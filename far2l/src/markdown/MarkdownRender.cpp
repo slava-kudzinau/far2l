@@ -178,15 +178,16 @@ struct Builder {
 
     // --- line helpers ---------------------------------------------------
 
-    // The bar of each enclosing blockquote, drawn at the start of a row.
-    std::wstring quote_bars() const
+    // The lead of every row: the list indent (2 cells per list level), then the bar of each
+    // enclosing blockquote.
+    std::wstring row_lead() const
     {
-        std::wstring bars;
+        std::wstring lead(2 * list_stack.size(), L' ');
         for (int q = 0; q < quote_depth; ++q) {
-            bars += BoxSymbols[BS_V1];
-            bars += L' ';
+            lead += BoxSymbols[BS_V1];
+            lead += L' ';
         }
-        return bars;
+        return lead;
     }
 
     void begin_line()
@@ -196,10 +197,7 @@ struct Builder {
         cur.clear();
         cur_pos_set = false;      // set by the line's first source text, see append()
         cur_started = true;
-        // leading indent: list depth (2 cells) + blockquote prefix.
-        std::wstring lead;
-        lead.append(2 * (size_t)list_stack.size(), L' ');
-        lead += quote_bars();
+        std::wstring lead = row_lead();
         if (li_prefix_pending) {
             lead += li_prefix;
             li_prefix_pending = false;
@@ -245,41 +243,38 @@ struct Builder {
     void line_break() { flush(); }   // paragraph soft/hard break = new display line
 
     // --- spacing (Spacing table in the story spec) ------------------------
-    // A block that ends queues one blank row; the next block emits it before its first row.
-    // So repeated blanks collapse into one, and no blank row comes before the first row.  Source
-    // blank lines never produce rows here, so only code fences keep theirs.  A list is one unit:
-    // nothing is queued inside it, and only its outermost start and end queue or emit a blank.
+    // A block that ends queues one blank row, and the block that comes next emits it before its
+    // first row.  So repeated blanks collapse into one, and no blank row comes before the first
+    // row.  Source blank lines never produce rows here, so only code fences keep theirs.  Items of
+    // a list stay tight (an item start drops the queued blank), a nested list is part of its outer
+    // list (no blank before or after it), and the outermost list has one before and after.
     bool gap_pending = false;
+    size_t spacer_row = (size_t)-1;   // index in out of the last blank row queued here
 
-    static bool is_blank(const MdLine &line)
-    {
-        for (const MdRun &r : line.runs)
-            if (r.text.find_first_not_of(L" \t") != std::wstring::npos)
-                return false;
-        return true;
-    }
+    bool last_row_is_spacer() const { return !out.empty() && spacer_row == out.size() - 1; }
 
     void open_block()
     {
-        if (!list_stack.empty() || !gap_pending)
+        if (cur_started) {            // text of a tight list item: a block of its own before this one
+            flush();
+            gap_pending = true;
+        }
+        if (!gap_pending)
             return;
         gap_pending = false;
-        if (out.empty() || is_blank(out.back()))
+        if (out.empty() || last_row_is_spacer())
             return;
         // Offset of the row before, so the offsets never decrease (see flush()).
         MdLine blank;
         blank.nFilePos = out.back().nFilePos;
-        const std::wstring bars = quote_bars();   // a blank inside a quote keeps its bar
-        if (!bars.empty())
-            blank.runs.push_back(MdRun{bars, base_attr});
+        const std::wstring lead = row_lead();   // a blank inside a list or a quote keeps its lead
+        if (!lead.empty())
+            blank.runs.push_back(MdRun{lead, base_attr});
         out.push_back(std::move(blank));
+        spacer_row = out.size() - 1;
     }
 
-    void close_block()
-    {
-        if (list_stack.empty())
-            gap_pending = true;
-    }
+    void close_block() { gap_pending = true; }
 };
 
 // File offset of the first source text in the code line [s, e) of code_text, or -1 when the line
@@ -299,14 +294,15 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_QUOTE: b.open_block(); b.quote_depth++; break;
         case MD_BLOCK_UL: {
             auto *d = (MD_BLOCK_UL_DETAIL *)detail;
-            b.open_block();
+            // The outermost list has a blank before it; a nested one is part of its outer list.
+            if (b.list_stack.empty()) b.open_block(); else b.flush();
             b.list_stack.push_back(0);
             (void)d;
             break;
         }
         case MD_BLOCK_OL: {
             auto *d = (MD_BLOCK_OL_DETAIL *)detail;
-            b.open_block();
+            if (b.list_stack.empty()) b.open_block(); else b.flush();
             b.list_stack.push_back(1);
             b.ol_counter.push_back(d ? (long)d->start : 1);
             break;
@@ -314,6 +310,7 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_LI: {
             auto *d = (MD_BLOCK_LI_DETAIL *)detail;
             b.li_open = true;
+            b.gap_pending = false;   // items stay tight: no blank row between two items
             std::wstring pfx;
             if (!b.list_stack.empty() && b.list_stack.back() == 1) {
                 pfx += std::to_wstring(b.ol_counter.back());
@@ -406,12 +403,12 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_UL:
             if (!b.list_stack.empty()) b.list_stack.pop_back();
             if (!b.ol_counter.empty() && b.list_stack.empty()) b.ol_counter.clear();
-            b.close_block();
+            if (b.list_stack.empty()) b.close_block();
             break;
         case MD_BLOCK_OL:
             if (!b.list_stack.empty()) b.list_stack.pop_back();
             if (!b.ol_counter.empty() && b.list_stack.empty()) b.ol_counter.clear();
-            b.close_block();
+            if (b.list_stack.empty()) b.close_block();
             break;
         case MD_BLOCK_LI:
             b.flush();

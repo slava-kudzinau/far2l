@@ -135,11 +135,3 @@ Row 115 paragraph text for the scrolling tests.
 # Long End
 
 Final paragraph of the long sample.
-
-Second final paragraph of the long sample.
-
-```text
-Fence line one of the blank test.
-
-Fence line two of the blank test.
-```

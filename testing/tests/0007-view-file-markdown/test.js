@@ -84,6 +84,23 @@ ExpectString("Long Start")
 ExpectNoString("# Long Start")
 ExpectString("  0%")
 
+// A row of the markdown view must be blank: the text of its 80 cells is empty.
+function CheckBlankRow(name, y) {
+	var text = BoundedLine(0, y, 80, " \t");
+	if (text != "") {
+		Log(name + ": row " + y + " is '" + text + "'");
+		Panic(name + " is not a blank row");
+	}
+}
+
+// The found text must be on row y.
+function CheckRowOf(name, found, y) {
+	if (found.Y != y) {
+		Log(name + ": found on row " + found.Y + ", expected row " + y);
+		Panic(name + " is not on the expected row");
+	}
+}
+
 // Spacing: a blank row follows the heading and its rule, then the first paragraph.
 var start_row = ExpectString("Long Start");
 CheckBlankRow("blank row after the heading", start_row.Y + 2);
@@ -98,15 +115,6 @@ function CheckTop(name, found) {
 	if (found.Y != 1) {
 		Log(name + ": found on row " + found.Y);
 		Panic(name + " is not on the top row");
-	}
-}
-
-// A row of the markdown view must be blank: the text of its 80 cells is empty.
-function CheckBlankRow(name, y) {
-	var text = BoundedLine(0, y, 80, " \t");
-	if (text != "") {
-		Log(name + ": row " + y + " is '" + text + "'");
-		Panic(name + " is not a blank row");
 	}
 }
 
@@ -155,32 +163,12 @@ if (still_last.Y != last_row.Y) {
 }
 ExpectString("100%")
 
-// Spacing at the end: a blank row after the last heading, one between two paragraphs, one before
-// the code fence, and the blank source line inside the fence is kept.
+// The last heading has one blank row after it, then its paragraph.
 var end_head = ExpectString("Long End")
 CheckBlankRow("blank row after the last heading", end_head.Y + 2)
-var final_para = ExpectString("Final paragraph")
-if (final_para.Y != end_head.Y + 3) {
-	Log("Long End on row " + end_head.Y + ", final paragraph on row " + final_para.Y);
+if (ExpectString("Final paragraph").Y != end_head.Y + 3) {
+	Log("Long End on row " + end_head.Y + ", final paragraph is not on row " + (end_head.Y + 3));
 	Panic("the final paragraph does not follow the heading after one blank row");
-}
-var second_para = ExpectString("Second final paragraph")
-CheckBlankRow("blank row between two paragraphs", final_para.Y + 1)
-if (second_para.Y != final_para.Y + 2) {
-	Log("final paragraph on row " + final_para.Y + ", second paragraph on row " + second_para.Y);
-	Panic("the two paragraphs are not separated by one blank row");
-}
-var fence_one = ExpectString("Fence line one")
-CheckBlankRow("blank row before the code fence", second_para.Y + 1)
-if (fence_one.Y != second_para.Y + 2) {
-	Log("second paragraph on row " + second_para.Y + ", fence on row " + fence_one.Y);
-	Panic("the code fence does not follow the paragraph after one blank row");
-}
-var fence_two = ExpectString("Fence line two")
-CheckBlankRow("blank source line inside the code fence", fence_one.Y + 1)
-if (fence_two.Y != fence_one.Y + 2) {
-	Log("fence line one on row " + fence_one.Y + ", line two on row " + fence_two.Y);
-	Panic("the blank source line inside the code fence was collapsed");
 }
 
 // Home goes back to the first page.
@@ -222,6 +210,81 @@ CheckTop("hex second row", ExpectString("0000000010:"))
 TypeFKey(4)
 ExpectNoString("0000000010:")
 CheckTop("back from hex", ExpectString("Row 001"))
+
+TypeEscape()
+
+// Spacing, block by block, in spacing.md. It sorts after sample.md, so the cursor steps above still
+// reach long.md and sample.md. Its first page is the top of the file; its last page is End.
+TypeDown(2)
+TypeFKey(3)
+ExpectString("left/spacing.md")
+ToggleShift(true)
+TypeFKey(4)
+ToggleShift(false)
+
+var title = ExpectString("Spacing Title");
+CheckRowOf("title as the first row", title, 1);
+CheckBlankRow("blank row after the title", title.Y + 2);
+var lead = ExpectString("Lead paragraph of the spacing test.");
+CheckRowOf("lead paragraph after the title", lead, title.Y + 3);
+var heading = ExpectString("Spacing Heading");
+CheckBlankRow("blank row before the heading", heading.Y - 1);
+CheckRowOf("heading after the lead paragraph", heading, lead.Y + 2);
+CheckBlankRow("blank row after the heading", heading.Y + 2);
+var p1 = ExpectString("Paragraph before two source blanks.");
+CheckRowOf("paragraph after the heading", p1, heading.Y + 3);
+var p2 = ExpectString("Paragraph after two source blanks.");
+CheckBlankRow("blank row between two paragraphs", p1.Y + 1);
+CheckRowOf("two source blank lines give one blank row", p2, p1.Y + 2);
+
+// Items of a list stay tight; the nested list gets no blank row; the list has one before and after.
+var item1 = ExpectString("Spacing item one");
+CheckBlankRow("blank row before the list", item1.Y - 1);
+var nested = ExpectString("Spacing nested item");
+var item2 = ExpectString("Spacing item two");
+CheckRowOf("nested item right under its item", nested, item1.Y + 1);
+CheckRowOf("next item right under the nested item", item2, item1.Y + 2);
+CheckBlankRow("blank row after the list", item2.Y + 1);
+
+var table = ExpectString("Spacing A");
+CheckBlankRow("blank row before the table", table.Y - 2);
+CheckBlankRow("blank row after the table", table.Y + 4);
+
+// The rest of the file: the last page (End) holds the quote to the last paragraph.
+TypeEnd();
+var quote = ExpectString("Spacing quote line.");
+CheckBlankRow("blank row after the quote", quote.Y + 1);
+var fence = ExpectString("Spacing fence line.");
+CheckRowOf("code fence after the quote", fence, quote.Y + 2);
+CheckBlankRow("blank row after the code fence", fence.Y + 1);
+var after_fence = ExpectString("Paragraph after the fence.");
+CheckRowOf("paragraph after the code fence", after_fence, fence.Y + 2);
+
+// A fence whose last source line is empty: its own empty code row, then the blank row after the fence.
+var empty_last = ExpectString("Fence with an empty last line.");
+CheckRowOf("code fence with an empty last line", empty_last, after_fence.Y + 2);
+CheckBlankRow("empty last source line inside the fence", empty_last.Y + 1);
+CheckBlankRow("blank row after the fence with an empty last line", empty_last.Y + 2);
+var after_empty = ExpectString("Paragraph after the empty last line.");
+CheckRowOf("paragraph after that fence", after_empty, empty_last.Y + 3);
+
+// Blocks inside list items: a fence after the item's text, and a second paragraph in a loose item.
+var item_fence = ExpectString("Spacing item with a fence:");
+CheckRowOf("list after the paragraph", item_fence, after_empty.Y + 2);
+CheckBlankRow("blank row before the fence in the item", item_fence.Y + 1);
+var item_code = ExpectString("Spacing item fence line.");
+CheckRowOf("fence in the item after its text and a blank row", item_code, item_fence.Y + 2);
+CheckBlankRow("blank row after the fence in the item", item_code.Y + 1);
+var after_list = ExpectString("Spacing paragraph after the list.");
+CheckRowOf("paragraph after the list", after_list, item_code.Y + 2);
+var item_p = ExpectString("Spacing item with a paragraph.");
+CheckRowOf("loose list after the paragraph", item_p, after_list.Y + 2);
+CheckBlankRow("blank row between the item's paragraphs", item_p.Y + 1);
+var item_p2 = ExpectString("Spacing item paragraph two.");
+CheckRowOf("second paragraph in the item", item_p2, item_p.Y + 2);
+CheckBlankRow("blank row after the list item", item_p2.Y + 1);
+var last = ExpectString("Spacing last paragraph.");
+CheckRowOf("paragraph after the list item", last, item_p2.Y + 2);
 
 TypeEscape()
 TypeFKey(10)
