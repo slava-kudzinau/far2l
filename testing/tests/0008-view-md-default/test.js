@@ -3,6 +3,28 @@ profile=mydir + "/profile"
 left=mydir + "/left"
 right=mydir + "/right"
 
+// Markdown view of sample.md: the heading shows without its "# " marker, with a double rule
+// line under it.
+function CheckMarkdownSample() {
+	ExpectString("═")
+	ExpectNoString("# Heading One")
+	var heading = ExpectString("Heading One")
+	CheckCellChar(heading.X, heading.Y + 1, "═")
+}
+
+// Plain view of sample.md: the "# " marker shows and no rule line is drawn under the heading.
+function CheckPlainSample() {
+	var heading = ExpectString("# Heading One")
+	if (CellCharMatches(heading.X, heading.Y + 1, "═"))
+		Panic("sample.md: plain heading has a rule line under it")
+}
+
+// Markdown view of plain.txt: its "# plain" line renders as a heading with a rule line.
+function CheckMarkdownPlainTxt() {
+	ExpectString("═")
+	ExpectNoString("# plain")
+}
+
 // A fresh profile shows the help screen on start; a reused one would not.
 RemoveAll(profile)
 
@@ -12,37 +34,57 @@ TypeEscape()
 ExpectString("OSC52");
 TypeEscape()
 
-// The panel lists "/..", then plain.txt, then sample.md: F3 on sample.md (two rows down).
+// The setting is on (the default). The panel lists "/..", then plain.txt, then sample.md: F3 on
+// sample.md (two rows down) opens it in Markdown mode. Escape closes it in that mode, which is
+// the file's default, so no choice is saved.
 TypeDown(2)
 TypeFKey(3)
 ExpectString("left/sample.md")
-
-// No Shift+F4: a .md file opens in Markdown mode. The heading shows without its "# " marker,
-// with a double rule line under it.
-var heading = ExpectString("Heading One")
-ExpectNoString("# Heading One")
-CheckCellChar(heading.X, heading.Y + 1, "═")
-
-// Shift+F4 at the top of the file switches to plain text. The choice is saved on close (even
-// with the top position), so F3 on sample.md again opens plain, not Markdown.
-ToggleShift(true)
-TypeFKey(4)
-ToggleShift(false)
-ExpectString("# Heading One")
-TypeEscape()
-TypeFKey(3)
-ExpectString("left/sample.md")
-ExpectString("# Heading One")
+CheckMarkdownSample()
 TypeEscape()
 
-// plain.txt is the row above sample.md. The last viewer showed Markdown, but a .txt file
+// plain.txt is the row above sample.md. The last viewer closed in Markdown mode, but a .txt file
 // opens plain: its "# plain" line stays as is.
 TypeUp()
 TypeFKey(3)
 ExpectString("left/plain.txt")
 ExpectString("# plain")
-
 TypeEscape()
+
+// Back on sample.md, with no saved choice: the rule opens it in Markdown again. Shift+F4 at the
+// top switches it to plain, and Escape saves that choice (a plain choice against the Markdown rule).
+TypeDown()
+TypeFKey(3)
+ExpectString("left/sample.md")
+CheckMarkdownSample()
+ToggleShift(true)
+TypeFKey(4)
+ToggleShift(false)
+CheckPlainSample()
+TypeEscape()
+
+// F3 on sample.md opens plain: the saved choice wins over the rule.
+TypeFKey(3)
+ExpectString("left/sample.md")
+CheckPlainSample()
+TypeEscape()
+
+// Hand change on plain.txt: Shift+F4 switches it to Markdown, a choice against the plain rule,
+// and Escape saves it. F3 on plain.txt opens Markdown again.
+TypeUp()
+TypeFKey(3)
+ExpectString("left/plain.txt")
+ExpectString("# plain")
+ToggleShift(true)
+TypeFKey(4)
+ToggleShift(false)
+CheckMarkdownPlainTxt()
+TypeEscape()
+TypeFKey(3)
+ExpectString("left/plain.txt")
+CheckMarkdownPlainTxt()
+TypeEscape()
+
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
 TypeEnter()

@@ -105,14 +105,32 @@ static bool IsMarkdownFileName(const wchar_t *path)
 	return false;
 }
 
-// Position cache Param[3] for the viewer mode. The cache drops all-zero entries, so a plain
-// choice on a Markdown file name is saved as 2 (not 0): 1 is Markdown, 2 is plain by choice
-// for a Markdown name, 0 is plain otherwise.
+// The F3 mode a file opens in without a saved choice: Markdown while the setting is on and the
+// name matches, else plain.
+static bool MarkdownRuleMode(const wchar_t *path)
+{
+	return Opt.ViOpt.ViewerMarkdownAuto && IsMarkdownFileName(path);
+}
+
+// Position cache Param[3] for the viewer mode. Only a deviation from the rule is saved: 0 when
+// the mode is the rule's, 1 for Markdown against a plain rule, 2 for plain against a Markdown
+// rule. The cache drops all-zero entries, so a plain choice on a Markdown name is 2, not 0.
 static DWORD64 MarkdownCacheParam(int markdown, const wchar_t *path)
 {
-	if (markdown)
+	if ((markdown != 0) == MarkdownRuleMode(path))
+		return 0;
+	return markdown ? 1 : 2;
+}
+
+// Start mode of a file: a saved choice wins (1 Markdown, 2 plain). Any other saved value, 0 or a
+// legacy one, applies the rule.
+static int MarkdownStartMode(DWORD64 saved, const wchar_t *path)
+{
+	if (saved == 1)
 		return 1;
-	return IsMarkdownFileName(path) ? 2 : 0;
+	if (saved == 2)
+		return 0;
+	return MarkdownRuleMode(path) ? 1 : 0;
 }
 
 static int NextViewerID = 0;
@@ -207,7 +225,7 @@ Viewer::Viewer(bool bQuickView, UINT aCodePage)
 	VM.WordWrap = Opt.ViOpt.ViewerWrap;
 	VM.Hex = InitHex;
 	VM.Processed = 0;
-	VM.Markdown = FALSE;	// the start mode is set by OpenFile (saved state, then the file name rule)
+	VM.Markdown = FALSE;	// the start mode is set by OpenFile: a saved choice, else the file name rule
 	ViewKeyBar = nullptr;
 	FilePos = 0;
 	LeftPos = 0;
@@ -416,7 +434,7 @@ int Viewer::OpenFile(FileHolderPtr NewFileHolder, int warning)
 	ConvertNameToFull(GotPathName, strFullFileName);
 	apiGetFindDataForExactPathName(GotPathName, ViewFindData);
 	UINT CachedCodePage = 0;
-	bool HasSavedState = false;
+	DWORD64 SavedMarkdown = 0;	// Param[3] of the saved position, see MarkdownStartMode
 
 	if (Opt.ViOpt.SavePos) {
 		int64_t NewLeftPos, NewFilePos;
@@ -431,11 +449,11 @@ int Viewer::OpenFile(FileHolderPtr NewFileHolder, int warning)
 			// poscache.Position[3]=;
 		}
 
-		HasSavedState = CtrlObject->ViewerPosCache->GetPosition(strCacheName, poscache);
+		CtrlObject->ViewerPosCache->GetPosition(strCacheName, poscache);
 		NewFilePos = poscache.Param[0];
 		NewLeftPos = poscache.Param[1];
 		VM.Hex = (int)poscache.Param[2];
-		VM.Markdown = (poscache.Param[3] == 1) ? 1 : 0;	// 2 and 0 are plain (see MarkdownCacheParam)
+		SavedMarkdown = poscache.Param[3];
 		CachedCodePage = (UINT)poscache.Param[4];
 
 		// Проверяем поддерживается или нет загруженная из кэша кодовая страница
@@ -447,10 +465,8 @@ int Viewer::OpenFile(FileHolderPtr NewFileHolder, int warning)
 		FilePos = 0;
 	}
 
-	// Start mode: a saved choice for this file wins; otherwise a Markdown file name opens in
-	// Markdown mode while the setting is on, and any other file opens plain.
-	if (!HasSavedState)
-		VM.Markdown = (Opt.ViOpt.ViewerMarkdownAuto && IsMarkdownFileName(GotPathName.CPtr())) ? 1 : 0;
+	// Start mode: a saved choice for this file wins; otherwise the rule (Markdown name and setting on).
+	VM.Markdown = MarkdownStartMode(SavedMarkdown, GotPathName.CPtr());
 
 	/*
 		$ 26.07.2002 IS
@@ -4429,6 +4445,8 @@ int Viewer::ProcessMarkdownMode(int newMode, bool isRedraw)
 {
 	int oldMarkdown = VM.Markdown;
 	VM.Markdown = newMode & 1;
+	// Written to the config only (ini key Markdown): the start mode comes from the position cache
+	// and Markdown_Auto, and this value is not read at start.
 	Opt.ViOpt.ViewerMarkdownMode = VM.Markdown;
 	m_md_ready = false;	// force (re)render on next fill
 
