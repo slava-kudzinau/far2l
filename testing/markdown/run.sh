@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds and runs the standalone MermaidEngine driver (no TUI).
-# usage: sh testing/markdown/run.sh flowchart|swimlane|invalid|cells
+# usage: sh testing/markdown/run.sh flowchart|swimlane|invalid|cells|hostile
 # Env overrides: MERMAID_JS (path to mermaid.min.js), MD_DRIVER_BUILD (build dir).
 set -eu
 
@@ -12,8 +12,8 @@ mermaid_js=${MERMAID_JS:-$root/../far2l.build/install/far2l.app/Contents/Resourc
 sample=$root/testing/tests/0007-view-file-markdown/initdir/left/sample.md
 
 case "${1:-}" in
-    flowchart|swimlane|invalid|cells) ;;
-    *) echo "usage: sh $0 flowchart|swimlane|invalid|cells" >&2; exit 2 ;;
+    flowchart|swimlane|invalid|cells|hostile) ;;
+    *) echo "usage: sh $0 flowchart|swimlane|invalid|cells|hostile" >&2; exit 2 ;;
 esac
 
 if [ ! -f "$qjs" ]; then

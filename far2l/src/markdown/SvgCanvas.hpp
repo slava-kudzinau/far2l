@@ -25,7 +25,7 @@ public:
     // when the document has no drawable shape.
     bool Parse(const std::string &svg);
 
-    // Appends the box art to `out` as MdLines carrying `attr`, at most
+    // Replaces the contents of `out` with the box art as MdLines carrying `attr`, at most
     // `width_cells` columns wide.  A cell is 8x16 px; a diagram wider than
     // that is compressed horizontally to fit.
     void ToCells(int width_cells, std::vector<MdLine> &out, uint16_t attr) const;

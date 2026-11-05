@@ -42,6 +42,9 @@ const double kPxPerCellY = 16.0;
 const double kDefaultEm = 16.0;   // SVG default font size, px; mermaid's root style sets 14px
 const double kMaxCoord = 1e5;     // shapes beyond this (px) are dropped as garbage
 const double kMaxRows = 2000;     // grid height cap, so a stray extent cannot exhaust memory
+const size_t kMaxNesting = 64;    // elements nested deeper than this are ignored, not drawn
+const size_t kMaxSelectorCompounds = 16;   // CSS selectors with more compounds are dropped
+const size_t kMaxMatchSteps = 2000000;     // budget of CSS compound checks per parse
 const int kCubicSteps = 6;        // samples per cubic segment
 const int kQuadSteps = 4;         // samples per quadratic segment
 
@@ -143,8 +146,16 @@ std::string DecodeEntities(const std::string &s)
             out += s[i];
             continue;
         }
-        const size_t semi = s.find(';', i);
-        if (semi == std::string::npos || semi - i > 10) {
+        // The ';' must fall within the next 10 characters: the scan is bounded even
+        // when the text holds many '&' and no ';'.
+        size_t semi = std::string::npos;
+        for (size_t j = i + 1; j < s.size() && j <= i + 10; ++j) {
+            if (s[j] == ';') {
+                semi = j;
+                break;
+            }
+        }
+        if (semi == std::string::npos) {
             out += s[i];
             continue;
         }
@@ -587,7 +598,8 @@ SvgSelector ParseSelector(const std::string &s)
 {
     SvgSelector sel;
     size_t i = 0;
-    while (i < s.size()) {
+    // Stops one compound past the cap, so a huge selector is never fully split.
+    while (i < s.size() && sel.size() <= kMaxSelectorCompounds) {
         while (i < s.size() && (IsSpace(s[i]) || s[i] == '>' || s[i] == '+' || s[i] == '~'))
             ++i;
         const size_t b = i;
@@ -652,6 +664,8 @@ private:
     std::vector<Shape> &m_out;
     std::vector<SvgFrame> m_stack;
     std::vector<SvgCssRule> m_rules;
+    size_t m_ignored_depth = 0;         // open elements skipped for nesting; their end tags are skipped too
+    mutable size_t m_match_steps = 0;   // CSS compound checks so far, bounded by kMaxMatchSteps
     double m_em = kDefaultEm;
     bool m_em_set = false;
     std::unique_ptr<SvgTextState> m_text;
@@ -757,6 +771,12 @@ size_t SvgParser::ReadTag(size_t at)
 
 void SvgParser::OpenElement(const std::string &name, const SvgAttrs &attrs, bool selfclose)
 {
+    if (m_stack.size() >= kMaxNesting) {
+        // Too deep to draw.  Skip it; a non-self-closing one is matched by CloseElement.
+        if (!selfclose)
+            ++m_ignored_depth;
+        return;
+    }
     SvgFrame f;
     f.name = name;
     if (const std::string *v = FindAttr(attrs, "id"))
@@ -795,6 +815,10 @@ void SvgParser::OpenElement(const std::string &name, const SvgAttrs &attrs, bool
 
 void SvgParser::CloseElement(const std::string &name)
 {
+    if (m_ignored_depth > 0) {
+        --m_ignored_depth;   // end tag of an element skipped for nesting
+        return;
+    }
     for (size_t k = m_stack.size(); k-- > 0; ) {
         if (m_stack[k].name == name) {
             while (m_stack.size() > k)
@@ -816,7 +840,7 @@ void SvgParser::PopFrame()
 
 void SvgParser::AddChars(const std::string &raw)
 {
-    if (!m_text || m_stack.empty() || m_stack.back().skip)
+    if (!m_text || m_stack.empty() || m_stack.back().skip || m_ignored_depth > 0)
         return;
     m_text->buf += DecodeEntities(raw);
 }
@@ -931,24 +955,39 @@ std::string SvgParser::CssAnchor(size_t idx) const
 {
     std::string val;
     for (const SvgCssRule &r : m_rules)
-        for (const SvgSelector &sel : r.selectors)
+        for (const SvgSelector &sel : r.selectors) {
+            if (m_match_steps > kMaxMatchSteps)
+                return val;   // budget spent: the remaining rules do not apply
             if (MatchesAt(sel, sel.size() - 1, idx)) {
                 val = r.anchor;   // the last matching rule wins
                 break;
             }
+        }
     return val;
 }
 
+// Matches a descendant-only chain whose last compound is at frame `si`.  The chain is
+// matched greedily from the right: each compound takes the nearest ancestor it fits,
+// which leaves the most room for the rest, so no backtracking is needed.  The loop is
+// iterative and costs at most (compounds x depth) checks.
 bool SvgParser::MatchesAt(const SvgSelector &sel, size_t ci, size_t si) const
 {
-    if (!CompoundMatches(sel[ci], m_stack[si]))
+    size_t at = si;
+    ++m_match_steps;
+    if (!CompoundMatches(sel[ci], m_stack[at]))
         return false;
-    if (ci == 0)
-        return true;
-    for (size_t k = si; k-- > 0; )
-        if (MatchesAt(sel, ci - 1, k))
-            return true;
-    return false;
+    for (size_t c = ci; c-- > 0; ) {
+        size_t k = at;
+        bool found = false;
+        while (!found && k-- > 0) {
+            ++m_match_steps;
+            found = CompoundMatches(sel[c], m_stack[k]);
+        }
+        if (!found)
+            return false;
+        at = k;
+    }
+    return true;
 }
 
 void SvgParser::ParseCss(const std::string &css)
@@ -995,11 +1034,12 @@ void SvgParser::ParseCss(const std::string &css)
             if (comma == std::string::npos)
                 comma = head.size();
             SvgSelector sel = ParseSelector(head.substr(sp, comma - sp));
-            if (!sel.empty())
+            if (!sel.empty() && sel.size() <= kMaxSelectorCompounds)
                 rule.selectors.push_back(sel);
             sp = comma + 1;
         }
-        m_rules.push_back(rule);
+        if (!rule.selectors.empty())
+            m_rules.push_back(rule);
     }
 }
 

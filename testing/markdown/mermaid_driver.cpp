@@ -1,13 +1,15 @@
 // Standalone driver for MermaidEngine (F3 markdown preview).  No TUI needed;
 // build and run through testing/markdown/run.sh.
 //
-// usage: mermaid_driver <flowchart|swimlane|invalid|cells> <path/to/sample.md>
+// usage: mermaid_driver <flowchart|swimlane|invalid|cells|hostile> <path/to/sample.md>
 //   flowchart  renders the spec flowchart; SVG must start with <svg and contain Start and Finish
 //   swimlane   renders the first ```mermaid fence of sample.md; same SVG expectations
 //   invalid    renders broken mermaid text; must fail with a non-empty error
 //   cells      renders the flowchart and the swimlane, rasterizes both to 80 cells (SvgCanvas)
 //              and prints the grids; each must show Start and Finish, a box glyph, and no row
 //              wider than 80 cells
+//   hostile    feeds hostile SVG (deep nesting, a long CSS selector, '&' with no ';') straight
+//              into SvgCanvas, without a mermaid render; each must parse and finish in under 2 s
 //
 // Prints ok=1 (plus the SVG) or ok=0 (plus err=...).  Exit 0 when the case
 // meets its expectation, 1 when it does not, 2 on bad usage.
@@ -15,15 +17,18 @@
 #include "MermaidEngine.hpp"
 #include "SvgCanvas.hpp"
 
+#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
 
 const char kFlowchart[] = "flowchart LR\n A[Start] --> B[Finish]\n";
 const char kInvalid[] = "this is not a mermaid diagram @@@\n";
+const long long kHostileBudgetMs = 2000;
 
 std::string to_utf8(const std::wstring &w)
 {
@@ -113,17 +118,72 @@ bool check_cells(const char *name, const std::string &src, int width)
     return ok;
 }
 
+// SvgCanvas must stay bounded on hostile input.  Each case is parsed and rasterized
+// directly; it must yield a drawable shape and finish within kHostileBudgetMs.
+bool check_hostile()
+{
+    const std::string rect = "<rect x=\"0\" y=\"0\" width=\"80\" height=\"32\"/>";
+    std::vector<std::pair<std::string, std::string>> cases;
+
+    // 5000 nested <g>.  The rect past the depth cap is ignored; the one above it is drawn.
+    std::string deep = "<svg>" + rect;
+    for (int i = 0; i < 5000; ++i)
+        deep += "<g>";
+    deep += rect;
+    for (int i = 0; i < 5000; ++i)
+        deep += "</g>";
+    cases.emplace_back("deep-nesting", deep + "</svg>");
+
+    // A 30-compound selector (30 g) that cannot match under 29 g ancestors.  Every g and the
+    // text consult it, so unbounded backtracking over the ancestors would run for seconds.
+    std::string sel30;
+    for (int i = 0; i < 30; ++i)
+        sel30 += "g ";
+    std::string css30 = "<svg>" + rect + "<style>" + sel30 + "{ text-anchor: end; }</style>";
+    for (int i = 0; i < 29; ++i)
+        css30 += "<g>";
+    css30 += "<text x=\"200\" y=\"16\">Start</text>";
+    for (int i = 0; i < 29; ++i)
+        css30 += "</g>";
+    cases.emplace_back("selector-30", css30 + "</svg>");
+
+    // One million '&' with no ';' in one text.
+    std::string amps = "<svg>" + rect + "<text x=\"0\" y=\"16\">";
+    amps.append(1000000, '&');
+    cases.emplace_back("ampersands", amps + "</text></svg>");
+
+    bool all_ok = true;
+    for (const auto &c : cases) {
+        const auto t0 = std::chrono::steady_clock::now();
+        SvgCanvas canvas;
+        const bool parsed = canvas.Parse(c.second);
+        std::vector<MdLine> lines;
+        if (parsed)
+            canvas.ToCells(80, lines, 0);
+        const long long ms = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now() - t0).count();
+        const bool ok = parsed && ms < kHostileBudgetMs;
+        printf("hostile %s: parsed=%d rows=%zu elapsed_ms=%lld: %s\n", c.first.c_str(), (int)parsed,
+               lines.size(), ms, ok ? "ok" : "FAIL");
+        all_ok = all_ok && ok;
+    }
+    return all_ok;
+}
+
 }   // namespace
 
 int main(int argc, char **argv)
 {
     if (argc < 2) {
-        fprintf(stderr, "usage: %s flowchart|swimlane|invalid|cells <sample.md>\n", argv[0]);
+        fprintf(stderr, "usage: %s flowchart|swimlane|invalid|cells|hostile <sample.md>\n", argv[0]);
         return 2;
     }
     const std::string which = argv[1];
     std::string src;
     bool expect_ok = true;
+
+    if (which == "hostile")
+        return check_hostile() ? 0 : 1;
 
     if (which == "cells") {
         std::string swim;
