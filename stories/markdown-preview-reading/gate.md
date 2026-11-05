@@ -49,13 +49,19 @@ _Pasted from the fresh read before the build._
 ## At merge
 
 ### What was built
-_At close-out._
+The Markdown view now scrolls by rendered line (Down, Up, PgDn, PgUp, Home, End, wheel). The status percent and resize follow the line index. Blank lines appear after headings and between paragraphs, lists, code, tables, quotes and diagram art. Headings, code, diagram art and table parts use four palette entries (body, heading, code, art). Table headers use the heading entry and table borders use the art entry. The background is the viewer background. All three tasks match the plan.
 
 ### Decisions changed during the build
-_At close-out._
+1. Down stops at the last full page, not at the last line. A review found that the literal rule shows a blank screen. The spec row is not changed yet (owner item 2 in `closeout.md`).
+2. Hex mode keys and line-start offsets got a fix round (commit e4d5bdc58).
 
 ### What the reviews caught
-_At close-out._
+- T1: hex keys, line-start offsets and the Down limit (fixed in e4d5bdc58).
+- T2: spacing inside list items and nested items (fixed in f538ad1d0).
+- T3: a table-art test and a table background check (fixed in 4b2e943e3).
+- Final review: approved, 0 Critical, 1 Important (long lines are cut, an owner item), 5 Minor.
 
 ### Run it
-_At close-out._
+1. Build: `cmake --build ../far2l.build --target far2l -j8`.
+2. Run the check from `story.md` (it ends with exit 0).
+3. By hand: open `sample.md` with F3, press Shift-F4, then use Down, PgDn, Home and End.
