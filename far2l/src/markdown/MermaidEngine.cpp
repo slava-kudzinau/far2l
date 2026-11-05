@@ -2,6 +2,7 @@
 #include "MermaidEngine.hpp"
 #include <quickjs.h>
 
+#include <chrono>
 #include <vector>
 #include <unistd.h>
 #ifdef __APPLE__
@@ -388,6 +389,54 @@ struct Engine {
 
 Engine g_engine;
 
+// Limits for one Render call.  The JS stack budget is measured down from the stack pointer
+// at each Render (JS_UpdateStackTop), so it holds wherever the viewer calls from; 1 MB is the
+// quickjs default and sits well inside the thread stack.  The wall-clock budget is 5 seconds:
+// quickjs polls the interrupt handler while JS runs, so a render past the deadline stops,
+// Render returns false (the fence stays raw), and the engine is rebuilt for the next render.
+const size_t kJsStackBytes = 1024 * 1024;
+const std::chrono::seconds kRenderBudget(5);
+const char kTimeoutErr[] = "mermaid render timed out";
+
+std::chrono::steady_clock::time_point g_deadline;
+bool g_timed_out = false;
+
+// True once the deadline of the current Render has passed; latches g_timed_out.
+bool deadline_passed()
+{
+    if (!g_timed_out && std::chrono::steady_clock::now() >= g_deadline)
+        g_timed_out = true;
+    return g_timed_out;
+}
+
+int interrupt_at_deadline(JSRuntime *, void *)
+{
+    return deadline_passed() ? 1 : 0;
+}
+
+// Arms the deadline and the stack limit for one Render call; the interrupt handler is
+// removed when the call returns.
+class RenderScope {
+public:
+    explicit RenderScope(JSRuntime *rt) : m_rt(rt)
+    {
+        g_timed_out = false;
+        g_deadline = std::chrono::steady_clock::now() + kRenderBudget;
+        JS_UpdateStackTop(rt);
+        JS_SetInterruptHandler(rt, interrupt_at_deadline, nullptr);
+    }
+    ~RenderScope() { JS_SetInterruptHandler(m_rt, nullptr, nullptr); }
+
+private:
+    JSRuntime *m_rt;
+};
+
+// The error for a JS step that failed: the timeout message when the deadline stopped it.
+std::string limited_error(const std::string &js_err)
+{
+    return g_timed_out ? std::string(kTimeoutErr) : js_err;
+}
+
 std::string get_global_string(JSContext *ctx, const char *name)
 {
     JSValue g = JS_GetGlobalObject(ctx);
@@ -511,7 +560,7 @@ bool init(Engine &e)
     if (!e.ctx)
         return false;
     JS_SetMemoryLimit(e.rt, 128 * 1024 * 1024);
-    JS_SetMaxStackSize(e.rt, 8 * 1024 * 1024);
+    JS_SetMaxStackSize(e.rt, kJsStackBytes);
 
     std::string err;
     if (!eval_js(e, kDomShim, "dom_shim.js", err)) {
@@ -554,14 +603,23 @@ bool MermaidEngine::Available()
     return g_engine.ready;
 }
 
-bool MermaidEngine::Render(const std::string &mermaid_src, const std::string &id,
-                           int width_px, std::string &svg_out, std::string &err)
+// Frees the runtime after a render the deadline stopped.  An interrupted render leaves JS
+// state behind (queued jobs, half-built DOM) that later renders do not recover from, so
+// the next Available() call initializes a fresh engine.
+static void discard_engine(Engine &e)
 {
-    err.clear();
-    if (!Available()) {
-        err = "mermaid engine not initialized";
-        return false;
-    }
+    if (e.ctx)
+        JS_FreeContext(e.ctx);
+    if (e.rt)
+        JS_FreeRuntime(e.rt);
+    e = Engine();
+}
+
+// Runs one render in the initialized engine.  RenderScope arms the limits for the whole call.
+static bool render_in_engine(const std::string &mermaid_src, const std::string &id,
+                             int width_px, std::string &svg_out, std::string &err)
+{
+    RenderScope scope(g_engine.rt);
 
     // Escape the source for a JS string literal and run the render glue.
     std::string esc = "\"";
@@ -580,16 +638,19 @@ bool MermaidEngine::Render(const std::string &mermaid_src, const std::string &id
     // width_px is not used: the glue ignores its width argument and mermaid sizes the SVG itself.
     std::string call = "globalThis.__far2l_render(" + esc + ", \"" + id + "\", " +
                        std::to_string(width_px) + ");";
-    if (!eval_js(g_engine, call.c_str(), "render_call.js", err))
+    if (!eval_js(g_engine, call.c_str(), "render_call.js", err)) {
+        err = limited_error(err);
         return false;
+    }
 
-    // Drain the promise microtasks (mermaid uses d3/async rendering).  The budget is 8000
-    // jobs; a render that needs more gives up, and its late callbacks are dropped by generation.
+    // Drain the promise microtasks (mermaid uses d3/async rendering).  The job budget is 8000
+    // jobs and the deadline caps the time; a render that needs more gives up, and its late
+    // callbacks are dropped by generation.
     bool done = false;
-    for (int spin = 0; spin < 8 && !done; ++spin) {
+    for (int spin = 0; spin < 8 && !done && !deadline_passed(); ++spin) {
         std::string job_err = run_pending_jobs(g_engine, 1000);
         if (!job_err.empty()) {
-            err = job_err;
+            err = limited_error(job_err);
             return false;
         }
         JSValue g = JS_GetGlobalObject(g_engine.ctx);
@@ -607,7 +668,7 @@ bool MermaidEngine::Render(const std::string &mermaid_src, const std::string &id
         return false;
     }
     if (!done) {
-        err = "mermaid render did not complete";
+        err = g_timed_out ? std::string(kTimeoutErr) : "mermaid render did not complete";
         return false;
     }
     svg_out = get_global_string(g_engine.ctx, "__far2l_svg");
@@ -616,4 +677,18 @@ bool MermaidEngine::Render(const std::string &mermaid_src, const std::string &id
         return false;
     }
     return true;
+}
+
+bool MermaidEngine::Render(const std::string &mermaid_src, const std::string &id,
+                           int width_px, std::string &svg_out, std::string &err)
+{
+    err.clear();
+    if (!Available()) {
+        err = "mermaid engine not initialized";
+        return false;
+    }
+    const bool ok = render_in_engine(mermaid_src, id, width_px, svg_out, err);
+    if (g_timed_out)
+        discard_engine(g_engine);
+    return ok;
 }

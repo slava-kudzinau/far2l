@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <functional>
 
 // ---------------------------------------------------------------------------
 // md4c event -> styled display lines.
@@ -64,6 +65,27 @@ std::string wide_to_utf8(const std::wstring &w)
         out.resize((size_t)need);
         WINPORT(WideCharToMultiByte)(CP_UTF8, 0, w.c_str(), (int)w.size(),
                                      &out[0], need, nullptr, nullptr);
+    }
+    return out;
+}
+
+// Mermaid cache key: the fence source (hashed) and the width it was laid out at.  Fences with
+// the same source get the same art, so they may share an entry; the file offset is not part
+// of the key.
+std::pair<size_t, int> mermaid_key(const std::wstring &src, int width)
+{
+    return std::make_pair(std::hash<std::wstring>()(src), width);
+}
+
+// Engine errors can carry multi-line JS stacks; each log line holds one failure.
+std::string one_line(const std::string &s)
+{
+    std::string out;
+    for (char c : s) {
+        if (c == '\n')
+            out += " | ";
+        else
+            out += c;
     }
     return out;
 }
@@ -504,25 +526,34 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width, uint64_t base
 
     // Hand rendered mermaid fences to the engine (Step 4/5); placeholder lines
     // from the fence body are replaced by box art when the engine is available.
+    // A failed fence stays raw; each failure logs one stderr line (the reason is in it).
     for (auto &f : b.fences) {
-        auto key = std::make_pair(f.file_pos, width);
+        auto key = mermaid_key(f.src, width);
         if (m_mermaid_cache.count(key))
             continue;
         std::string src = wide_to_utf8(f.src);
         std::string svg, err;
         std::vector<MdLine> cell;
-        if (MermaidEngine::Available() &&
-            MermaidEngine::Render(src, "mmd", width * 8, svg, err)) {
+        if (!MermaidEngine::Available() ||
+            !MermaidEngine::Render(src, "mmd", width * 8, svg, err)) {
+            fprintf(stderr, "MermaidEngine: render failed: %s\n",
+                    one_line(err.empty() ? std::string("engine not available") : err).c_str());
+        } else {
             SvgCanvas canvas;
-            if (canvas.Parse(svg))
+            if (!canvas.Parse(svg)) {
+                fprintf(stderr, "MarkdownRender: SvgCanvas parse failed\n");
+            } else {
                 canvas.ToCells(width, cell, base_attr);
+                if (cell.empty())
+                    fprintf(stderr, "MarkdownRender: mermaid art is empty\n");
+            }
         }
         m_mermaid_cache[key] = std::move(cell);
     }
 
     // Splice rendered fences in place (reverse order: earlier indices stay valid).
     for (auto it = b.fences.rbegin(); it != b.fences.rend(); ++it) {
-        auto cell = m_mermaid_cache.find(std::make_pair(it->file_pos, width));
+        auto cell = m_mermaid_cache.find(mermaid_key(it->src, width));
         if (cell == m_mermaid_cache.end() || cell->second.empty())
             continue;
         std::vector<MdLine> &lines = cell->second;

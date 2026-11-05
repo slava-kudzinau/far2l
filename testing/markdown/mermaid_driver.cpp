@@ -1,7 +1,7 @@
 // Standalone driver for MermaidEngine (F3 markdown preview).  No TUI needed;
 // build and run through testing/markdown/run.sh.
 //
-// usage: mermaid_driver <flowchart|swimlane|invalid|cells|hostile> <path/to/sample.md>
+// usage: mermaid_driver <flowchart|swimlane|invalid|cells|hostile|timeout> <path/to/sample.md>
 //   flowchart  renders the spec flowchart; SVG must start with <svg and contain Start and Finish
 //   swimlane   renders the first ```mermaid fence of sample.md; same SVG expectations
 //   invalid    renders broken mermaid text; must fail with a non-empty error
@@ -10,6 +10,9 @@
 //              wider than 80 cells
 //   hostile    feeds hostile SVG (deep nesting, a long CSS selector, '&' with no ';') straight
 //              into SvgCanvas, without a mermaid render; each must parse and finish in under 2 s
+//   timeout    renders 300 nested subgraphs, which mermaid cannot lay out inside the render
+//              deadline; Render must fail with "mermaid render timed out" within 10 s, and a
+//              flowchart must render afterwards (the stopped engine is rebuilt)
 //
 // Prints ok=1 (plus the SVG) or ok=0 (plus err=...).  Exit 0 when the case
 // meets its expectation, 1 when it does not, 2 on bad usage.
@@ -29,6 +32,7 @@ namespace {
 const char kFlowchart[] = "flowchart LR\n A[Start] --> B[Finish]\n";
 const char kInvalid[] = "this is not a mermaid diagram @@@\n";
 const long long kHostileBudgetMs = 2000;
+const long long kTimeoutBudgetMs = 10000;
 
 std::string to_utf8(const std::wstring &w)
 {
@@ -170,12 +174,47 @@ bool check_hostile()
     return all_ok;
 }
 
+// 300 nested subgraphs with a node in the innermost one: the layout is far too slow for the
+// render deadline, so Render must give up on it.
+std::string nested_subgraphs(int depth)
+{
+    std::string src = "flowchart TD\n";
+    for (int i = 0; i < depth; ++i)
+        src += "subgraph s" + std::to_string(i) + " [group " + std::to_string(i) + "]\n";
+    src += "X0[inner] --> X1[inner2]\n";
+    for (int i = 0; i < depth; ++i)
+        src += "end\n";
+    return src;
+}
+
+// A render stopped by the deadline must fail with the timeout message and return within
+// kTimeoutBudgetMs; the engine must then render a flowchart again.
+bool check_timeout()
+{
+    const auto t0 = std::chrono::steady_clock::now();
+    std::string svg, err;
+    const bool ok = MermaidEngine::Render(nested_subgraphs(300), "m1", 800, svg, err);
+    const long long ms = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - t0).count();
+    const bool stopped = !ok && err == "mermaid render timed out";
+    const bool in_time = ms < kTimeoutBudgetMs;
+    printf("timeout nested-subgraphs: ok=%d elapsed_ms=%lld err=%s: %s\n", (int)ok, ms, err.c_str(),
+           (stopped && in_time) ? "ok" : "FAIL");
+
+    std::string after_svg, after_err;
+    const bool recovered = MermaidEngine::Render(kFlowchart, "m2", 800, after_svg, after_err)
+                           && svg_expected(after_svg);
+    printf("timeout recovery flowchart: ok=%d err=%s: %s\n", (int)recovered, after_err.c_str(),
+           recovered ? "ok" : "FAIL");
+    return stopped && in_time && recovered;
+}
+
 }   // namespace
 
 int main(int argc, char **argv)
 {
     if (argc < 2) {
-        fprintf(stderr, "usage: %s flowchart|swimlane|invalid|cells|hostile <sample.md>\n", argv[0]);
+        fprintf(stderr, "usage: %s flowchart|swimlane|invalid|cells|hostile|timeout <sample.md>\n", argv[0]);
         return 2;
     }
     const std::string which = argv[1];
@@ -184,6 +223,9 @@ int main(int argc, char **argv)
 
     if (which == "hostile")
         return check_hostile() ? 0 : 1;
+
+    if (which == "timeout")
+        return check_timeout() ? 0 : 1;
 
     if (which == "cells") {
         std::string swim;

@@ -71,8 +71,8 @@ private:
     // The original text + base attr, retained so Invalidate(width) re-renders.
     std::wstring m_text;
 
-    // mermaid render cache keyed by (fence source offset, width).
-    std::map<std::pair<int64_t, int>, std::vector<MdLine>> m_mermaid_cache;
+    // mermaid render cache keyed by (fence source hash, width).
+    std::map<std::pair<size_t, int>, std::vector<MdLine>> m_mermaid_cache;
 };
 
 #endif // FAR2L_MARKDOWN_RENDER_HH

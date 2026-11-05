@@ -195,7 +195,7 @@ func far2l_Close() {
 
 func termTask(args []string, cols int, rows int) {
     opts := termtest.Options {
-        CmdName: g_far2l_bin, // g_far2l_bin,
+        CmdName: g_far2l_bin, // g_far2l_bin, 
 		Args: append([]string{"--test=" + g_far2l_sock}, args...),
 		Environment : append(os.Environ(), []string {
 			"FAR2L_STD=" + filepath.Join(g_test_workdir, "far2l.log"),
