@@ -75,16 +75,19 @@ add_custom_command(TARGET bootstrap
     COMMAND "cp" "${CMAKE_CURRENT_SOURCE_DIR}/*.ini" "${INSTALL_DIR}"
 )
 
-# Mermaid asset: bundle Resources on macOS (keeps the bundle's code
-# directory Mach-O-only so codesign --deep validates), INSTALL_DIR elsewhere.
+# Mermaid asset: the ASCII diagram bundle and its license.  Bundle Resources on macOS (keeps the
+# bundle's code directory Mach-O-only so codesign --deep validates), INSTALL_DIR elsewhere.
+# Only these two files are copied; mermaid.min.js is no longer installed.
 if (APPLE)
     add_custom_command(TARGET bootstrap
         POST_BUILD
-        COMMAND "cp" "${CMAKE_CURRENT_SOURCE_DIR}/*.js" "${INSTALL_DIR}/../Resources"
+        COMMAND "cp" "${CMAKE_CURRENT_SOURCE_DIR}/mermaid-ascii.js" "${INSTALL_DIR}/../Resources"
+        COMMAND "cp" "${CMAKE_CURRENT_SOURCE_DIR}/mermaid-ascii.LICENSE.md" "${INSTALL_DIR}/../Resources"
     )
 else ()
     add_custom_command(TARGET bootstrap
         POST_BUILD
-        COMMAND "cp" "${CMAKE_CURRENT_SOURCE_DIR}/*.js" "${INSTALL_DIR}"
+        COMMAND "cp" "${CMAKE_CURRENT_SOURCE_DIR}/mermaid-ascii.js" "${INSTALL_DIR}"
+        COMMAND "cp" "${CMAKE_CURRENT_SOURCE_DIR}/mermaid-ascii.LICENSE.md" "${INSTALL_DIR}"
     )
 endif ()

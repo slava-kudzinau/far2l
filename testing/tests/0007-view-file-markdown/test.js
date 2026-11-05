@@ -96,13 +96,24 @@ CheckForeOther("table art", art_cell, plain, "viewer")
 CheckForeOther("table art", art_cell, heading_cell, "heading")
 CheckForeOther("table art", art_cell, code_cell, "code")
 
-// Scroll to the bottom, where the mermaid fence is.
+// Scroll to the bottom, where the mermaid fences are.
 TypeEnd()
 ExpectNoString("Heading One")
 ExpectString("Start")
 ExpectString("Finish")
-ExpectString("┌──────────────────┐")
 ExpectNoString("```mermaid")
+// The flowchart is drawn as box art in the art role, with no source text left on screen.
+var flow = ExpectString("┌───────┐     ┌────────┐")
+CheckForeSame("flowchart art", ReadCell(flow.X, flow.Y), art_cell, "table art")
+ExpectNoString("graph LR")
+// The swimlane block is not drawn: its code shows, and the hint row follows the code.
+var swim_last = ExpectString("a1[Start] --> a2[Finish]")
+var hint = ExpectString("(diagram not drawn here - Alt-F3 opens it in the browser)")
+if (hint.Y != swim_last.Y + 2) {
+	Log("swimlane code on row " + swim_last.Y + ", hint on row " + hint.Y);
+	Panic("the hint does not follow the swimlane code after its end line");
+}
+CheckFore("diagram hint", ReadCell(hint.X, hint.Y))
 var quote = ExpectString("│ block quote line")
 CheckFore("block quote", ReadCell(quote.X + 2, quote.Y))
 

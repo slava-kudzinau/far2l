@@ -190,8 +190,6 @@ src/shoco/shoco.c
 set(MD_SOURCES
 src/markdown/md4c/md4c.c
 src/markdown/MarkdownRender.cpp
-src/markdown/MermaidEngine.cpp
-src/markdown/SvgCanvas.cpp
 src/markdown/AsciiMermaid.cpp
 )
 
@@ -275,7 +273,7 @@ target_include_directories(far2l PRIVATE
 
 add_dependencies(far2l bootstrap WinPort)
 
-# Markdown preview shared library (md4c + render + mermaid + svg rasterizer)
+# Markdown preview shared library (md4c + render + ascii mermaid)
 add_library(far2l_md STATIC ${MD_SOURCES})
 target_compile_definitions(far2l_md PRIVATE -DUNICODE)
 target_include_directories(far2l_md PRIVATE
@@ -334,7 +332,7 @@ else()
         PRIVATE ${UCHARDET_LIBRARIES})
 endif()
 
-# markdown preview subsystem (drives embedded mermaid via quickjs-ng)
+# markdown preview subsystem (draws mermaid fences with the quickjs-ng runtime)
 target_link_libraries(far2l PRIVATE far2l_md)
 
 if(CMAKE_SYSTEM_NAME MATCHES "OpenBSD")

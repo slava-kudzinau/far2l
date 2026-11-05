@@ -18,8 +18,8 @@
 // ---------------------------------------------------------------------------
 // ASCII Mermaid (F3 markdown view).  One quickjs-ng runtime for the process, built on the first
 // render: it evaluates mermaid-ascii.js, whose global renderAscii(src) returns the art (or throws
-// Error 'unsupported: <type>' or a parse message).  Each render runs under the same bounds as
-// MermaidEngine: a wall-clock deadline (interrupt handler), a 1 MB JS stack and a memory limit.
+// Error 'unsupported: <type>' or a parse message).  Each render runs under a wall-clock deadline
+// (interrupt handler), a 1 MB JS stack and a memory limit.
 // A render that hits the deadline frees the runtime; the next render builds it again from disk.
 // ---------------------------------------------------------------------------
 
@@ -110,7 +110,7 @@ std::string exe_dir()
 }
 
 // The bundle path: FAR2L_MERMAID_ASCII_JS when set (and not searched for elsewhere), else the
-// first readable copy in the places MermaidEngine looks for mermaid.min.js.
+// first readable copy in the app bundle's Resources, the install prefix and the system share dirs.
 std::string locate_bundle()
 {
     if (const char *env = getenv("FAR2L_MERMAID_ASCII_JS")) {
