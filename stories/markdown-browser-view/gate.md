@@ -9,7 +9,7 @@ A script. When you press Alt-F3 on a `.md` file, far2l runs it. The script write
 - **Alt-F3**: far2l's "alternative view" key. It runs the `AltView` command of a File associations entry.
 - **File associations**: far2l's list of masks (like `*.md`) and the commands to run for them. You edit it in F9, Commands, File associations.
 - **marked**: a small MIT-licensed JavaScript library that turns Markdown into HTML.
-- **mermaid**: the library that draws diagrams. The repo already has `mermaid.min.js`.
+- **mermaid**: the library that draws diagrams. The page loads it from a CDN.
 - **Strict security level**: a mermaid setting that stops diagram text from running scripts.
 
 ### Parts it touches
@@ -22,14 +22,14 @@ flowchart LR
 ```
 
 ### Contracts, data and runtime
-One new script `far2l/bootstrap/md-open.sh`, one vendored file `marked.min.js` (with its license), both installed beside `mermaid.min.js`. A temp file `far2l-md-<pid>.html` stays in the temp folder. Needs a browser opened by macOS `open`. No change to far2l C++ code and no change to your config; you add the association entry once by hand (the script prints it).
+One new script `far2l/bootstrap/md-open.sh`, one vendored file `marked.min.js` (with its license), installed with the other bootstrap files. Mermaid is loaded from the jsdelivr CDN (pinned version, integrity hash), so the page needs internet to draw diagrams; without it you see the text and the diagram source. A temp file `far2l-md-<pid>.html` stays in the temp folder. Needs a browser opened by macOS `open`. No change to far2l C++ code and no change to your config; you add the association entry once by hand (the script prints it).
 
 ### Decisions the model made
 | Decision | Alternative rejected | Why |
 |---|---|---|
 | A shell script run through File associations | A new C++ viewer key | No C++ needed; Alt-F3 already exists; easy to change |
 | Markdown rendered inside the page by `marked` | Convert to HTML in C++ with md4c | Keeps the script small and POSIX; no new native tool |
-| Everything inline in one file | A local web server | Works offline, nothing to start or stop |
+| One page file; `marked` inline, mermaid from the CDN | A local web server, or the 5 MB mermaid file kept in the repo | Nothing to start or stop; no large file to ship (your decision) |
 | Mermaid at strict security level | Loose level | The file may come from anywhere |
 | You add the association by hand once (the script prints it) | The script edits your `config.ini` | far2l rewrites `config.ini` on exit and could undo the edit |
 | Raw HTML in the Markdown is shown as text | Allow it, or add a sanitizer library | Smallest safe rule; no new dependency |

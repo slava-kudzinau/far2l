@@ -11,7 +11,7 @@ depends-on: markdown-preview-reading
 The terminal Markdown view (Shift-F4 in F3) is good for quick reading, but it cannot draw diagrams well. The owner decided: keep the terminal view for text, and open a real web page for the full document with diagrams.
 
 ## What
-- `far2l/bootstrap/md-open.sh <file.md>` writes one temp `.html` file and opens it with `open` (macOS). The page holds the markdown text, an inline markdown renderer (`marked`, MIT), `mermaid.min.js` (securityLevel strict), and a small stylesheet. It works offline. Light and dark follow the system setting.
+- `far2l/bootstrap/md-open.sh <file.md>` writes one temp `.html` file and opens it with `open` (macOS). The page holds the markdown text, an inline markdown renderer (`marked`, MIT), a `<script>` tag that loads mermaid from the jsdelivr CDN (pinned version, integrity hash, securityLevel strict), and a small stylesheet. Owner decision 2026-11-06: no local `mermaid.min.js`; the CDN is used. Without internet the diagrams show as source. Light and dark follow the system setting.
 - Alt-F3 on a `.md` file runs the script, through far2l's file associations. A default association `*.md` is shipped (the user can change it in far2l).
 - The terminal Markdown view is not changed by this story.
 
