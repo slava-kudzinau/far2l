@@ -555,7 +555,10 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width, uint16_t base
         if (cell == m_mermaid_cache.end() || cell->second.empty())
             continue;
         std::vector<MdLine> &lines = cell->second;
-        lines.front().nFilePos = it->file_pos;
+        // Every art row carries the fence position: the viewer reads nFilePos as the row's
+        // position, and a 0 in the middle of the sequence breaks the lookup in NextLines().
+        for (MdLine &line : lines)
+            line.nFilePos = it->file_pos;
         m_lines.erase(m_lines.begin() + it->first_line,
                       m_lines.begin() + it->first_line + it->count);
         m_lines.insert(m_lines.begin() + it->first_line, lines.begin(), lines.end());
