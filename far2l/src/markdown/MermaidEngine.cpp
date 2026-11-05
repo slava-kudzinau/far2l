@@ -27,11 +27,20 @@ namespace {
 // get/set, classList, textContent, style, getBoundingClientRect, querySelector(All).
 const char kDomShim[] = R"JS(
 (function () {
-  function ClassList() {}
-  ClassList.prototype.add = function () { for (var i = 0; i < arguments.length; i++) this._s[arguments[i]] = 1; };
-  ClassList.prototype.remove = function (c) { delete this._s[c]; };
-  ClassList.prototype.contains = function (c) { return !!this._s[c]; };
-  ClassList.prototype.toggle = function (c, f) { if (f) this.add(c); else this.remove(c); };
+  // classList reads and writes the class attribute, so class selectors see d3's changes.
+  function classesOf(n) { return (n._attrs['class'] || '').split(/\s+/).filter(function (c) { return c; }); }
+  function ClassList(el) { this._el = el; }
+  ClassList.prototype.add = function () { var a = classesOf(this._el); for (var i = 0; i < arguments.length; i++) if (a.indexOf(arguments[i]) < 0) a.push(arguments[i]); this._el._attrs['class'] = a.join(' '); };
+  ClassList.prototype.remove = function () { var a = classesOf(this._el); for (var i = 0; i < arguments.length; i++) { var j = a.indexOf(arguments[i]); if (j >= 0) a.splice(j, 1); } this._el._attrs['class'] = a.join(' '); };
+  ClassList.prototype.contains = function (c) { return classesOf(this._el).indexOf(c) >= 0; };
+  ClassList.prototype.toggle = function (c, f) { var on = (f === undefined) ? !this.contains(c) : !!f; if (on) this.add(c); else this.remove(c); return on; };
+
+  // d3 writes inline styles through style.setProperty/removeProperty and reads
+  // them through getPropertyValue; values are own string properties.
+  function Style() {}
+  Object.defineProperty(Style.prototype, 'setProperty', { value: function (k, v) { this[k] = String(v); } });
+  Object.defineProperty(Style.prototype, 'removeProperty', { value: function (k) { var old = this[k]; delete this[k]; return old === undefined ? '' : old; } });
+  Object.defineProperty(Style.prototype, 'getPropertyValue', { value: function (k) { return Object.prototype.hasOwnProperty.call(this, k) ? String(this[k]) : ''; } });
 
   function El(tag, ns) {
     this.tagName = String(tag).toUpperCase();
@@ -39,10 +48,9 @@ const char kDomShim[] = R"JS(
     this.ns = ns || null;
     this.childNodes = [];
     this._attrs = {};
-    this.style = {};
+    this.style = new Style();
     this._text = null;
-    this.classList = new ClassList();
-    this.classList._s = {};
+    this.classList = new ClassList(this);
     this.parentNode = null;
     this.id = '';
     this._listeners = {};
@@ -65,12 +73,119 @@ const char kDomShim[] = R"JS(
     return { x: 0, y: 0, width: w, height: h };
   };
   El.prototype.addEventListener = function (t, fn) { (this._listeners[t] = this._listeners[t] || []).push(fn); };
-  El.prototype.setAttributeNS = El.prototype.setAttribute;
-  El.prototype.getAttributeNS = El.prototype.getAttribute;
+  // d3 calls (namespace, localName, value); keep the conventional prefix in the name.
+  var NSPREFIX = { 'http://www.w3.org/1999/xlink': 'xlink:', 'http://www.w3.org/XML/1998/namespace': 'xml:', 'http://www.w3.org/2000/xmlns/': 'xmlns:' };
+  function qname(ns, local) { var p = NSPREFIX[ns]; return (p && local !== 'xmlns') ? p + local : local; }
+  El.prototype.setAttributeNS = function (ns, local, v) { this.setAttribute(qname(ns, local), v); };
+  El.prototype.getAttributeNS = function (ns, local) { return this.getAttribute(qname(ns, local)); };
+  El.prototype.removeAttributeNS = function (ns, local) { this.removeAttribute(qname(ns, local)); };
+  El.prototype.hasAttributeNS = function (ns, local) { return this.hasAttribute(qname(ns, local)); };
   function walk(node, out) { for (var i = 0; i < node.childNodes.length; i++) { var c = node.childNodes[i]; if (c.childNodes) { out.push(c); walk(c, out); } } }
-  function tagOf(sel) { var m = String(sel).match(/([a-zA-Z][\w-]*)$/); return m ? m[1].toUpperCase() : null; }
-  El.prototype.querySelectorAll = function (sel) { var all = []; walk(this, all); var t = tagOf(sel), id = (sel[0] === '#') ? sel.slice(1) : null; var res = []; for (var i = 0; i < all.length; i++) { var n = all[i]; if (id && n.id === id) res.push(n); else if (t && n.tagName === t) res.push(n); } return res; };
+  // Selector matcher for the subset mermaid uses: type, *, #id, .class, [attr] and
+  // [attr op value], :first-child, :last-child, :nth-child(n|odd|even), :not(compound),
+  // :scope, and the ' ' and '>' combinators in comma lists.  Anything else throws,
+  // so an unsupported selector shows up in the render error instead of matching nothing.
+  function attrOf(n, k) { return Object.prototype.hasOwnProperty.call(n._attrs, k) ? n._attrs[k] : null; }
+  function elementSiblings(n) { var p = n.parentNode; return p ? p.childNodes.filter(function (c) { return c.tagName.charAt(0) !== '#'; }) : [n]; }
+  function parseCompound(s) {
+    var c = { tag: null, conds: [] }, i = 0, m;
+    m = /^(\*|[a-zA-Z][\w-]*)/.exec(s);
+    if (m) { if (m[1] !== '*') c.tag = m[1].toUpperCase(); i = m[1].length; }
+    while (i < s.length) {
+      var rest = s.slice(i);
+      if ((m = /^#([\w-]+)/.exec(rest))) c.conds.push({ k: 'id', v: m[1] });
+      else if ((m = /^\.([\w-]+)/.exec(rest))) c.conds.push({ k: 'cls', v: m[1] });
+      else if ((m = /^\[\s*([\w:-]+)\s*(?:([~^$*|]?=)\s*(?:"([^"]*)"|'([^']*)'|([^\]\s]+)))?\s*\]/.exec(rest)))
+        c.conds.push({ k: 'attr', n: m[1], op: m[2] || '', v: m[3] !== undefined ? m[3] : m[4] !== undefined ? m[4] : m[5] });
+      else if ((m = /^:not\(([^()]*)\)/.exec(rest))) c.conds.push({ k: 'not', v: parseCompound(m[1]) });
+      else if ((m = /^:(first-child|last-child|scope)/.exec(rest))) c.conds.push({ k: m[1] });
+      else if ((m = /^:nth-child\((\d+|odd|even)\)/.exec(rest))) c.conds.push({ k: 'nth', v: m[1] });
+      else throw new Error('unsupported selector: ' + s);
+      i += m[0].length;
+    }
+    return c;
+  }
+  function parseComplex(s) {
+    var parts = [], re = /(\s*>\s*|\s+)?((?:[^\s>\[]|\[[^\]]*\])+)/g, m, end = 0;
+    s = s.trim();
+    while ((m = re.exec(s)) !== null) {
+      if (m.index !== end) throw new Error('unsupported selector: ' + s);
+      end = m.index + m[0].length;
+      var comb = parts.length === 0 ? null : (m[1] && m[1].indexOf('>') >= 0 ? '>' : ' ');
+      parts.push({ comb: comb, c: parseCompound(m[2]) });
+    }
+    if (parts.length === 0 || end !== s.length) throw new Error('unsupported selector: ' + s);
+    return parts;
+  }
+  var selCache = {};
+  function compileSel(sel) {
+    if (selCache[sel]) return selCache[sel];
+    var groups = [], cur = '', depth = 0, quote = null;
+    for (var i = 0; i < sel.length; i++) {
+      var ch = sel[i];
+      if (quote) { if (ch === quote) quote = null; }
+      else if (ch === '"' || ch === "'") quote = ch;
+      else if (ch === '[' || ch === '(') depth++;
+      else if (ch === ']' || ch === ')') depth--;
+      else if (ch === ',' && depth === 0) { groups.push(cur); cur = ''; continue; }
+      cur += ch;
+    }
+    groups.push(cur);
+    return (selCache[sel] = groups.map(parseComplex));
+  }
+  function matchAttr(n, d) {
+    var v = attrOf(n, d.n);
+    if (v === null) return false;
+    switch (d.op) {
+      case '': return true;
+      case '=': return v === d.v;
+      case '~=': return v.split(/\s+/).indexOf(d.v) >= 0;
+      case '^=': return v.indexOf(d.v) === 0;
+      case '$=': return v.slice(v.length - d.v.length) === d.v;
+      case '*=': return v.indexOf(d.v) >= 0;
+      case '|=': return v === d.v || v.indexOf(d.v + '-') === 0;
+    }
+    return false;
+  }
+  function matchCompound(n, c, scope) {
+    if (!n || !n._attrs || n.tagName.charAt(0) === '#') return false;
+    if (c.tag && n.tagName !== c.tag) return false;
+    for (var i = 0; i < c.conds.length; i++) {
+      var d = c.conds[i], idx;
+      switch (d.k) {
+        case 'id': if (attrOf(n, 'id') !== d.v) return false; break;
+        case 'cls': if (classesOf(n).indexOf(d.v) < 0) return false; break;
+        case 'attr': if (!matchAttr(n, d)) return false; break;
+        case 'not': if (matchCompound(n, d.v, scope)) return false; break;
+        case 'first-child': if (elementSiblings(n).indexOf(n) !== 0) return false; break;
+        case 'last-child': { var sib = elementSiblings(n); if (sib.indexOf(n) !== sib.length - 1) return false; break; }
+        case 'nth': idx = elementSiblings(n).indexOf(n) + 1;
+          if (d.v === 'odd' ? idx % 2 !== 1 : d.v === 'even' ? idx % 2 !== 0 : idx !== +d.v) return false;
+          break;
+        case 'scope': if (n !== scope) return false; break;
+      }
+    }
+    return true;
+  }
+  function matchFrom(n, parts, i, scope) {
+    if (!matchCompound(n, parts[i].c, scope)) return false;
+    if (i === 0) return true;
+    if (parts[i].comb === '>') return !!n.parentNode && matchFrom(n.parentNode, parts, i - 1, scope);
+    for (var p = n.parentNode; p; p = p.parentNode) if (matchFrom(p, parts, i - 1, scope)) return true;
+    return false;
+  }
+  function matchesAny(n, groups, scope) {
+    for (var g = 0; g < groups.length; g++) if (matchFrom(n, groups[g], groups[g].length - 1, scope)) return true;
+    return false;
+  }
+  El.prototype.querySelectorAll = function (sel) {
+    var groups = compileSel(String(sel)), all = [], res = [];
+    walk(this, all);
+    for (var i = 0; i < all.length; i++) if (matchesAny(all[i], groups, this)) res.push(all[i]);
+    return res;
+  };
   El.prototype.querySelector = function (sel) { var r = this.querySelectorAll(sel); return r.length ? r[0] : null; };
+  El.prototype.matches = function (sel) { return matchesAny(this, compileSel(String(sel)), this); };
 
   var SVGNS = 'http://www.w3.org/2000/svg';
   Object.defineProperty(El.prototype, 'ownerDocument', { get: function () { return globalThis.document; } });
@@ -82,7 +197,7 @@ const char kDomShim[] = R"JS(
   Object.defineProperty(El.prototype, 'parentElement', { get: function () { return this.parentNode; } });
   Object.defineProperty(El.prototype, 'nextSibling', { get: function () { var p = this.parentNode; if (!p) return null; var i = p.childNodes.indexOf(this); return p.childNodes[i + 1] || null; } });
   Object.defineProperty(El.prototype, 'previousSibling', { get: function () { var p = this.parentNode; if (!p) return null; var i = p.childNodes.indexOf(this); return i > 0 ? p.childNodes[i - 1] : null; } });
-  Object.defineProperty(El.prototype, 'nodeType', { get: function () { return this.tagName === '#text' ? 3 : 1; } });
+  Object.defineProperty(El.prototype, 'nodeType', { get: function () { return this.tagName === '#text' ? 3 : this.tagName === '#DOCUMENT' ? 9 : 1; } });
   Object.defineProperty(El.prototype, 'dataset', { get: function () { return this._ds || (this._ds = {}); } });
   Object.defineProperty(El.prototype, 'className', { get: function () { return this._attrs['class'] || ''; }, set: function (v) { this._attrs['class'] = String(v); } });
   Object.defineProperty(El.prototype, 'nodeValue', { get: function () { return this._text; }, set: function (v) { this._text = String(v); } });
@@ -96,7 +211,6 @@ const char kDomShim[] = R"JS(
   El.prototype.removeEventListener = function () {};
   El.prototype.dispatchEvent = function () { return true; };
   El.prototype.focus = function () {};
-  El.prototype.matches = function (sel) { var t = tagOf(sel); return !!t && this.tagName === t; };
   El.prototype.getElementsByTagName = function (t) { return this.querySelectorAll(t); };
   function textLen(n) { var fs = parseFloat(n.style['font-size'] || n._attrs['font-size'] || '16') || 16; return n.textContent.length * fs * 0.6; }
   El.prototype.getComputedTextLength = function () { return textLen(this); };
@@ -114,7 +228,16 @@ const char kDomShim[] = R"JS(
       set: function (v) { this.childNodes = []; this._text = String(v); }
     });
   }
-  function attrStr(n) { var s = ''; for (var k in n._attrs) s += ' ' + k + '="' + String(n._attrs[k]).replace(/"/g, '&quot;') + '"'; return s; }
+  // Attributes, plus the inline style object folded into a style attribute (d3 sets
+  // text-anchor and the like through style.setProperty, not setAttribute).
+  function attrStr(n) {
+    var a = {}, k, st = '', s = '';
+    for (k in n._attrs) a[k] = n._attrs[k];
+    for (k in n.style) if (Object.prototype.hasOwnProperty.call(n.style, k) && typeof n.style[k] === 'string') st += k + ': ' + n.style[k] + '; ';
+    if (st) a.style = (a.style ? a.style + ' ' : '') + st.trim();
+    for (k in a) s += ' ' + k + '="' + String(a[k]).replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"';
+    return s;
+  }
   function serialize(n) {
     if (n.tagName === '#text') return String(n._text).replace(/&/g, '&amp;').replace(/</g, '&lt;');
     var tag = n.tagName.toLowerCase();
@@ -125,7 +248,9 @@ const char kDomShim[] = R"JS(
     return s;
   }
   defText();
-  Object.defineProperty(El.prototype, 'innerHTML', { get: function () { var s = ''; for (var i = 0; i < this.childNodes.length; i++) s += serialize(this.childNodes[i]); return s; }, set: function (v) { this.childNodes = []; this._text = null; } });
+  // No HTML parser here: innerHTML can only carry raw text, which is what <style> and
+  // <script> hold.  Other elements get no children from innerHTML.
+  Object.defineProperty(El.prototype, 'innerHTML', { get: function () { var s = ''; for (var i = 0; i < this.childNodes.length; i++) s += serialize(this.childNodes[i]); return s; }, set: function (v) { this.childNodes = []; this._text = (this.tagName === 'STYLE' || this.tagName === 'SCRIPT') ? String(v) : null; } });
   Object.defineProperty(El.prototype, 'outerHTML', { get: function () { return serialize(this); } });
 
   var document = new El('#document');
@@ -134,10 +259,13 @@ const char kDomShim[] = R"JS(
   document.createTextNode = function (t) { var n = new El('#text'); n.tagName = '#text'; n._text = String(t); return n; };
   document.createDocumentFragment = function () { return new El('#fragment'); };
   document.getElementById = function (id) { var all = []; walk(document, all); for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i]; return null; };
-  document.body = document.appendChild(new El('body'));
-  document.documentElement = document;
-  document.documentElement.tagName = 'HTML';
-  document.documentElement.setAttribute('lang', 'en');
+  // document -> html -> (head, body).  DOMPurify (inside mermaid) only enables itself
+  // when document.nodeType is 9, so the document must not alias its <html> element.
+  var htmlEl = document.appendChild(new El('html'));
+  htmlEl.setAttribute('lang', 'en');
+  document.documentElement = htmlEl;
+  document.head = htmlEl.appendChild(new El('head'));
+  document.body = htmlEl.appendChild(new El('body'));
 
   globalThis.document = document;
   globalThis.window = globalThis;
@@ -157,10 +285,45 @@ const char kDomShim[] = R"JS(
   globalThis.document.addEventListener = function () {};
   globalThis.document.createComment = function (t) { var n = new El('#comment'); n._text = String(t); return n; };
   globalThis.document.createTreeWalker = function () { return { nextNode: function () { return null; } }; };
-  globalThis.document.head = document.appendChild(new El('head'));
   globalThis.DOMParser = function () {};
   globalThis.DOMParser.prototype.parseFromString = function (s) { var d = globalThis.document.implementation.createHTMLDocument(); d.body.innerHTML = s; return d; };
   globalThis.navigator = { userAgent: 'far2l' };
+  // quickjs has no timers (ELK's worker emulation uses setTimeout).  A timer is a
+  // microtask, which Render drains; delays are ignored.
+  globalThis.setTimeout = function (fn) {
+    var args = Array.prototype.slice.call(arguments, 2);
+    Promise.resolve().then(function () { if (typeof fn === 'function') fn.apply(null, args); });
+    return 0;
+  };
+  globalThis.clearTimeout = function () {};
+  globalThis.setInterval = function () { return 0; };
+  globalThis.clearInterval = function () {};
+  // base64 over binary strings (chars 0-255), as in the browser.
+  var B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  globalThis.btoa = function (s) {
+    s = String(s);
+    var out = '';
+    for (var i = 0; i < s.length; i += 3) {
+      var has1 = i + 1 < s.length, has2 = i + 2 < s.length;
+      var a = s.charCodeAt(i), b = has1 ? s.charCodeAt(i + 1) : 0, c = has2 ? s.charCodeAt(i + 2) : 0;
+      if (a > 255 || b > 255 || c > 255) throw new Error('btoa: invalid character');
+      var n = (a << 16) | (b << 8) | c;
+      out += B64[(n >> 18) & 63] + B64[(n >> 12) & 63] + (has1 ? B64[(n >> 6) & 63] : '=') + (has2 ? B64[n & 63] : '=');
+    }
+    return out;
+  };
+  globalThis.atob = function (s) {
+    s = String(s).replace(/[\t\n\f\r ]/g, '').replace(/=+$/, '');
+    var out = '', buf = 0, bits = 0;
+    for (var i = 0; i < s.length; i++) {
+      var v = B64.indexOf(s.charAt(i));
+      if (v < 0) throw new Error('atob: invalid character');
+      buf = ((buf << 6) | v) & 0xffff;
+      bits += 6;
+      if (bits >= 8) { bits -= 8; out += String.fromCharCode((buf >> bits) & 255); }
+    }
+    return out;
+  };
   globalThis.requestAnimationFrame = function (cb) { cb(0); return 0; };
   globalThis.cancelAnimationFrame = function () {};
   globalThis.getComputedStyle = function () { return { getPropertyValue: function () { return ''; } }; };
@@ -172,6 +335,10 @@ const char kDomShim[] = R"JS(
 
 // Render helper: calls mermaid.render (async) and stashes the SVG on the global.
 const char kRenderGlue[] = R"JS(
+// The shim has no HTML parser, so mermaid must not build HTML labels (htmlLabels false
+// draws labels as SVG text) and must skip its DOMPurify pass (securityLevel 'loose').
+// The SVG is only converted to terminal cells, never shown in a page.
+globalThis.mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', htmlLabels: false, flowchart: { htmlLabels: false } });
 globalThis.__far2l_done = false;
 globalThis.__far2l_svg = '';
 globalThis.__far2l_err = '';
@@ -381,16 +548,16 @@ bool MermaidEngine::Render(const std::string &mermaid_src, const std::string &id
         return false;
 
     // Drain the promise microtasks (mermaid uses d3/async rendering).
-    for (int spin = 0; spin < 8; ++spin) {
+    bool done = false;
+    for (int spin = 0; spin < 8 && !done; ++spin) {
         run_pending_jobs(g_engine.rt, 1000);
         JSValue g = JS_GetGlobalObject(g_engine.ctx);
         JSValue d = JS_GetPropertyStr(g_engine.ctx, g, "__far2l_done");
-        int done = 0;
-        JS_ToInt32(g_engine.ctx, &done, d);
+        int flag = 0;
+        JS_ToInt32(g_engine.ctx, &flag, d);
         JS_FreeValue(g_engine.ctx, d);
         JS_FreeValue(g_engine.ctx, g);
-        if (done)
-            break;
+        done = flag != 0;
     }
 
     std::string serr = get_global_string(g_engine.ctx, "__far2l_err");
@@ -398,6 +565,14 @@ bool MermaidEngine::Render(const std::string &mermaid_src, const std::string &id
         err = serr;
         return false;
     }
+    if (!done) {
+        err = "mermaid render did not complete";
+        return false;
+    }
     svg_out = get_global_string(g_engine.ctx, "__far2l_svg");
-    return !svg_out.empty();
+    if (svg_out.empty()) {
+        err = "mermaid render produced no svg";
+        return false;
+    }
+    return true;
 }
