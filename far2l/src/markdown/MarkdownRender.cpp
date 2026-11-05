@@ -178,6 +178,17 @@ struct Builder {
 
     // --- line helpers ---------------------------------------------------
 
+    // The bar of each enclosing blockquote, drawn at the start of a row.
+    std::wstring quote_bars() const
+    {
+        std::wstring bars;
+        for (int q = 0; q < quote_depth; ++q) {
+            bars += BoxSymbols[BS_V1];
+            bars += L' ';
+        }
+        return bars;
+    }
+
     void begin_line()
     {
         if (cur_started)
@@ -188,10 +199,7 @@ struct Builder {
         // leading indent: list depth (2 cells) + blockquote prefix.
         std::wstring lead;
         lead.append(2 * (size_t)list_stack.size(), L' ');
-        for (int q = 0; q < quote_depth; ++q) {
-            lead += BoxSymbols[BS_V1];
-            lead += L' ';
-        }
+        lead += quote_bars();
         if (li_prefix_pending) {
             lead += li_prefix;
             li_prefix_pending = false;
@@ -235,6 +243,43 @@ struct Builder {
     }
 
     void line_break() { flush(); }   // paragraph soft/hard break = new display line
+
+    // --- spacing (Spacing table in the story spec) ------------------------
+    // A block that ends queues one blank row; the next block emits it before its first row.
+    // So repeated blanks collapse into one, and no blank row comes before the first row.  Source
+    // blank lines never produce rows here, so only code fences keep theirs.  A list is one unit:
+    // nothing is queued inside it, and only its outermost start and end queue or emit a blank.
+    bool gap_pending = false;
+
+    static bool is_blank(const MdLine &line)
+    {
+        for (const MdRun &r : line.runs)
+            if (r.text.find_first_not_of(L" \t") != std::wstring::npos)
+                return false;
+        return true;
+    }
+
+    void open_block()
+    {
+        if (!list_stack.empty() || !gap_pending)
+            return;
+        gap_pending = false;
+        if (out.empty() || is_blank(out.back()))
+            return;
+        // Offset of the row before, so the offsets never decrease (see flush()).
+        MdLine blank;
+        blank.nFilePos = out.back().nFilePos;
+        const std::wstring bars = quote_bars();   // a blank inside a quote keeps its bar
+        if (!bars.empty())
+            blank.runs.push_back(MdRun{bars, base_attr});
+        out.push_back(std::move(blank));
+    }
+
+    void close_block()
+    {
+        if (list_stack.empty())
+            gap_pending = true;
+    }
 };
 
 // File offset of the first source text in the code line [s, e) of code_text, or -1 when the line
@@ -251,15 +296,17 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
     Builder &b = *(Builder *)userdata;
     b.pos; // (offsets tracked in text callback)
     switch (type) {
-        case MD_BLOCK_QUOTE: b.quote_depth++; break;
+        case MD_BLOCK_QUOTE: b.open_block(); b.quote_depth++; break;
         case MD_BLOCK_UL: {
             auto *d = (MD_BLOCK_UL_DETAIL *)detail;
+            b.open_block();
             b.list_stack.push_back(0);
             (void)d;
             break;
         }
         case MD_BLOCK_OL: {
             auto *d = (MD_BLOCK_OL_DETAIL *)detail;
+            b.open_block();
             b.list_stack.push_back(1);
             b.ol_counter.push_back(d ? (long)d->start : 1);
             break;
@@ -287,15 +334,18 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         }
         case MD_BLOCK_H: {
             auto *d = (MD_BLOCK_H_DETAIL *)detail;
+            b.open_block();
             b.heading_level = d ? (int)d->level : 1;
             b.begin_line();
             break;
         }
         case MD_BLOCK_P:
+            b.open_block();
             b.begin_line();
             break;
         case MD_BLOCK_CODE: {
             auto *d = (MD_BLOCK_CODE_DETAIL *)detail;
+            b.open_block();
             b.in_code = true;
             b.code_text.clear();
             b.code_marks.clear();
@@ -304,21 +354,25 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             break;
         }
         case MD_BLOCK_HTML:
+            b.open_block();
             b.in_code = true;   // verbatim, same treatment as code
             b.code_text.clear();
             b.code_marks.clear();
             b.code_lang.clear();
             break;
         case MD_BLOCK_HR: {
+            b.open_block();
             b.begin_line();
             std::wstring hr;
             int n = std::max(1, b.width - (int)(2 * b.list_stack.size()));
             hr.append((size_t)n, BoxSymbols[BS_H1]);
             b.append(hr);
             b.flush();
+            b.close_block();
             break;
         }
         case MD_BLOCK_TABLE:
+            b.open_block();
             b.in_table = true;
             b.table_rows.clear();
             b.table_row_pos.clear();
@@ -345,14 +399,19 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
     Builder &b = *(Builder *)userdata;
     (void)detail;
     switch (type) {
-        case MD_BLOCK_QUOTE: if (b.quote_depth) b.quote_depth--; break;
+        case MD_BLOCK_QUOTE:
+            if (b.quote_depth) b.quote_depth--;
+            b.close_block();
+            break;
         case MD_BLOCK_UL:
             if (!b.list_stack.empty()) b.list_stack.pop_back();
             if (!b.ol_counter.empty() && b.list_stack.empty()) b.ol_counter.clear();
+            b.close_block();
             break;
         case MD_BLOCK_OL:
             if (!b.list_stack.empty()) b.list_stack.pop_back();
             if (!b.ol_counter.empty() && b.list_stack.empty()) b.ol_counter.clear();
+            b.close_block();
             break;
         case MD_BLOCK_LI:
             b.flush();
@@ -369,9 +428,11 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                 b.flush();
             }
             b.heading_level = 0;
+            b.close_block();
             break;
         case MD_BLOCK_P:
             b.flush();
+            b.close_block();
             break;
         case MD_BLOCK_CODE:
         case MD_BLOCK_HTML: {
@@ -407,6 +468,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             }
             if (is_mermaid)
                 b.fences.push_back(Builder::Fence{fence_pos, fence_src, first_line, count});
+            b.close_block();
             break;
         }
         case MD_BLOCK_TH:
@@ -422,6 +484,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             break;
         case MD_BLOCK_TABLE:
             b.in_table = false;
+            b.close_block();
             // grid render via BoxSymbols; column widths = max cell width.
             if (!b.table_rows.empty()) {
                 size_t cols = 0;

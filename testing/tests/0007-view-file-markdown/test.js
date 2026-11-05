@@ -84,11 +84,29 @@ ExpectString("Long Start")
 ExpectNoString("# Long Start")
 ExpectString("  0%")
 
+// Spacing: a blank row follows the heading and its rule, then the first paragraph.
+var start_row = ExpectString("Long Start");
+CheckBlankRow("blank row after the heading", start_row.Y + 2);
+var first_para = ExpectString("Row 001");
+if (first_para.Y != start_row.Y + 3) {
+	Log("heading on row " + start_row.Y + ", first paragraph on row " + first_para.Y);
+	Panic("the first paragraph does not follow the heading after one blank row");
+}
+
 // The found text must be on the top row of the viewer.
 function CheckTop(name, found) {
 	if (found.Y != 1) {
 		Log(name + ": found on row " + found.Y);
 		Panic(name + " is not on the top row");
+	}
+}
+
+// A row of the markdown view must be blank: the text of its 80 cells is empty.
+function CheckBlankRow(name, y) {
+	var text = BoundedLine(0, y, 80, " \t");
+	if (text != "") {
+		Log(name + ": row " + y + " is '" + text + "'");
+		Panic(name + " is not a blank row");
 	}
 }
 
@@ -127,7 +145,7 @@ ExpectNoString("# Long End")
 ExpectNoString("Row 030")
 ExpectString("100%")
 
-// Down on the last page does not scroll past it: the last line keeps its row.
+// Down on the last page does not scroll past it: the last page keeps its rows.
 var last_row = ExpectString("Final paragraph")
 TypeDown(3)
 var still_last = ExpectString("Final paragraph")
@@ -136,6 +154,34 @@ if (still_last.Y != last_row.Y) {
 	Panic("Down scrolled past the last full page");
 }
 ExpectString("100%")
+
+// Spacing at the end: a blank row after the last heading, one between two paragraphs, one before
+// the code fence, and the blank source line inside the fence is kept.
+var end_head = ExpectString("Long End")
+CheckBlankRow("blank row after the last heading", end_head.Y + 2)
+var final_para = ExpectString("Final paragraph")
+if (final_para.Y != end_head.Y + 3) {
+	Log("Long End on row " + end_head.Y + ", final paragraph on row " + final_para.Y);
+	Panic("the final paragraph does not follow the heading after one blank row");
+}
+var second_para = ExpectString("Second final paragraph")
+CheckBlankRow("blank row between two paragraphs", final_para.Y + 1)
+if (second_para.Y != final_para.Y + 2) {
+	Log("final paragraph on row " + final_para.Y + ", second paragraph on row " + second_para.Y);
+	Panic("the two paragraphs are not separated by one blank row");
+}
+var fence_one = ExpectString("Fence line one")
+CheckBlankRow("blank row before the code fence", second_para.Y + 1)
+if (fence_one.Y != second_para.Y + 2) {
+	Log("second paragraph on row " + second_para.Y + ", fence on row " + fence_one.Y);
+	Panic("the code fence does not follow the paragraph after one blank row");
+}
+var fence_two = ExpectString("Fence line two")
+CheckBlankRow("blank source line inside the code fence", fence_one.Y + 1)
+if (fence_two.Y != fence_one.Y + 2) {
+	Log("fence line one on row " + fence_one.Y + ", line two on row " + fence_two.Y);
+	Panic("the blank source line inside the code fence was collapsed");
+}
 
 // Home goes back to the first page.
 TypeHome()
@@ -154,17 +200,18 @@ ToggleShift(false)
 ExpectNoString("# Long Start")
 CheckTop("heading back in markdown", ExpectString("Long Start"))
 
+// The blank rows of the spacing moved the list down: after three pages the top row is Item 057.
 TypePageDown(3)
-CheckTop("list item in markdown", ExpectString("Item 060"))
+CheckTop("list item in markdown", ExpectString("Item 057"))
 ToggleShift(true)
 TypeFKey(4)
 ToggleShift(false)
-CheckTop("list item in plain", ExpectString("- Item 060 list text for the scrolling tests."))
+CheckTop("list item in plain", ExpectString("- Item 057 list text for the scrolling tests."))
 ToggleShift(true)
 TypeFKey(4)
 ToggleShift(false)
-ExpectNoString("- Item 060")
-CheckTop("list item back in markdown", ExpectString("Item 060"))
+ExpectNoString("- Item 057")
+CheckTop("list item back in markdown", ExpectString("Item 057"))
 
 // Hex with the Markdown flag still set: Down moves by one 16-byte row, not by a markdown line.
 TypeHome()
