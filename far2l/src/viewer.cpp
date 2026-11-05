@@ -1075,7 +1075,7 @@ void Viewer::ShowMarkdown()
 		text.resize((size_t)got);
 	}
 
-	m_md_doc.Render(text, Width, FarColorToReal(COL_VIEWERTEXT));
+	m_md_doc.Render(text, Width);
 	m_md_ready = true;
 
 	vseek(top, SEEK_SET);

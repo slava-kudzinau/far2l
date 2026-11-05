@@ -8,11 +8,19 @@
 #include <farplug-wide.h>   // FarColor 16-bit cell attributes (F_*/B_*)
 #include "colors.hpp"       // F_LIGHTGRAY, B_BLACK, ...
 
-// A run of text sharing one console color: a full FarColorToReal() value (palette
-// entry resolved, 24-bit parts included), drawn with SetColor() by the viewer.
+// Palette role of a run.  The viewer maps it to a far palette entry when it draws, so a theme
+// change shows on the next redraw.  Plain integers, so SvgCanvas can build runs as (text, role).
+enum MdRole : uint64_t {
+    MD_ROLE_BODY = 0,      // body text, list text, quote bars (the viewer text entry)
+    MD_ROLE_HEADING,       // headings, their rules, links, strong text, table header text
+    MD_ROLE_CODE,          // code spans and code fences
+    MD_ROLE_ART,           // mermaid art and table borders
+};
+
+// A run of text sharing one palette role.
 struct MdRun {
     std::wstring text;
-    uint64_t attr = 0;
+    uint64_t role = MD_ROLE_BODY;   // an MdRole
 };
 
 // One display line: an ordered sequence of styled runs plus its source offset: the file
@@ -34,9 +42,9 @@ class MarkdownDoc {
 public:
     MarkdownDoc() = default;
 
-    // Full-document pass: parses UTF-8 `file_text`, lays out to `width` cells.
-    // Every run takes `base_attr`, the viewer text color (FarColorToReal(COL_VIEWERTEXT)).
-    void Render(const std::wstring &file_text, int width, uint64_t base_attr);
+    // Full-document pass: parses UTF-8 `file_text`, lays out to `width` cells.  Runs carry
+    // palette roles (MdRole), not colors, so the colors follow the theme at draw time.
+    void Render(const std::wstring &file_text, int width);
 
     // Fills `out` with the display lines of the next block and advances the
     // internal block cursor.  `at_file_pos` is the viewer's current read
@@ -65,7 +73,6 @@ private:
     int64_t m_first_pos = 0;
     int64_t m_cursor_pos = 0;   // last at_file_pos the cursor was primed to
     int m_width = 0;
-    uint64_t m_base_attr = 0;
     bool m_valid = false;
 
     // The original text + base attr, retained so Invalidate(width) re-renders.

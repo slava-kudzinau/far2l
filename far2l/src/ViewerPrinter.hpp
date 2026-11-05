@@ -44,7 +44,7 @@ private:
 
 struct MarkdownPrinter : ViewerPrinter
 {
-	// Draws styled markdown display lines (runs with per-run FarColor attrs).
+	// Draws styled markdown display lines (runs with palette roles, mapped to colors when drawn).
 	// Print() is called once per screen row, in row order, consuming `_lines`
 	// sequentially; the `str` argument (the concatenation of the runs, kept in
 	// the viewer's Strings[] for poscache/length) is ignored in favour of runs.

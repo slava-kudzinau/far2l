@@ -3,7 +3,8 @@ profile=mydir + "/profile"
 left=mydir + "/left"
 right=mydir + "/right"
 
-// Colors: a markdown cell must have the viewer background, and text the viewer foreground.
+// Colors: a markdown cell must have the viewer background. Body text has the viewer foreground;
+// headings, code and table art take palette entries of their own (checked below).
 // plain is a blank cell of the plain-mode viewer, read before the markdown switch.
 function CheckBack(name, cell) {
 	if (cell.Back != plain.Back || cell.IsBackTC != plain.IsBackTC || cell.BackTC != plain.BackTC) {
@@ -16,6 +17,25 @@ function CheckFore(name, cell) {
 	if (cell.Fore != plain.Fore || cell.IsForeTC != plain.IsForeTC || cell.ForeTC != plain.ForeTC) {
 		Log(name + ": fore " + cell.Fore + " tc " + cell.IsForeTC + " " + cell.ForeTC + ", plain fore " + plain.Fore + " tc " + plain.IsForeTC + " " + plain.ForeTC)
 		Panic(name + " foreground differs from the viewer foreground")
+	}
+}
+
+// Foreground of a cell against a reference cell: the same palette entry, or a different one.
+function SameFore(a, b) {
+	return a.Fore == b.Fore && a.IsForeTC == b.IsForeTC && a.ForeTC == b.ForeTC;
+}
+
+function CheckForeSame(name, cell, ref, refName) {
+	if (!SameFore(cell, ref)) {
+		Log(name + ": fore " + cell.Fore + " tc " + cell.IsForeTC + " " + cell.ForeTC + ", " + refName + " fore " + ref.Fore + " tc " + ref.IsForeTC + " " + ref.ForeTC)
+		Panic(name + " foreground differs from the " + refName + " foreground")
+	}
+}
+
+function CheckForeOther(name, cell, ref, refName) {
+	if (SameFore(cell, ref)) {
+		Log(name + ": fore " + cell.Fore + " tc " + cell.IsForeTC + " " + cell.ForeTC + ", " + refName + " fore is the same")
+		Panic(name + " foreground is the same as the " + refName + " foreground")
 	}
 }
 
@@ -46,18 +66,32 @@ ExpectString("Code Fence Body")
 
 var heading = ExpectString("Heading One")
 CheckBack("heading", ReadCell(heading.X, heading.Y))
-CheckFore("heading", ReadCell(heading.X, heading.Y))
+// Headings take the heading palette entry, not the body foreground.
+var heading_cell = ReadCell(heading.X, heading.Y)
+CheckForeOther("heading", heading_cell, plain, "viewer")
 CheckBack("blank viewer cell", ReadCell(60, heading.Y))
-// A level-4 heading is drawn in the viewer colour like body text; its layout cue is the rule line below it.
+// A level-4 heading takes the heading entry too; its layout cue is the rule line below it.
 var h4 = ExpectString("Heading Four")
 CheckCellChar(h4.X, h4.Y + 1, "─")
-CheckFore("heading four rule", ReadCell(h4.X, h4.Y + 1))
+CheckForeSame("heading four rule", ReadCell(h4.X, h4.Y + 1), heading_cell, "heading")
+// Code takes its own palette entry, different from the heading and from the body.
 var code = ExpectString("Code Fence Body")
 CheckBack("code", ReadCell(code.X, code.Y))
-CheckFore("code", ReadCell(code.X, code.Y))
+var code_cell = ReadCell(code.X, code.Y)
+CheckForeOther("code", code_cell, plain, "viewer")
+CheckForeOther("code", code_cell, heading_cell, "heading")
 var table = ExpectString("│ cell1")
 CheckBack("table box glyph", ReadCell(table.X, table.Y))
 CheckBack("table cell", ReadCell(table.X + 2, table.Y))
+// Table header text takes the heading entry; the borders take the art entry, read from the
+// line glyph of the separator row under the header.
+var table_head = ExpectString("Col A")
+CheckForeSame("table header", ReadCell(table_head.X, table_head.Y), heading_cell, "heading")
+CheckCellChar(table.X + 1, table.Y - 1, "─")
+var art_cell = ReadCell(table.X + 1, table.Y - 1)
+CheckForeSame("table border", ReadCell(table.X, table.Y), art_cell, "table art")
+CheckForeOther("table art", art_cell, plain, "viewer")
+CheckForeOther("table art", art_cell, heading_cell, "heading")
 
 // Scroll to the bottom, where the mermaid fence is.
 TypeEnd()

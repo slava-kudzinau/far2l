@@ -105,6 +105,29 @@ void PlainViewerPrinter::Print(int skip_len, int print_len, const wchar_t *str)
 
 // ---------------------------------------------------------------------------
 
+namespace {
+
+// The part of a palette entry that sets the background: its index nibble, the flag and the 24-bit color.
+constexpr uint64_t kBackBits = 0xf0 | BACKGROUND_TRUECOLOR | (uint64_t(0xffffff) << 40);
+
+// The color of a markdown run, from its palette role.  Read when the row is drawn, so a theme change
+// shows on the next redraw.  The foreground comes from the role's entry; the background is always the
+// viewer text background.
+uint64_t MarkdownRunColor(uint64_t role)
+{
+	const uint64_t body = FarColorToReal(COL_VIEWERTEXT);
+	uint64_t entry = body;
+	switch (role) {
+		case MD_ROLE_HEADING: entry = FarColorToReal(COL_HELPTOPIC); break;
+		case MD_ROLE_CODE: entry = FarColorToReal(COL_HELPHIGHLIGHTTEXT); break;
+		case MD_ROLE_ART: entry = FarColorToReal(COL_PANELHIGHLIGHTTEXT); break;
+		default: return body;
+	}
+	return (entry & ~kBackBits) | (body & kBackBits);
+}
+
+}
+
 MarkdownPrinter::MarkdownPrinter(uint64_t sel_color, const std::vector<MdLine> *lines)
 	: _sel_color(sel_color), _lines(lines)
 {
@@ -144,7 +167,7 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 
 	if (line) {
 		for (const MdRun &run : line->runs) {
-			SetColor(_selection ? _sel_color : run.attr);
+			SetColor(_selection ? _sel_color : MarkdownRunColor(run.role));
 
 			const wchar_t *p = run.text.c_str();
 			bool joining = false;

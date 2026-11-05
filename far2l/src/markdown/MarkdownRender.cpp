@@ -20,9 +20,10 @@
 
 namespace {
 
-// Styling: every run takes the viewer text color (`base_attr`, which the viewer
-// reads from COL_VIEWERTEXT when it renders).  Structure is shown by layout only:
-// heading rule lines, the box-line quote prefix, indented code, bullets and table borders.
+// Styling: each run takes a palette role (MdRole); the viewer maps roles to colors when it draws.
+// Body text has the body role.  Headings, links, strong text and table header text take the heading
+// role; code spans and fences the code role; mermaid art and table borders the art role.  Structure
+// is also shown by layout: heading rule lines, the box-line quote prefix, indented code, bullets.
 constexpr int      CODE_INDENT   = 4;     // cells of indent before each code line
 constexpr wchar_t  BULLET        = L'\u2022';
 
@@ -131,7 +132,6 @@ struct Builder {
     bool cur_pos_set = false;     // cur_pos came from source text (else see flush())
     bool cur_started = false;
 
-    uint64_t base_attr;           // viewer text color; every run takes it
     int width;
 
     // block context
@@ -165,6 +165,9 @@ struct Builder {
     // span context
     std::wstring link_href;       // set on span enter, appended on span leave
     std::wstring link_label;      // label text captured while the link is open
+    int span_code = 0;            // open code spans
+    int span_strong = 0;          // open strong spans
+    int span_link = 0;            // open links
 
     // mermaid fences: the placeholder line range (in `out`) plus the fence
     // body, so Render() can splice engine-produced box art in place.
@@ -203,7 +206,7 @@ struct Builder {
             li_prefix_pending = false;
         }
         if (!lead.empty())
-            cur.push_back(MdRun{lead, base_attr});
+            cur.push_back(MdRun{lead, MD_ROLE_BODY});
     }
 
     void set_line_pos(int64_t p)
@@ -212,18 +215,29 @@ struct Builder {
         cur_pos_set = true;
     }
 
-    // `off` is the file offset of `text` when it comes from the source, else -1.
-    void append(const std::wstring &text, int64_t off = -1)
+    // The palette role of source text read now: a code span, then heading, link and strong text.
+    uint64_t text_role() const
+    {
+        if (span_code > 0)
+            return MD_ROLE_CODE;
+        if (heading_level > 0 || span_link > 0 || span_strong > 0)
+            return MD_ROLE_HEADING;
+        return MD_ROLE_BODY;
+    }
+
+    // `role` is the palette role of `text`; `off` is the file offset of `text` when it comes from the
+    // source, else -1.
+    void append(const std::wstring &text, uint64_t role, int64_t off = -1)
     {
         if (text.empty())
             return;
         begin_line();
         if (!cur_pos_set && off >= 0)
             set_line_pos(off);
-        if (!cur.empty() && cur.back().attr == base_attr)
+        if (!cur.empty() && cur.back().role == role)
             cur.back().text += text;
         else
-            cur.push_back(MdRun{text, base_attr});
+            cur.push_back(MdRun{text, role});
     }
 
     void flush()
@@ -269,7 +283,7 @@ struct Builder {
         blank.nFilePos = out.back().nFilePos;
         const std::wstring lead = row_lead();   // a blank inside a list or a quote keeps its lead
         if (!lead.empty())
-            blank.runs.push_back(MdRun{lead, base_attr});
+            blank.runs.push_back(MdRun{lead, MD_ROLE_BODY});
         out.push_back(std::move(blank));
         spacer_row = out.size() - 1;
     }
@@ -363,7 +377,7 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             std::wstring hr;
             int n = std::max(1, b.width - (int)(2 * b.list_stack.size()));
             hr.append((size_t)n, BoxSymbols[BS_H1]);
-            b.append(hr);
+            b.append(hr, MD_ROLE_BODY);
             b.flush();
             b.close_block();
             break;
@@ -421,7 +435,8 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                 b.begin_line();
                 int lead = (int)concat(b.cur).size();
                 int n = std::max(1, b.width - lead);
-                b.append(std::wstring((size_t)n, b.heading_level == 1 ? BoxSymbols[BS_H2] : BoxSymbols[BS_H1]));
+                b.append(std::wstring((size_t)n, b.heading_level == 1 ? BoxSymbols[BS_H2] : BoxSymbols[BS_H1]),
+                         MD_ROLE_HEADING);
                 b.flush();
             }
             b.heading_level = 0;
@@ -457,7 +472,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                 const int64_t line_pos = code_line_pos(b, start, end);
                 if (line_pos >= 0)
                     b.set_line_pos(line_pos);
-                b.append(std::wstring(CODE_INDENT, L' ') + line);
+                b.append(std::wstring(CODE_INDENT, L' ') + line, MD_ROLE_CODE);
                 b.flush();
                 ++count;
                 if (nl == std::wstring::npos) break;
@@ -493,30 +508,35 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                         for (size_t c = 0; c < r.size(); ++c)
                             w[c] = std::max(w[c], (int)concat(r[c]).size());
                     // Rows take their own source offset; the borders take the line before them (flush()).
-                    auto render_row = [&](std::vector<std::vector<MdRun>> &row, int64_t pos) {
+                    // The header row (the first) is drawn in the heading role; other cells keep their roles.
+                    auto render_row = [&](std::vector<std::vector<MdRun>> &row, int64_t pos, bool header) {
                         b.begin_line();
                         b.set_line_pos(pos);
-                        b.append(std::wstring(1, BoxSymbols[BS_V1]));
+                        b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_ART);
                         for (size_t c = 0; c < cols; ++c) {
-                            std::wstring cell_txt = (c < row.size()) ? concat(row[c]) : L"";
-                            int pad = w[c] - (int)cell_txt.size();
-                            b.append(L" " + cell_txt + std::wstring(pad > 0 ? pad : 0, L' ') + L" ");
-                            b.append(std::wstring(1, BoxSymbols[BS_V1]));
+                            const int cell_w = (c < row.size()) ? (int)concat(row[c]).size() : 0;
+                            const int pad = w[c] - cell_w;
+                            b.append(L" ", MD_ROLE_BODY);
+                            if (c < row.size())
+                                for (const MdRun &r : row[c])
+                                    b.append(r.text, header ? MD_ROLE_HEADING : r.role);
+                            b.append(std::wstring(pad > 0 ? pad : 0, L' ') + L" ", MD_ROLE_BODY);
+                            b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_ART);
                         }
                         b.flush();
                     };
                     auto render_sep = [&](wchar_t l, wchar_t mid, wchar_t r) {
                         b.begin_line();
-                        b.append(std::wstring(1, l));
+                        b.append(std::wstring(1, l), MD_ROLE_ART);
                         for (size_t c = 0; c < cols; ++c) {
-                            b.append(std::wstring((size_t)w[c] + 2, BoxSymbols[BS_H1]));
-                            b.append(std::wstring(1, (c + 1 < cols) ? mid : r));
+                            b.append(std::wstring((size_t)w[c] + 2, BoxSymbols[BS_H1]), MD_ROLE_ART);
+                            b.append(std::wstring(1, (c + 1 < cols) ? mid : r), MD_ROLE_ART);
                         }
                         b.flush();
                     };
                     render_sep(BoxSymbols[BS_LT_H1V1], BoxSymbols[BS_T_H1V1], BoxSymbols[BS_RT_H1V1]);
                     for (size_t ri = 0; ri < b.table_rows.size(); ++ri) {
-                        render_row(b.table_rows[ri], b.table_row_pos[ri]);
+                        render_row(b.table_rows[ri], b.table_row_pos[ri], ri == 0);
                         if (ri == 0)
                             render_sep(BoxSymbols[BS_L_H1V1], BoxSymbols[BS_C_H1V1], BoxSymbols[BS_R_H1V1]);
                     }
@@ -545,6 +565,7 @@ int cb_enter_span(MD_SPANTYPE type, void *detail, void *userdata)
             auto *d = (MD_SPAN_A_DETAIL *)detail;
             b.link_href.clear();
             b.link_label.clear();
+            b.span_link++;
             if (d)
                 b.link_href = attr_to_wide(d->href);
             break;
@@ -557,6 +578,8 @@ int cb_enter_span(MD_SPANTYPE type, void *detail, void *userdata)
                 b.link_href = attr_to_wide(d->src);
             break;
         }
+        case MD_SPAN_STRONG: b.span_strong++; break;
+        case MD_SPAN_CODE: b.span_code++; break;
         default: break;
     }
     return 0;
@@ -568,11 +591,18 @@ int cb_leave_span(MD_SPANTYPE type, void *detail, void *userdata)
     (void)detail;
     switch (type) {
         case MD_SPAN_A:
+            if (b.span_link > 0)
+                b.span_link--;
+            b.link_href.clear();
+            b.link_label.clear();
+            break;
         case MD_SPAN_IMG:
             // Label only; the URL stays reachable by toggling markdown off.
             b.link_href.clear();
             b.link_label.clear();
             break;
+        case MD_SPAN_STRONG: if (b.span_strong > 0) b.span_strong--; break;
+        case MD_SPAN_CODE: if (b.span_code > 0) b.span_code--; break;
         default: break;
     }
     return 0;
@@ -602,15 +632,15 @@ int cb_text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *userdata)
             b.line_break();
             break;
         case MD_TEXT_NULLCHAR:
-            b.append(L" ");
+            b.append(L" ", b.text_role());
             break;
         default:
             if (b.in_cell) {
                 if (b.row_pos < 0 && off >= 0)
                     b.row_pos = off;
-                b.cell.push_back(MdRun{w, b.base_attr});
+                b.cell.push_back(MdRun{w, b.text_role()});
             } else {
-                b.append(w, off);
+                b.append(w, b.text_role(), off);
                 b.link_label += w;   // accumulate link/label text
             }
             break;
@@ -622,11 +652,10 @@ int cb_text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *userdata)
 
 // ---------------------------------------------------------------------------
 
-void MarkdownDoc::Render(const std::wstring &file_text, int width, uint64_t base_attr)
+void MarkdownDoc::Render(const std::wstring &file_text, int width)
 {
     m_text = file_text;
     m_width = width;
-    m_base_attr = base_attr;
     m_lines.clear();
     m_block_starts.clear();
     m_block_first_line.clear();
@@ -642,7 +671,6 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width, uint64_t base
     }
 
     Builder b;
-    b.base_attr = base_attr;
     b.width = width;
     b.base = utf8.data();
     b.base_size = utf8.size();
@@ -683,7 +711,7 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width, uint64_t base
             if (!canvas.Parse(svg)) {
                 fprintf(stderr, "MarkdownRender: SvgCanvas parse failed\n");
             } else {
-                canvas.ToCells(width, cell, base_attr);
+                canvas.ToCells(width, cell, MD_ROLE_ART);
                 if (cell.empty())
                     fprintf(stderr, "MarkdownRender: mermaid art is empty\n");
             }
@@ -735,5 +763,5 @@ bool MarkdownDoc::NextLines(std::vector<MdLine> &out, int64_t at_file_pos)
 void MarkdownDoc::Invalidate(int width)
 {
     m_mermaid_cache.clear();
-    Render(m_text, width, m_base_attr);
+    Render(m_text, width);
 }
