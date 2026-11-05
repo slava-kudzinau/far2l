@@ -6,32 +6,34 @@
 #include <cstdint>
 #include "MarkdownRender.hpp"
 
-// Decodes an SVG string (XML subset produced by mermaid) into a cell grid of
-// Unicode box-drawing glyphs, emitting MarkdownLines.  Pure C++, no deps.
+// Decodes an SVG string (the XML subset mermaid emits) into a cell grid of
+// box-drawing glyphs, emitting MdLines.  Pure C++, no deps.
 class SvgCanvas {
 public:
     struct Shape {
-        enum Kind { RECT, LINE, POLY, TEXT } kind;
-        double x1 = 0, y1 = 0, x2 = 0, y2 = 0;
-        double w = 0, h = 0;
-        std::vector<std::pair<double, double>> pts;
-        std::wstring text;
-        std::wstring anchor;   // start | middle | end
-        double tx = 0, ty = 0;
+        enum Kind { RECT, POLY, TEXT } kind = RECT;
+        double x1 = 0, y1 = 0;                          // RECT: top-left corner
+        double w = 0, h = 0;                            // RECT: size
+        std::vector<std::pair<double, double>> pts;     // POLY: vertices in order
+        std::wstring text;                              // TEXT: one line of label text
+        std::wstring anchor;                            // TEXT: start | middle | end
+        double tx = 0, ty = 0;                          // TEXT: start point; ty is the glyph centre
+        bool arrow_start = false, arrow_end = false;    // POLY: marker-start / marker-end
     };
 
-    // Parses an SVG string (tags/attrs/entities, geometry subset).
+    // Parses an SVG string; coordinates are user units (px).  Returns false
+    // when the document has no drawable shape.
     bool Parse(const std::string &svg);
 
-    // Rasterizes into `width_cells` wide box art appended to `out` as
-    // MdLines carrying `attr`.
+    // Appends the box art to `out` as MdLines carrying `attr`, at most
+    // `width_cells` columns wide.  A cell is 8x16 px; a diagram wider than
+    // that is compressed horizontally to fit.
     void ToCells(int width_cells, std::vector<MdLine> &out, uint16_t attr) const;
 
     bool IsValid() const { return m_valid; }
 
 private:
     std::vector<Shape> m_shapes;
-    double m_x = 0, m_y = 0, m_w = 0, m_h = 0;
     bool m_valid = false;
 };
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds and runs the standalone MermaidEngine driver (no TUI).
-# usage: sh testing/markdown/run.sh flowchart|swimlane|invalid
+# usage: sh testing/markdown/run.sh flowchart|swimlane|invalid|cells
 # Env overrides: MERMAID_JS (path to mermaid.min.js), MD_DRIVER_BUILD (build dir).
 set -eu
 
@@ -12,8 +12,8 @@ mermaid_js=${MERMAID_JS:-$root/../far2l.build/install/far2l.app/Contents/Resourc
 sample=$root/testing/tests/0007-view-file-markdown/initdir/left/sample.md
 
 case "${1:-}" in
-    flowchart|swimlane|invalid) ;;
-    *) echo "usage: sh $0 flowchart|swimlane|invalid" >&2; exit 2 ;;
+    flowchart|swimlane|invalid|cells) ;;
+    *) echo "usage: sh $0 flowchart|swimlane|invalid|cells" >&2; exit 2 ;;
 esac
 
 if [ ! -f "$qjs" ]; then
@@ -34,6 +34,26 @@ cat > "$build/stub/headers.hpp" <<'EOF'
 #include <cstring>
 #include <string>
 EOF
+# SvgCanvas.cpp and MarkdownRender.hpp (MdLine, MdRun) need far2l's color and box-symbol
+# definitions.  The stubs copy the BOX_DEF_SYMBOLS enum and the BoxSymbols table verbatim
+# from the sources, so the glyphs are the ones far2l draws.
+cat > "$build/stub/colors.hpp" <<'EOF'
+#pragma once
+// The two color constants MarkdownRender.hpp uses (values of console/colors.hpp).
+enum { F_LIGHTGRAY = 0x07, B_BLACK = 0x00 };
+EOF
+{
+    echo '#pragma once'
+    echo '#include <cstdint>'
+    sed -n '/^enum BOX_DEF_SYMBOLS/,/^};/p' "$root/far2l/far2sdk/farplug-wide.h"
+} > "$build/stub/farplug-wide.h"
+{
+    echo '#pragma once'
+    echo '#include <cwchar>'
+    echo 'typedef wchar_t WCHAR;'
+    sed -n '/static WCHAR _BoxSymbols\[48\] = {/,/^[[:space:]]*};/p' "$root/far2l/src/console/interf.cpp" \
+        | sed 's/static WCHAR _BoxSymbols\[48\]/inline WCHAR BoxSymbols[48]/'
+} > "$build/stub/interf.hpp"
 
 clang++ -std=c++17 -O1 -g \
     -I"$build/stub" \
@@ -41,6 +61,7 @@ clang++ -std=c++17 -O1 -g \
     -I"$root/far2l/third_party/quickjs" \
     "$here/mermaid_driver.cpp" \
     "$root/far2l/src/markdown/MermaidEngine.cpp" \
+    "$root/far2l/src/markdown/SvgCanvas.cpp" \
     "$qjs" \
     -o "$build/mermaid_driver"
 
