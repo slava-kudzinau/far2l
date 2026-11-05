@@ -12,7 +12,7 @@ The terminal Markdown view (Shift-F4 in F3) is good for quick reading, but it ca
 
 ## What
 - `far2l/bootstrap/md-open.sh <file.md>` writes one temp `.html` file and opens it with `open` (macOS). The page holds the markdown text, an inline markdown renderer (`marked`, MIT), a `<script>` tag that loads mermaid from the jsdelivr CDN (pinned version, integrity hash, securityLevel strict), and a small stylesheet. Owner decision 2026-11-06: no local `mermaid.min.js`; the CDN is used. Without internet the diagrams show as source. Light and dark follow the system setting.
-- Alt-F3 on a `.md` file runs the script, through far2l's file associations. A default association `*.md` is shipped (the user can change it in far2l).
+- Alt-F3 on a `.md` file runs the script, through far2l's file associations. The script prints the association entry (`--print-association`); the owner adds it once in far2l. No default association is shipped.
 - The terminal Markdown view is not changed by this story.
 
 ## Not in this story

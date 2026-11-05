@@ -11,7 +11,7 @@ Tier: lite (`flow tier=lite`). No `spec.md`: the spec is the section below.
 | Same, file that contains the text `</script>` | the page still renders the rest of the file (the text is not able to close the script tag) |
 | Same, file that does not exist, or no argument | exits non-zero, prints a usage line, writes no page |
 | `sh far2l/bootstrap/md-open.sh <file.md>` (no `--no-open`) | writes the page to a temp file and runs `open <page>` on macOS; exits 0 |
-| `sh far2l/bootstrap/md-open.sh --print-association` | prints the File associations entry for `*.md` (mask, and the Alt-F3 view command that runs this script with `"!.!"`) and the steps to add it in far2l (F9, Commands, File associations) |
+| `sh far2l/bootstrap/md-open.sh --print-association` | prints the File associations entry for `*.md` (mask, and the Alt-F3 view command that runs this script with `!.!`, unquoted) and the steps to add it in far2l (F9, Commands, File associations) |
 | The terminal Markdown view (F3, Shift-F4) | not changed |
 
 ### Done
@@ -42,6 +42,14 @@ The check exits 0 and the page test shows an `<svg>` and the heading. The owner 
   - `check.sh` needs network for the CDN script (if `curl -sI` to the CDN fails, print `no network` and exit 1). It matches in the dumped DOM: `<svg` inside the text between `class="mermaid"` and the next `</pre>`, the heading text by `grep -F`; the hostile fixture passes when the dumped DOM holds the text after `</script>` and no element with `id="x"`. If Chrome is missing, `check.sh` prints `chrome not found` and exits 1 (fail, not skip).
   - Install: `install(PROGRAMS md-open.sh ...)` for the script (executable), `install(FILES ...)` for `marked.min.js` and its license, into the same destination as the other bootstrap files. The association command runs the script by its installed absolute path, with `sh` in front; `--print-association` prints that path from the script's own folder.
   - Association entry format: print the lines for far2l's dialog: Mask `*.md`; Command for Alt-F3 view: `sh "<abs path>/md-open.sh" "!.!"`, with numbered steps to add them.
+  - Final-review rulings (fix round; the reviewer's findings are in `.build/final-review.md`):
+    1. The Alt-F3 command prints and documents `sh <abs path to md-open.sh> !.!` with `!.!` unquoted: far2l already escapes it (`fnparce.cpp:102-111`). Quote only the script path if it has spaces. The spec row "(`\"!.!\"`)" is amended to this. Test with a file name that has a space and a quote.
+    2. The page renders the Markdown text first; mermaid is added by a script element created after the text is shown (load or error), so a slow or blocked CDN never blanks the page.
+    3. Escaping must not lose text: in the embedded text first replace `\` with `\\`, then `</` with `<\/` and `<!--` with `<\!--`; the page reverses in the opposite order. Add a fixture with the literal sequences `<\/` and `<\!--` and check them.
+    4. Install: one layout. macOS: the script, `marked.min.js` and the license all go to `Contents/Resources/` (COMPONENT app); exclude `md-open.sh` from the `cp *.sh` glob that copies scripts into `MacOS/`. Linux: install all three to `share/far2l`. Add `EXCLUDE_FROM_ALL` where the existing sibling install rules have it, so a plain `cmake --install` does not create a partial app.
+    5. Content security: add a `<meta http-equiv="Content-Security-Policy">` that allows only inline script and style, the one CDN script origin, `img-src data: file:` (local images stay possible, remote images are blocked), and no other network. Re-run the diagram test: the svg must still draw. State this limit in the gate: remote images in a Markdown file do not load.
+    6. `story.md` no longer promises a shipped default association; it says the script prints the entry and the owner adds it once. (Main session edits this.)
+    7. Minor findings (reviewer #7 to #15): fix #7 (show the mermaid error text in the block), #8 (a name starting with `-` after `--` works) and #14 (the stale gate text); park the rest in `closeout.md`.
   - Commit trailer: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` (put in the dispatch; verify).
 - Check: `sh stories/markdown-browser-view/check.sh` (written in T1; builds the fixtures, runs the Spec rows with `--no-open`, and runs Chrome headless on the page). Owner-checked paths: `stories/*/story.md`.
 
