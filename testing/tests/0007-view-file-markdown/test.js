@@ -83,15 +83,18 @@ CheckForeOther("code", code_cell, heading_cell, "heading")
 var table = ExpectString("│ cell1")
 CheckBack("table box glyph", ReadCell(table.X, table.Y))
 CheckBack("table cell", ReadCell(table.X + 2, table.Y))
+CheckFore("table cell text", ReadCell(table.X + 2, table.Y))
 // Table header text takes the heading entry; the borders take the art entry, read from the
 // line glyph of the separator row under the header.
 var table_head = ExpectString("Col A")
+CheckBack("table header", ReadCell(table_head.X, table_head.Y))
 CheckForeSame("table header", ReadCell(table_head.X, table_head.Y), heading_cell, "heading")
 CheckCellChar(table.X + 1, table.Y - 1, "─")
 var art_cell = ReadCell(table.X + 1, table.Y - 1)
 CheckForeSame("table border", ReadCell(table.X, table.Y), art_cell, "table art")
 CheckForeOther("table art", art_cell, plain, "viewer")
 CheckForeOther("table art", art_cell, heading_cell, "heading")
+CheckForeOther("table art", art_cell, code_cell, "code")
 
 // Scroll to the bottom, where the mermaid fence is.
 TypeEnd()

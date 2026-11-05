@@ -5,8 +5,8 @@
 #include <map>
 #include <vector>
 #include <string>
-#include <farplug-wide.h>   // FarColor 16-bit cell attributes (F_*/B_*)
-#include "colors.hpp"       // F_LIGHTGRAY, B_BLACK, ...
+#include <farplug-wide.h>
+#include "colors.hpp"
 
 // Palette role of a run.  The viewer maps it to a far palette entry when it draws, so a theme
 // change shows on the next redraw.  Plain integers, so SvgCanvas can build runs as (text, role).
@@ -75,7 +75,7 @@ private:
     int m_width = 0;
     bool m_valid = false;
 
-    // The original text + base attr, retained so Invalidate(width) re-renders.
+    // The original text, retained so Invalidate(width) re-renders.
     std::wstring m_text;
 
     // mermaid render cache keyed by (fence source hash, width).
