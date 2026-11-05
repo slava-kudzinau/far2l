@@ -216,6 +216,8 @@ private:
 	int64_t MarkdownMaxTop() const;
 	int MarkdownPercent() const;
 	void MarkdownPage(int dir);
+	// Markdown rendering shows and scrolls only when hex is off (hex has priority, as in DisplayObject).
+	bool MarkdownView() const { return VM.Markdown && !VM.Hex; }
 	int CalcStrSize(const wchar_t *Str, int Length);
 	void ChangeViewKeyBar();
 	void SetCRSym();

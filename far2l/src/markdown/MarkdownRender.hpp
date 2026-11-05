@@ -15,9 +15,9 @@ struct MdRun {
     uint64_t attr = 0;
 };
 
-// One display line: an ordered sequence of styled runs plus its source offset: the
-// file offset of the line's first source text.  Offsets never decrease down the doc, so the
-// viewer finds the line for a file position (poscache, mode switch) by searching them.
+// One display line: an ordered sequence of styled runs plus its source offset: the file
+// offset where the source line holding its first source text starts.  Offsets never decrease
+// down the doc, so the viewer finds the line for a file position (poscache, mode switch) by searching them.
 struct MdLine {
     std::vector<MdRun> runs;
     int64_t nFilePos = 0;

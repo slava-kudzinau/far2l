@@ -105,6 +105,25 @@ struct Builder {
         return (int64_t)(at - start);
     }
 
+    // File offset where the source line holding offset `at` starts.  Text arrives in input order,
+    // so the newlines are counted once, as the scan moves forward.
+    int64_t line_start_of(size_t at)
+    {
+        if (at < ls_scan) {   // out of order: look back directly
+            size_t i = at;
+            while (i > 0 && base[i - 1] != '\n')
+                --i;
+            return (int64_t)i;
+        }
+        for (; ls_scan < at; ++ls_scan)
+            if (base[ls_scan] == '\n')
+                ls_start = ls_scan + 1;
+        return (int64_t)ls_start;
+    }
+
+    size_t ls_scan = 0;     // line_start_of() has counted the newlines before this offset
+    size_t ls_start = 0;    // start of the source line that holds ls_scan
+
     std::vector<MdLine> out;
 
     std::vector<MdRun> cur;       // current display line runs
@@ -504,10 +523,13 @@ int cb_text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *userdata)
     Builder &b = *(Builder *)userdata;
     std::wstring w = utf8_to_wide((const char *)text, size);
     // Source text points into the input, so its offset is exact; other text keeps the running pos.
-    const int64_t off = b.offset_of(text);
-    if (off >= 0)
-        b.pos = (size_t)off;
+    // A display line takes the start of the source line its first text sits on, so the markup
+    // before the text ("# ", "- ", "| ", the indent) is part of the line.
+    const int64_t at = b.offset_of(text);
+    if (at >= 0)
+        b.pos = (size_t)at;
     b.pos += size;
+    const int64_t off = at >= 0 ? b.line_start_of((size_t)at) : -1;
     if (b.in_code) {
         if (off >= 0)
             b.code_marks.emplace_back(b.code_text.size(), off);

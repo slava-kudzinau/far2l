@@ -1211,7 +1211,7 @@ void Viewer::DrawScrollbar()
 			SetFarColor(COL_VIEWERSCROLLBAR);
 
 		if (!VM.Hex) {
-			const int percent = VM.Markdown ? MarkdownPercent()
+			const int percent = MarkdownView() ? MarkdownPercent()
 					: (LastPage ? (!FilePos ? 0 : 100) : ToPercent64(FilePos, FileSize));
 			ScrollBar(X2 + (m_bQuickView ? 1 : 0), Y1, Y2 - Y1 + 1, percent, 100);
 		} else {
@@ -2156,7 +2156,7 @@ int Viewer::ProcessKey(FarKey Key)
 		case KEY_UP:
 		case KEY_NUMPAD8:
 		case KEY_SHIFTNUMPAD8: {
-			if (VM.Markdown) {
+			if (MarkdownView()) {
 				if (ViewFile.Opened() && m_md_top > 0) {
 					SetMarkdownTop(m_md_top - 1);
 					Show();
@@ -2194,8 +2194,8 @@ int Viewer::ProcessKey(FarKey Key)
 		case KEY_DOWN:
 		case KEY_NUMPAD2:
 		case KEY_SHIFTNUMPAD2: {
-			if (VM.Markdown) {
-				if (ViewFile.Opened() && m_md_top + 1 < (int64_t)m_md_doc.Lines().size()) {
+			if (MarkdownView()) {
+				if (ViewFile.Opened() && m_md_top < MarkdownMaxTop()) {
 					SetMarkdownTop(m_md_top + 1);
 					Show();
 				}
@@ -2219,7 +2219,7 @@ int Viewer::ProcessKey(FarKey Key)
 		case KEY_NUMPAD9:
 		case KEY_SHIFTNUMPAD9:
 		case KEY_CTRLUP: {
-			if (VM.Markdown) {
+			if (MarkdownView()) {
 				if (ViewFile.Opened())
 					MarkdownPage(-1);
 				return TRUE;
@@ -2250,7 +2250,7 @@ int Viewer::ProcessKey(FarKey Key)
 		case KEY_NUMPAD3:
 		case KEY_SHIFTNUMPAD3:
 		case KEY_CTRLDOWN: {
-			if (VM.Markdown) {
+			if (MarkdownView()) {
 				if (ViewFile.Opened())
 					MarkdownPage(+1);
 				return TRUE;
@@ -2444,7 +2444,7 @@ int Viewer::ProcessKey(FarKey Key)
 		case KEY_CTRLNUMPAD9:
 
 			if (ViewFile.Opened()) {
-				if (VM.Markdown)
+				if (MarkdownView())
 					SetMarkdownTop(0);
 				else
 					FilePos = 0;
@@ -2466,7 +2466,7 @@ int Viewer::ProcessKey(FarKey Key)
 		case KEY_CTRLPGDN:
 		case KEY_CTRLNUMPAD3:
 
-			if (VM.Markdown && ViewFile.Opened()) {
+			if (MarkdownView() && ViewFile.Opened()) {
 				SetMarkdownTop(MarkdownMaxTop());
 				Show();
 				return TRUE;
@@ -2609,7 +2609,7 @@ int Viewer::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 			ProcessKey(KEY_CTRLEND);
 		else {
 			while (IsMouseButtonPressed()) {
-				if (VM.Markdown) {
+				if (MarkdownView()) {
 					// The thumb maps onto the top row: from the first row to the last full page.
 					const int64_t maxTop = MarkdownMaxTop();
 					SetMarkdownTop(std::clamp<int64_t>(maxTop * (MouseY - Y1) / std::max(1, Y2 - Y1), 0, maxTop));

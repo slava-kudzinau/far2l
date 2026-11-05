@@ -84,15 +84,35 @@ ExpectString("Long Start")
 ExpectNoString("# Long Start")
 ExpectString("  0%")
 
+// The found text must be on the top row of the viewer.
+function CheckTop(name, found) {
+	if (found.Y != 1) {
+		Log(name + ": found on row " + found.Y);
+		Panic(name + " is not on the top row");
+	}
+}
+
 // Down moves the top by one rendered line: the heading row scrolls off, the next row stays.
 TypeDown()
 ExpectNoString("Long Start")
 ExpectString("Row 001")
 
+// Up moves the top back by one line and stops at the first line.
+TypeUp(3)
+CheckTop("up to the first line", ExpectString("Long Start"))
+
 // PgDn moves by a screen minus one line: the first rows go, later rows show, never a blank screen.
 TypePageDown()
 ExpectNoString("Row 001")
-ExpectString("Row 030")
+var row30 = ExpectString("Row 030")
+
+// Up moves the top by exactly one line: the row below it moves down one row.
+TypeUp()
+var row30_up = ExpectString("Row 030")
+if (row30_up.Y != row30.Y + 1) {
+	Log("Row 030 moved from row " + row30.Y + " to row " + row30_up.Y);
+	Panic("Up did not move the top by one line");
+}
 
 // PgUp moves back by the same step: the first rows return.
 TypePageUp()
@@ -107,10 +127,54 @@ ExpectNoString("# Long End")
 ExpectNoString("Row 030")
 ExpectString("100%")
 
+// Down on the last page does not scroll past it: the last line keeps its row.
+var last_row = ExpectString("Final paragraph")
+TypeDown(3)
+var still_last = ExpectString("Final paragraph")
+if (still_last.Y != last_row.Y) {
+	Log("Final paragraph moved from row " + last_row.Y + " to row " + still_last.Y);
+	Panic("Down scrolled past the last full page");
+}
+ExpectString("100%")
+
 // Home goes back to the first page.
 TypeHome()
-ExpectString("Long Start")
+CheckTop("home", ExpectString("Long Start"))
 ExpectString("  0%")
+
+// Markdown -> plain -> markdown keeps the top row. Each row's file position is its line start,
+// so the plain view of the heading keeps its "# " and the list item keeps its "- ".
+ToggleShift(true)
+TypeFKey(4)
+ToggleShift(false)
+CheckTop("heading in plain", ExpectString("# Long Start"))
+ToggleShift(true)
+TypeFKey(4)
+ToggleShift(false)
+ExpectNoString("# Long Start")
+CheckTop("heading back in markdown", ExpectString("Long Start"))
+
+TypePageDown(3)
+CheckTop("list item in markdown", ExpectString("Item 060"))
+ToggleShift(true)
+TypeFKey(4)
+ToggleShift(false)
+CheckTop("list item in plain", ExpectString("- Item 060 list text for the scrolling tests."))
+ToggleShift(true)
+TypeFKey(4)
+ToggleShift(false)
+ExpectNoString("- Item 060")
+CheckTop("list item back in markdown", ExpectString("Item 060"))
+
+// Hex with the Markdown flag still set: Down moves by one 16-byte row, not by a markdown line.
+TypeHome()
+TypeFKey(4)
+CheckTop("hex first row", ExpectString("0000000000:"))
+TypeDown()
+CheckTop("hex second row", ExpectString("0000000010:"))
+TypeFKey(4)
+ExpectNoString("0000000010:")
+CheckTop("back from hex", ExpectString("Row 001"))
 
 TypeEscape()
 TypeFKey(10)
