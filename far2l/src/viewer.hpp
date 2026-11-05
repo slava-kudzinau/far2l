@@ -36,6 +36,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "scrobj.hpp"
 #include "namelist.hpp"
 #include <farplug-wide.h>
+#include "MarkdownRender.hpp"
 #include "poscache.hpp"
 #include "config.hpp"
 #include "cache.hpp"
@@ -80,7 +81,8 @@ enum SHOW_MODES
 	SHOW_RELOAD,
 	SHOW_HEX,
 	SHOW_UP,
-	SHOW_DOWN
+	SHOW_DOWN,
+	SHOW_MARKDOWN
 };
 
 class Viewer : public ScreenObject
@@ -115,6 +117,11 @@ private:
 	FARString strFullFileName;
 
 	BufferedFileView ViewFile;
+
+	// F3 markdown preview: whole-file rendered doc + validity flag.
+	MarkdownDoc m_md_doc;
+	std::vector<MdLine> m_md_screen;   // runs for the rows shown (parallel to Strings)
+	bool m_md_ready = false;
 
 	FAR_FIND_DATA_EX ViewFindData;
 
@@ -197,6 +204,8 @@ private:
 	size_t SkipZeroWidthSubsequence(const wchar_t *buf, size_t index, size_t length);
 
 	void ReadString(ViewerString &rString, int MaxSize, int StrSize);
+	void ReadStringMarkdown(ViewerString &rString, int MaxSize, int StrSize);
+	void ShowMarkdown();
 	int CalcStrSize(const wchar_t *Str, int Length);
 	void ChangeViewKeyBar();
 	void SetCRSym();
@@ -290,12 +299,14 @@ public:
 	void SetPersistentBlocks(int newValue) { ViOpt.PersistentBlocks = newValue; }
 
 	int GetHexMode() const { return VM.Hex; }
+	int GetMarkdownMode() const { return VM.Markdown; }
 
 	UINT GetCodePage() const { return VM.CodePage; }
 
 	NamesList *GetNamesList() { return &ViewNamesList; }
 
 	int ProcessHexMode(int newMode, bool isRedraw = TRUE);
+	int ProcessMarkdownMode(int newMode, bool isRedraw = TRUE);
 	int ProcessWrapMode(int newMode, bool isRedraw = TRUE);
 	int ProcessTypeWrapMode(int newMode, bool isRedraw = TRUE);
 };

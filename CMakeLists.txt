@@ -205,6 +205,7 @@ include_directories(utils/include)
 
 add_subdirectory (WinPort)
 add_subdirectory (utils)
+add_subdirectory (far2l/third_party/quickjs)
 add_subdirectory (far2l)
 add_subdirectory (themes)
 

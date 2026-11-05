@@ -127,6 +127,7 @@ void ViewerShellOptions(int LastCommand, MOUSE_EVENT_RECORD *MouseEvent, FileVie
 		{Msg::ViewerMenuWordWrap,	0,	KEY_SHIFTF2  },
 		{L"", LIF_SEPARATOR, 0  },
 		{Msg::ViewerMenuHex,	0,	KEY_F4  },
+		{Msg::ViewerMenuMarkdown,	0,	KEY_SHIFTF4  },
 		{Msg::ViewerMenuExtl,	0,	KEY_F5  },
 		{Msg::ViewerMenuEditor,	0,	KEY_F6  },
 		{Msg::ViewerMenuOem,	0,	KEY_F8  },

@@ -80,6 +80,7 @@ static void PR_ViewerSearchMsg();
 static void ViewerSearchMsg(const wchar_t *Name, int Percent);
 
 static int InitHex = FALSE, SearchHex = FALSE;
+static int InitMarkdown = FALSE;
 
 static int NextViewerID = 0;
 
@@ -173,6 +174,12 @@ Viewer::Viewer(bool bQuickView, UINT aCodePage)
 	VM.WordWrap = Opt.ViOpt.ViewerWrap;
 	VM.Hex = InitHex;
 	VM.Processed = 0;
+	{	// F3 markdown preview: first viewer seeds from persisted option,
+		// later viewers inherit the last session value.
+		static bool s_md_seeded = false;
+		if (!s_md_seeded) { InitMarkdown = Opt.ViOpt.ViewerMarkdownMode; s_md_seeded = true; }
+		VM.Markdown = InitMarkdown;
+	}
 	ViewKeyBar = nullptr;
 	FilePos = 0;
 	LeftPos = 0;
@@ -228,7 +235,7 @@ void Viewer::SavePosCache()
 		poscache.Param[0] = FilePos;
 		poscache.Param[1] = LeftPos;
 		poscache.Param[2] = VM.Hex;
-		//=poscache.Param[3];
+		poscache.Param[3] = VM.Markdown;
 		poscache.Param[4] = CodePage;
 
 		if (Opt.ViOpt.SaveShortPos) {
@@ -289,6 +296,7 @@ void Viewer::KeepInitParameters()
 	Opt.ViOpt.ViewerWrap = VM.WordWrap;
 	Opt.ViOpt.SearchRegexp = LastSearchRegexp;
 	InitHex = VM.Hex;
+	InitMarkdown = VM.Markdown;
 }
 
 void Viewer::Show()
@@ -398,7 +406,7 @@ int Viewer::OpenFile(FileHolderPtr NewFileHolder, int warning)
 		NewFilePos = poscache.Param[0];
 		NewLeftPos = poscache.Param[1];
 		VM.Hex = (int)poscache.Param[2];
-		//=poscache.Param[3];
+		VM.Markdown = (int)poscache.Param[3];
 		CachedCodePage = (UINT)poscache.Param[4];
 
 		// Проверяем поддерживается или нет загруженная из кэша кодовая страница
@@ -589,6 +597,25 @@ void Viewer::ShowPage(int nMode)
 			Strings[Y2 - Y1].nFilePos = vtell();
 			ReadString(Strings[Y2 - Y1], -1, MAX_VIEWLINE);
 			break;
+
+		case SHOW_MARKDOWN:
+			CtrlObject->Plugins.CurViewer = this;	// HostFileViewer;
+			if (!m_md_ready)
+				ShowMarkdown();
+			else if (m_md_doc.Width() != Width)
+				m_md_doc.Invalidate(Width);   // layout depends on width
+			m_md_doc.SetCursor(0);            // fresh pass: prime at the top row's pos
+
+			m_md_screen.clear();
+			for (I = 0, Y = Y1; Y <= Y2; Y++, I++) {
+				Strings[I].nFilePos = vtell();
+
+				if (Y == Y1 + 1 && !ViewFile.Eof())
+					SecondPos = vtell();
+
+				ReadStringMarkdown(Strings[I], -1, MAX_VIEWLINE);
+			}
+			break;
 	}
 
 	if (!VM.Hex)
@@ -612,7 +639,7 @@ void Viewer::ShowPage(int nMode)
 		if (ViOpt.ClickableURLs)
 			CollectVisibleLinks();
 
-		if (!VM.Hex && !VM.Processed) {
+		if (!VM.Hex && !VM.Processed && !VM.Markdown) {
 			ViewerColors.assign(static_cast<size_t>(lineCount), {});
 			if (ViewerContextCodePage != VM.CodePage) {
 				ViewerContext.clear();
@@ -630,6 +657,8 @@ void Viewer::ShowPage(int nMode)
 		std::unique_ptr<ViewerPrinter> printer;
 		if (VM.Processed)
 			printer.reset(new AnsiEsc::Printer(B_BLACK | F_WHITE));
+		else if (VM.Markdown)
+			printer.reset(new MarkdownPrinter(FarColorToReal(COL_VIEWERTEXT), &m_md_screen));
 		else
 			printer.reset(new PlainViewerPrinter(FarColorToReal(COL_VIEWERTEXT)));
 		if (IsUnicodeOrUtfCodePage(VM.CodePage))
@@ -827,7 +856,7 @@ void Viewer::ApplyColorRanges(int line, int screenY, ViewerPrinter &printer)
 
 void Viewer::DisplayObject()
 {
-	ShowPage(VM.Hex ? SHOW_HEX : SHOW_RELOAD);
+	ShowPage(VM.Hex ? SHOW_HEX : VM.Markdown ? SHOW_MARKDOWN : SHOW_RELOAD);
 }
 
 void Viewer::ShowHex()
@@ -1034,6 +1063,64 @@ void Viewer::ShowHex()
 			//			SelSize = 0;
 		}
 	}
+}
+
+void Viewer::ShowMarkdown()
+{
+	if (!ViewFile.Opened())
+		return;
+
+	int64_t top = vtell();
+	vseek(0, SEEK_SET);
+
+	std::wstring text;
+	int64_t units = FileSize;
+	if (units > 0) {
+		text.resize((size_t)units + 1);
+		int got = vread(&text[0], (int)units, false);
+		if (got < 0) got = 0;
+		text.resize((size_t)got);
+	}
+
+	m_md_doc.Render(text, Width, FarColorToReal(COL_VIEWERTEXT));
+	m_md_ready = true;
+
+	vseek(top, SEEK_SET);
+}
+
+void Viewer::ReadStringMarkdown(ViewerString &rString, int MaxSize, int StrSize)
+{
+	(void)MaxSize;
+	(void)StrSize;
+	rString.bSelection = false;
+	rString.WrapsToNext = false;
+	rString.ContinuesFromPrev = false;
+	rString.SetChar(0, 0);
+
+	if (!m_md_ready)
+		ShowMarkdown();
+	else if (m_md_doc.Width() != Width)
+		m_md_doc.Invalidate(Width);   // geometry depends on width (tables, mermaid)
+
+	std::vector<MdLine> out;
+	int64_t at = vtell();
+	if (!m_md_doc.NextLines(out, at)) {
+		rString.nFilePos = at;
+		return;
+	}
+
+	std::wstring full;
+	for (const MdRun &r : out[0].runs)
+		full += r.text;
+	rString.nFilePos = out[0].nFilePos;
+	rString.SetChars(0, full.c_str(), full.size() + 1);
+	m_md_screen.push_back(out[0]);
+
+	// Advance the file pointer to the next display line's source start so the
+	// following row's vtell() (and thus poscache / scrolling) stays consistent.
+	int64_t c = m_md_doc.Cursor();
+	if (c >= 0 && c < (int64_t)m_md_doc.Lines().size())
+		vseek(m_md_doc.Lines()[c].nFilePos, SEEK_SET);
 }
 
 /*
@@ -1565,6 +1652,7 @@ int64_t Viewer::VMProcess(MacroOpcode OpCode, void *vParam, int64_t iParam)
 			MacroViewerState|= VM.Wrap ? 0x00000008 : 0;
 			MacroViewerState|= VM.WordWrap ? 0x00000010 : 0;
 			MacroViewerState|= VM.Hex ? 0x00000020 : 0;
+			MacroViewerState|= VM.Markdown ? 0x00000040 : 0;
 			MacroViewerState|= Opt.OnlyEditorViewerUsed ? 0x08000000 | 0x00000800 : 0;
 			MacroViewerState|= HostFileViewer && !HostFileViewer->GetCanLoseFocus() ? 0x00000800 : 0;
 			return (int64_t)MacroViewerState;
@@ -1794,7 +1882,7 @@ int Viewer::ProcessKey(FarKey Key)
 							poscache.Param[0] = FilePos;
 							poscache.Param[1] = LeftPos;
 							poscache.Param[2] = VM.Hex;
-							//=poscache.Param[3];
+							poscache.Param[3] = VM.Markdown;
 							poscache.Param[4] = CodePage;
 
 							if (Opt.ViOpt.SaveShortPos) {
@@ -1840,6 +1928,11 @@ int Viewer::ProcessKey(FarKey Key)
 			ProcessHexMode(!VM.Hex);
 			return TRUE;
 		}
+		case KEY_SHIFTF4:
+			ProcessMarkdownMode(!VM.Markdown);
+			return TRUE;
+
+
 		case KEY_F5: {
 			SavePosCache();
 			VM.Processed = !VM.Processed;
@@ -2699,10 +2792,21 @@ void Viewer::ChangeViewKeyBar()
 		ViewKeyBar->Change(VM.Wrap ? Msg::ViewF2Unwrap : (VM.WordWrap ? Msg::ViewShiftF2 : Msg::ViewF2), 1);
 		ViewKeyBar->Change(KBL_SHIFT, VM.WordWrap ? Msg::ViewF2 : Msg::ViewShiftF2, 1);
 
-		if (VM.Hex)
+		if (VM.Markdown)
+		{
+			ViewKeyBar->Change(Msg::ViewF4Markdown, 3);
+			ViewKeyBar->Change(KBL_SHIFT, Msg::ViewF4Text, 3);
+		}
+		else if (VM.Hex)
+		{
 			ViewKeyBar->Change(Msg::ViewF4Text, 3);
+			ViewKeyBar->Change(KBL_SHIFT, Msg::ViewF4Markdown, 3);
+		}
 		else
+		{
 			ViewKeyBar->Change(Msg::ViewF4, 3);
+			ViewKeyBar->Change(KBL_SHIFT, Msg::ViewF4Markdown, 3);
+		}
 
 
 		if (VM.CodePage == CP_UTF8)
@@ -4142,6 +4246,9 @@ int Viewer::ViewerControl(int Command, void *Param)
 					case VSMT_WORDWRAP:
 						ProcessTypeWrapMode(vsmode->Param.iParam, isRedraw);
 						return TRUE;
+					case VSMT_MARKDOWN:
+						ProcessMarkdownMode(vsmode->Param.iParam, isRedraw);
+						return TRUE;
 				}
 			}
 
@@ -4164,6 +4271,21 @@ int Viewer::ProcessHexMode(int newMode, bool isRedraw)
 
 	// LastSelPos=FilePos;
 	return oldHex;
+}
+
+int Viewer::ProcessMarkdownMode(int newMode, bool isRedraw)
+{
+	int oldMarkdown = VM.Markdown;
+	VM.Markdown = newMode & 1;
+	Opt.ViOpt.ViewerMarkdownMode = VM.Markdown;
+	m_md_ready = false;	// force (re)render on next fill
+
+	if (isRedraw) {
+		ChangeViewKeyBar();
+		Show();
+	}
+
+	return oldMarkdown;
 }
 
 int Viewer::ProcessWrapMode(int newMode, bool isRedraw)

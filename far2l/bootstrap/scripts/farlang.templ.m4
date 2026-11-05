@@ -4464,6 +4464,17 @@ upd:"Toggle hex view                     F4"
 upd:"Toggle hex view                     F4"
 upd:"Toggle hex view                     F4"
 
+ViewerMenuMarkdown
+"Просмотр Markdown             Shift+F4"
+"Toggle markdown preview       Shift+F4"
+upd:"Toggle markdown preview       Shift+F4"
+upd:"Toggle markdown preview       Shift+F4"
+upd:"Toggle markdown preview       Shift+F4"
+upd:"Toggle markdown preview       Shift+F4"
+upd:"Toggle markdown preview       Shift+F4"
+upd:"Toggle markdown preview       Shift+F4"
+upd:"Toggle markdown preview       Shift+F4"
+
 ViewerMenuExtl
 "Включить пост-обработку             F5"
 "Toggle processed view               F5"
@@ -12176,6 +12187,18 @@ l:// this is another text for F4
 "Text"
 "Текст"
 "Тэкст"
+
+ViewF4Markdown
+l:// F3 markdown preview keybar label
+"Markdown"
+"Markdown"
+"Markdown"
+"Markdown"
+"Markdown"
+"Markdown"
+"Markdown"
+"Markdown"
+"Markdown"
 
 ViewF8DOS
 "->OEM"

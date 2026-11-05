@@ -74,3 +74,17 @@ add_custom_command(TARGET bootstrap
     COMMAND "cp" "${CMAKE_CURRENT_SOURCE_DIR}/*.vbs" "${INSTALL_DIR}"
     COMMAND "cp" "${CMAKE_CURRENT_SOURCE_DIR}/*.ini" "${INSTALL_DIR}"
 )
+
+# Mermaid asset: bundle Resources on macOS (keeps the bundle's code
+# directory Mach-O-only so codesign --deep validates), INSTALL_DIR elsewhere.
+if (APPLE)
+    add_custom_command(TARGET bootstrap
+        POST_BUILD
+        COMMAND "cp" "${CMAKE_CURRENT_SOURCE_DIR}/*.js" "${INSTALL_DIR}/../Resources"
+    )
+else ()
+    add_custom_command(TARGET bootstrap
+        POST_BUILD
+        COMMAND "cp" "${CMAKE_CURRENT_SOURCE_DIR}/*.js" "${INSTALL_DIR}"
+    )
+endif ()

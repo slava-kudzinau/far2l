@@ -1490,6 +1490,7 @@ enum VIEWER_SETMODE_TYPES
 	VSMT_HEX,
 	VSMT_WRAP,
 	VSMT_WORDWRAP,
+	VSMT_MARKDOWN,
 };
 
 enum VIEWER_SETMODEFLAGS_TYPES
@@ -1565,6 +1566,7 @@ struct ViewerMode
 	int WordWrap;
 	int Hex;
 	int Processed;
+	int Markdown;
 	DWORD Reserved[3];
 };
 

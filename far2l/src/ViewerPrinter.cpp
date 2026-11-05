@@ -102,3 +102,82 @@ void PlainViewerPrinter::Print(int skip_len, int print_len, const wchar_t *str)
 		PrintSpaces(print_len);
 	}
 }
+
+// ---------------------------------------------------------------------------
+
+MarkdownPrinter::MarkdownPrinter(uint64_t sel_color, const std::vector<MdLine> *lines)
+	: _sel_color(sel_color), _lines(lines)
+{
+}
+
+MarkdownPrinter::~MarkdownPrinter()
+{
+}
+
+int MarkdownPrinter::Length(const wchar_t *str, int limit)
+{
+	int out;
+	bool joining = false;
+	for (out = 0; *str && limit != 0; ++str, --limit) {
+		if (static_cast<uint32_t>(*str) <= 0x7f) {
+			if (!joining) ++out;
+			joining = false;
+		} else if (!ShouldSkip(*str)) {
+			if (*str == CharClasses::ZERO_WIDTH_JOINER) {
+				joining = true;
+			} else if (CharClasses::IsFullWidth(str)) {
+				if (!joining) out += 2;
+				joining = false;
+			} else if (!CharClasses::IsXxxfix(*str)) {
+				if (!joining) ++out;
+				joining = false;
+			}
+		}
+	}
+	return out;
+}
+
+void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/)
+{
+	const MdLine *line = (_row < _lines->size()) ? &(*_lines)[_row] : nullptr;
+	++_row;
+
+	if (line) {
+		for (const MdRun &run : line->runs) {
+			SetFarColor(_selection ? (uint16_t)_sel_color
+			                       : run.attr);
+
+			const wchar_t *p = run.text.c_str();
+			bool joining = false;
+
+			// advance past the horizontal scroll offset (in cells)
+			while (skip_len > 0 && *p) {
+				if (static_cast<uint32_t>(*p) <= 0x7f) { if (!joining) skip_len--; joining = false; }
+				else if (!ShouldSkip(*p)) {
+					if (*p == CharClasses::ZERO_WIDTH_JOINER) joining = true;
+					else if (CharClasses::IsFullWidth(p)) { if (!joining) skip_len -= 2; joining = false; }
+					else if (!CharClasses::IsXxxfix(*p)) { if (!joining) skip_len--; joining = false; }
+				}
+				++p;
+			}
+
+			while (print_len > 0 && *p) {
+				size_t piece = 0;
+				while (p[piece] && !ShouldSkip(p[piece])) ++piece;
+				if (piece) {
+					size_t cells = print_len;
+					piece = StrSizeOfCells(p, piece, cells, false);
+					if (piece) {
+						Text(p, piece);
+						print_len -= (int)cells;
+					}
+				}
+				if (!p[piece]) break;
+				p += piece + 1;
+			}
+		}
+	}
+
+	if (print_len > 0)
+		PrintSpaces(print_len);
+}
