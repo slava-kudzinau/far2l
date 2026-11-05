@@ -235,7 +235,7 @@ const char kDomShim[] = R"JS(
     for (k in n._attrs) a[k] = n._attrs[k];
     for (k in n.style) if (Object.prototype.hasOwnProperty.call(n.style, k) && typeof n.style[k] === 'string') st += k + ': ' + n.style[k] + '; ';
     if (st) a.style = (a.style ? a.style + ' ' : '') + st.trim();
-    for (k in a) s += ' ' + k + '="' + String(a[k]).replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"';
+    for (k in a) s += ' ' + k + '="' + String(a[k]).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') + '"';
     return s;
   }
   function serialize(n) {
@@ -289,13 +289,23 @@ const char kDomShim[] = R"JS(
   globalThis.DOMParser.prototype.parseFromString = function (s) { var d = globalThis.document.implementation.createHTMLDocument(); d.body.innerHTML = s; return d; };
   globalThis.navigator = { userAgent: 'far2l' };
   // quickjs has no timers (ELK's worker emulation uses setTimeout).  A timer is a
-  // microtask, which Render drains; delays are ignored.
+  // microtask, which Render drains; delays are ignored.  A timer runs only while it is
+  // pending, so clearTimeout cancels it.  An exception goes to the render that scheduled
+  // the timer (__far2l_fail, kRenderGlue) instead of becoming an unobserved rejection.
+  globalThis.__far2l_gen = 0;
+  var pendingTimers = {}, nextTimer = 1;
   globalThis.setTimeout = function (fn) {
-    var args = Array.prototype.slice.call(arguments, 2);
-    Promise.resolve().then(function () { if (typeof fn === 'function') fn.apply(null, args); });
-    return 0;
+    var args = Array.prototype.slice.call(arguments, 2), id = nextTimer++, gen = globalThis.__far2l_gen;
+    pendingTimers[id] = true;
+    Promise.resolve().then(function () {
+      if (!pendingTimers[id]) return;
+      delete pendingTimers[id];
+      try { if (typeof fn === 'function') fn.apply(null, args); }
+      catch (e) { globalThis.__far2l_fail(gen, e); }
+    });
+    return id;
   };
-  globalThis.clearTimeout = function () {};
+  globalThis.clearTimeout = function (id) { delete pendingTimers[id]; };
   globalThis.setInterval = function () { return 0; };
   globalThis.clearInterval = function () {};
   // base64 over binary strings (chars 0-255), as in the browser.
@@ -342,18 +352,30 @@ globalThis.mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', html
 globalThis.__far2l_done = false;
 globalThis.__far2l_svg = '';
 globalThis.__far2l_err = '';
+// Records a failure of the render with generation `gen` (a rejected promise, or a shim
+// timer that threw).  A stale generation is dropped.
+globalThis.__far2l_fail = function (gen, e) {
+  if (gen !== globalThis.__far2l_gen) return;
+  globalThis.__far2l_err = (e && e.message) ? (e.message + ' @ ' + String(e.stack).replace(/\n/g,' | ')) : String(e);
+  globalThis.__far2l_done = true;
+};
+// Each call takes a new generation.  Callbacks of an earlier call that Render gave up on
+// (drain budget exhausted) stay in the job queue; they see a stale generation and drop
+// their result instead of overwriting this call's globals.
 globalThis.__far2l_render = function (src, id, w) {
+  var gen = ++globalThis.__far2l_gen;
   globalThis.__far2l_done = false;
   globalThis.__far2l_svg = '';
   globalThis.__far2l_err = '';
   try {
     var r = globalThis.mermaid.render(id, src);
     if (r && r.then) r.then(function (o) {
+      if (gen !== globalThis.__far2l_gen) return;
       globalThis.__far2l_svg = (o && o.svg) ? o.svg : (typeof o === 'string' ? o : '');
       globalThis.__far2l_done = true;
-    }, function (e) { globalThis.__far2l_err = (e && e.message) ? (e.message + ' @ ' + String(e.stack).replace(/\n/g,' | ')) : String(e); globalThis.__far2l_done = true; });
+    }, function (e) { globalThis.__far2l_fail(gen, e); });
     else { globalThis.__far2l_svg = (r && r.svg) ? r.svg : String(r); globalThis.__far2l_done = true; }
-  } catch (e) { globalThis.__far2l_err = (e && e.message) ? (e.message + ' @ ' + String(e.stack).replace(/\n/g,' | ')) : String(e); globalThis.__far2l_done = true; }
+  } catch (e) { globalThis.__far2l_fail(gen, e); }
 };
 )JS";
 
@@ -380,14 +402,40 @@ std::string get_global_string(JSContext *ctx, const char *name)
     return out;
 }
 
-void run_pending_jobs(JSRuntime *rt, int budget)
+// Reads and frees the pending exception of `ctx`: its message, then the stack on a new line.
+std::string take_exception(JSContext *ctx)
+{
+    JSValue ex = JS_GetException(ctx);
+    const char *s = JS_ToCString(ctx, ex);
+    std::string out = s ? s : "js exception";
+    if (s) JS_FreeCString(ctx, s);
+    JSValue st = JS_GetPropertyStr(ctx, ex, "stack");
+    if (!JS_IsUndefined(st)) {
+        const char *ss = JS_ToCString(ctx, st);
+        if (ss) {
+            out += "\n";
+            out += ss;
+            JS_FreeCString(ctx, ss);
+        }
+    }
+    JS_FreeValue(ctx, st);
+    JS_FreeValue(ctx, ex);
+    return out;
+}
+
+// Runs up to `budget` pending jobs.  A job that throws stops the drain and its exception
+// is returned as text; empty when the jobs ran cleanly.
+std::string run_pending_jobs(Engine &e, int budget)
 {
     for (int i = 0; i < budget; ++i) {
         JSContext *ctx = nullptr;
-        int ret = JS_ExecutePendingJob(rt, &ctx);
-        if (ret <= 0)
+        int ret = JS_ExecutePendingJob(e.rt, &ctx);
+        if (ret == 0)
             break;
+        if (ret < 0)
+            return take_exception(ctx ? ctx : e.ctx);
     }
+    return std::string();
 }
 
 // Evaluate `code`; on exception fills `err`.
@@ -396,21 +444,7 @@ bool eval_js(Engine &e, const char *code, const char *name, std::string &err)
     JSValue v = JS_Eval(e.ctx, code, std::string(code).size(), name, JS_EVAL_TYPE_GLOBAL);
     bool ok = true;
     if (JS_IsException(v)) {
-        JSValue ex = JS_GetException(e.ctx);
-        const char *s = JS_ToCString(e.ctx, ex);
-        err = s ? s : "js exception";
-        if (s) JS_FreeCString(e.ctx, s);
-        JSValue st = JS_GetPropertyStr(e.ctx, ex, "stack");
-        if (!JS_IsUndefined(st)) {
-            const char *ss = JS_ToCString(e.ctx, st);
-            if (ss) {
-                err += "\n";
-                err += ss;
-                JS_FreeCString(e.ctx, ss);
-            }
-        }
-        JS_FreeValue(e.ctx, st);
-        JS_FreeValue(e.ctx, ex);
+        err = take_exception(e.ctx);
         ok = false;
     }
     JS_FreeValue(e.ctx, v);
@@ -523,6 +557,7 @@ bool MermaidEngine::Available()
 bool MermaidEngine::Render(const std::string &mermaid_src, const std::string &id,
                            int width_px, std::string &svg_out, std::string &err)
 {
+    err.clear();
     if (!Available()) {
         err = "mermaid engine not initialized";
         return false;
@@ -542,15 +577,21 @@ bool MermaidEngine::Render(const std::string &mermaid_src, const std::string &id
     }
     esc += "\"";
 
+    // width_px is not used: the glue ignores its width argument and mermaid sizes the SVG itself.
     std::string call = "globalThis.__far2l_render(" + esc + ", \"" + id + "\", " +
                        std::to_string(width_px) + ");";
     if (!eval_js(g_engine, call.c_str(), "render_call.js", err))
         return false;
 
-    // Drain the promise microtasks (mermaid uses d3/async rendering).
+    // Drain the promise microtasks (mermaid uses d3/async rendering).  The budget is 8000
+    // jobs; a render that needs more gives up, and its late callbacks are dropped by generation.
     bool done = false;
     for (int spin = 0; spin < 8 && !done; ++spin) {
-        run_pending_jobs(g_engine.rt, 1000);
+        std::string job_err = run_pending_jobs(g_engine, 1000);
+        if (!job_err.empty()) {
+            err = job_err;
+            return false;
+        }
         JSValue g = JS_GetGlobalObject(g_engine.ctx);
         JSValue d = JS_GetPropertyStr(g_engine.ctx, g, "__far2l_done");
         int flag = 0;

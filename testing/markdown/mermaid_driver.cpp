@@ -76,20 +76,22 @@ int main(int argc, char **argv)
 
     std::string svg, err;
     const bool ok = MermaidEngine::Render(src, "m1", 800, svg, err);
+    // A failed render must say why, so ok=0 never comes with an empty err.
+    const std::string why = err.empty() ? "render failed without a message" : err;
 
     if (expect_ok) {
         if (ok && err.empty() && svg_expected(svg)) {
             printf("ok=1\n%s\n", svg.c_str());
             return 0;
         }
-        printf("ok=0\nerr=%s\n", ok ? "svg does not start with <svg or lacks Start/Finish" : err.c_str());
+        printf("ok=0\nerr=%s\n", ok ? "svg does not start with <svg or lacks Start/Finish" : why.c_str());
         if (ok)
             printf("%s\n", svg.c_str());
         return 1;
     }
 
-    if (!ok && !err.empty()) {
-        printf("ok=0\nerr=%s\n", err.c_str());
+    if (!ok) {
+        printf("ok=0\nerr=%s\n", why.c_str());
         return 0;
     }
     printf("ok=1\nerr=invalid input unexpectedly rendered\n");

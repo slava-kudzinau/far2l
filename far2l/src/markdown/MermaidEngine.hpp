@@ -11,8 +11,8 @@ public:
     static bool Available();
 
     // Renders `mermaid_src` into `svg_out` via mermaid.render().  `id` is the
-    // SVG element id; `width_px` hints the layout width.  On JS exception,
-    // fills `err` and returns false.
+    // SVG element id.  `width_px` is currently unused: mermaid sizes the SVG itself.
+    // On failure, fills `err` (cleared on entry) and returns false.
     static bool Render(const std::string &mermaid_src, const std::string &id,
                        int width_px, std::string &svg_out, std::string &err);
 };
