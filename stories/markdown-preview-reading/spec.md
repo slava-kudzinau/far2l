@@ -30,7 +30,8 @@
 | Body text, list text | `COL_VIEWERTEXT` |
 | Headings | one far theme palette entry that differs from the body (not a fixed ANSI color); H1 and H2 may differ from H3 to H6 |
 | Code span, code fence text | a second palette entry, different from heading and body |
-| Mermaid art and table borders | a third palette entry |
+| Mermaid art and table borders | a third palette entry (the art entry) |
+| Table header row text | the heading entry; other table cell text uses the body color |
 | Link, strong, emphasis | strong and links use the heading entry; emphasis uses the body color |
 | Background of every cell | the viewer background; no black and no red |
 | Theme change | colors follow it after the next redraw |
