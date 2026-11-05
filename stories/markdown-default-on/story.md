@@ -1,5 +1,5 @@
 ---
-status: ready
+status: in-progress
 size: S
 risk: none
 depends-on: markdown-preview-reading
@@ -20,7 +20,8 @@ Owner decision 2026-11-06: pressing F3 on a `.md` file should show the rendered 
 
 ## Notes
 - Branch `markdown-preview/default-on`, worktree `.worktrees/markdown-default-on`, based on `markdown-preview/reading`. It edits `viewer.cpp` and the viewer settings code, so it may conflict with nothing in B or C.
-- Budget/hard stop: S $8/$10. Lite tier (build starts when story B closes, to keep two stories at a time).
+- Budget/hard stop: S $8/$10. Lite tier. The owner said to run it now, in parallel with B and C ("it is isolated").
 - Owner rules: no PR, no push until the owner says so. Commit trailer: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
 - Owner-checked paths: stories/*/story.md.
 - The owner chose "on by default" in these words: "it should be on".
+- started: 2026-11-06T00:30:00Z
