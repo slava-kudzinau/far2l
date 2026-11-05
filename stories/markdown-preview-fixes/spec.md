@@ -6,7 +6,7 @@
 |---|---|
 | `MermaidEngine::Available()` with `mermaid.min.js` beside the binary | `true`; stderr has no `eval failed` line |
 | `Render("flowchart LR\n A[Start] --> B[Finish]\n", "m1", 800, svg, err)` | returns `true`; `svg` starts with `<svg`; contains `Start` and `Finish`; `err` is empty |
-| `Render` of the `swimlane-alpha` block in `sample.md` | returns `true`; `svg` contains `Start` and `Finish` |
+| `Render` of the `swimlane-beta` block in `sample.md` | returns `true`; `svg` contains `Start` and `Finish` |
 | `Render` of invalid mermaid text | returns `false`; `err` is not empty; no crash |
 
 ## SVG to cells (`far2l/src/markdown/SvgCanvas.cpp`)
