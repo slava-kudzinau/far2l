@@ -28,7 +28,7 @@ public:
     // Replaces the contents of `out` with the box art as MdLines carrying `attr`, at most
     // `width_cells` columns wide.  A cell is 8x16 px; a diagram wider than
     // that is compressed horizontally to fit.
-    void ToCells(int width_cells, std::vector<MdLine> &out, uint16_t attr) const;
+    void ToCells(int width_cells, std::vector<MdLine> &out, uint64_t attr) const;
 
     bool IsValid() const { return m_valid; }
 

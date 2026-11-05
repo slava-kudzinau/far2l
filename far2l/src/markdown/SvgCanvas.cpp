@@ -1356,7 +1356,7 @@ bool SvgCanvas::Parse(const std::string &svg)
     return m_valid;
 }
 
-void SvgCanvas::ToCells(int width_cells, std::vector<MdLine> &out, uint16_t attr) const
+void SvgCanvas::ToCells(int width_cells, std::vector<MdLine> &out, uint64_t attr) const
 {
     if (!m_valid || width_cells <= 0)
         return;

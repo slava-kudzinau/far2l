@@ -144,8 +144,7 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 
 	if (line) {
 		for (const MdRun &run : line->runs) {
-			SetFarColor(_selection ? (uint16_t)_sel_color
-			                       : run.attr);
+			SetColor(_selection ? _sel_color : run.attr);
 
 			const wchar_t *p = run.text.c_str();
 			bool joining = false;
@@ -178,6 +177,10 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 		}
 	}
 
-	if (print_len > 0)
+	// Blank cells (past the line end, or an empty line) take the viewer text color,
+	// not whatever color the last run or the arrows left behind.
+	if (print_len > 0) {
+		SetColor(_selection ? _sel_color : FarColorToReal(COL_VIEWERTEXT));
 		PrintSpaces(print_len);
+	}
 }

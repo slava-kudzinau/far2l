@@ -21,17 +21,10 @@
 
 namespace {
 
-// Styling (documented: the viewer has no italics, so emphasis/strong map to
-// colors, not slant).
-constexpr uint16_t ATTR_H1       = F_WHITE;
-constexpr uint16_t ATTR_H23      = F_LIGHTCYAN;
-constexpr uint16_t ATTR_H456     = F_LIGHTMAGENTA;
-constexpr uint16_t ATTR_STRONG   = F_LIGHTCYAN;
-constexpr uint16_t ATTR_EMPH     = F_LIGHTGREEN;
-constexpr uint16_t ATTR_CODE     = F_LIGHTGRAY;
-constexpr uint16_t ATTR_LINK     = F_CYAN;
-constexpr uint16_t ATTR_DEL      = F_DARKGRAY;
-constexpr uint16_t ATTR_QUOTE    = F_LIGHTGRAY;
+// Styling: every run takes the viewer text color (`base_attr`, which the viewer
+// reads from COL_VIEWERTEXT when it renders).  Structure is shown by layout only:
+// heading rule lines, the box-line quote prefix, indented code, bullets and table borders.
+constexpr int      CODE_INDENT   = 4;     // cells of indent before each code line
 constexpr wchar_t  BULLET        = L'\u2022';
 
 std::wstring concat(const std::vector<MdRun> &runs);
@@ -85,8 +78,8 @@ struct Builder {
     int64_t cur_pos = 0;          // file pos of the current display line
     bool cur_started = false;
 
-    uint16_t base_attr;
-    uint16_t attr;                // active inline attr
+    uint64_t base_attr;
+    uint64_t attr;                // active inline attr (always base_attr)
     int width;
 
     // block context
@@ -115,7 +108,7 @@ struct Builder {
     std::vector<MdRun> cell;
 
     // span context
-    std::vector<uint16_t> attr_stack;
+    std::vector<uint64_t> attr_stack;
     std::wstring link_href;       // set on span enter, appended on span leave
     std::wstring link_label;      // label text captured while the link is open
 
@@ -150,7 +143,7 @@ struct Builder {
             li_prefix_pending = false;
         }
         if (!lead.empty())
-            cur.push_back(MdRun{lead, (uint16_t)(base_attr & (F_WHITE | B_BLACK))});
+            cur.push_back(MdRun{lead, base_attr});
     }
 
     void append(const std::wstring &text)
@@ -221,8 +214,7 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_H: {
             auto *d = (MD_BLOCK_H_DETAIL *)detail;
             b.heading_level = d ? (int)d->level : 1;
-            b.attr = b.heading_level <= 1 ? ATTR_H1
-                   : b.heading_level <= 3 ? ATTR_H23 : ATTR_H456;
+            b.attr = b.base_attr;
             b.begin_line();
             break;
         }
@@ -250,7 +242,7 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             std::wstring hr;
             int n = std::max(1, b.width - (int)(2 * b.list_stack.size()));
             hr.append((size_t)n, BoxSymbols[BS_H1]);
-            b.attr = ATTR_QUOTE;
+            b.attr = b.base_attr;
             b.append(hr);
             b.attr = b.base_attr;
             b.flush();
@@ -268,7 +260,7 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_TD:
             b.in_cell = true;
             b.cell.clear();
-            b.attr = (type == MD_BLOCK_TH) ? ATTR_STRONG : b.base_attr;
+            b.attr = b.base_attr;
             break;
         default: break;
     }
@@ -295,6 +287,14 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             break;
         case MD_BLOCK_H:
             b.flush();
+            // Heading rule under H1-H3 (double for H1); H4-H6 get none.
+            if (b.heading_level >= 1 && b.heading_level <= 3) {
+                b.begin_line();
+                int lead = (int)concat(b.cur).size();
+                int n = std::max(1, b.width - lead);
+                b.append(std::wstring((size_t)n, b.heading_level == 1 ? BoxSymbols[BS_H2] : BoxSymbols[BS_H1]));
+                b.flush();
+            }
             b.heading_level = 0;
             b.attr = b.base_attr;
             break;
@@ -323,7 +323,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                 std::wstring line = (nl == std::wstring::npos)
                     ? text.substr(start) : text.substr(start, nl - start);
                 b.begin_line();
-                b.append(line);
+                b.append(std::wstring(CODE_INDENT, L' ') + line);
                 b.flush();
                 ++count;
                 if (nl == std::wstring::npos) break;
@@ -356,16 +356,16 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                     for (auto &r : b.table_rows)
                         for (size_t c = 0; c < r.size(); ++c)
                             w[c] = std::max(w[c], (int)concat(r[c]).size());
-                    auto render_row = [&](std::vector<std::vector<MdRun>> &row, uint16_t attr) {
+                    auto render_row = [&](std::vector<std::vector<MdRun>> &row, uint64_t attr) {
                         b.begin_line();
-                        b.attr = ATTR_QUOTE;
+                        b.attr = b.base_attr;
                         b.append(std::wstring(1, BoxSymbols[BS_V1]));
                         for (size_t c = 0; c < cols; ++c) {
                             b.attr = attr;
                             std::wstring cell_txt = (c < row.size()) ? concat(row[c]) : L"";
                             int pad = w[c] - (int)cell_txt.size();
                             b.append(L" " + cell_txt + std::wstring(pad > 0 ? pad : 0, L' ') + L" ");
-                            b.attr = ATTR_QUOTE;
+                            b.attr = b.base_attr;
                             b.append(std::wstring(1, BoxSymbols[BS_V1]));
                         }
                         b.attr = b.base_attr;
@@ -373,7 +373,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                     };
                     auto render_sep = [&](wchar_t l, wchar_t mid, wchar_t r) {
                         b.begin_line();
-                        b.attr = ATTR_QUOTE;
+                        b.attr = b.base_attr;
                         b.append(std::wstring(1, l));
                         for (size_t c = 0; c < cols; ++c) {
                             b.append(std::wstring((size_t)w[c] + 2, BoxSymbols[BS_H1]));
@@ -384,7 +384,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                     };
                     render_sep(BoxSymbols[BS_LT_H1V1], BoxSymbols[BS_T_H1V1], BoxSymbols[BS_RT_H1V1]);
                     for (size_t ri = 0; ri < b.table_rows.size(); ++ri) {
-                        render_row(b.table_rows[ri], ri == 0 ? ATTR_STRONG : b.base_attr);
+                        render_row(b.table_rows[ri], b.base_attr);
                         if (ri == 0)
                             render_sep(BoxSymbols[BS_L_H1V1], BoxSymbols[BS_C_H1V1], BoxSymbols[BS_R_H1V1]);
                     }
@@ -410,12 +410,12 @@ int cb_enter_span(MD_SPANTYPE type, void *detail, void *userdata)
     Builder &b = *(Builder *)userdata;
     b.attr_stack.push_back(b.attr);
     switch (type) {
-        case MD_SPAN_STRONG: b.attr = ATTR_STRONG; break;
-        case MD_SPAN_EM:     b.attr = ATTR_EMPH; break;
-        case MD_SPAN_CODE:   b.attr = ATTR_CODE; break;
-        case MD_SPAN_DEL:    b.attr = ATTR_DEL; break;
+        case MD_SPAN_STRONG: b.attr = b.base_attr; break;
+        case MD_SPAN_EM:     b.attr = b.base_attr; break;
+        case MD_SPAN_CODE:   b.attr = b.base_attr; break;
+        case MD_SPAN_DEL:    b.attr = b.base_attr; break;
         case MD_SPAN_A: {
-            b.attr = ATTR_LINK;
+            b.attr = b.base_attr;
             auto *d = (MD_SPAN_A_DETAIL *)detail;
             b.link_href.clear();
             b.link_label.clear();
@@ -424,7 +424,7 @@ int cb_enter_span(MD_SPANTYPE type, void *detail, void *userdata)
             break;
         }
         case MD_SPAN_IMG: {
-            b.attr = ATTR_LINK;
+            b.attr = b.base_attr;
             auto *d = (MD_SPAN_IMG_DETAIL *)detail;
             b.link_href.clear();
             b.link_label.clear();
@@ -490,7 +490,7 @@ int cb_text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *userdata)
 
 // ---------------------------------------------------------------------------
 
-void MarkdownDoc::Render(const std::wstring &file_text, int width, uint16_t base_attr)
+void MarkdownDoc::Render(const std::wstring &file_text, int width, uint64_t base_attr)
 {
     m_text = file_text;
     m_width = width;
