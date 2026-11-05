@@ -30,7 +30,8 @@ ExpectString("OSC52");
 TypeEscape()
 
 // Open the markdown sample in the viewer (F3 on panel; the cursor starts on "/..").
-TypeDown()
+// long.md sorts before sample.md, so the sample is the second file below "/..".
+TypeDown(2)
 TypeFKey(3)
 ExpectString("left/sample.md")
 var plain_line = ExpectString("# Heading One")
@@ -58,8 +59,7 @@ var table = ExpectString("│ cell1")
 CheckBack("table box glyph", ReadCell(table.X, table.Y))
 CheckBack("table cell", ReadCell(table.X + 2, table.Y))
 
-// Scroll to the bottom, where the mermaid fence is. End is the scroll key that
-// re-renders the markdown view; PgDn and the arrow keys do not yet.
+// Scroll to the bottom, where the mermaid fence is.
 TypeEnd()
 ExpectNoString("Heading One")
 ExpectString("Start")
@@ -68,6 +68,49 @@ ExpectString("┌──────────────────┐")
 ExpectNoString("```mermaid")
 var quote = ExpectString("│ block quote line")
 CheckFore("block quote", ReadCell(quote.X + 2, quote.Y))
+
+TypeEscape()
+
+// Scrolling by line index on long.md: several screens of rendered lines, so each
+// step lands on text that is not on the screen before it.
+TypeUp()
+TypeFKey(3)
+ExpectString("left/long.md")
+// The markdown mode is kept per file, so switch this new file to it (Shift+F4).
+ToggleShift(true)
+TypeFKey(4)
+ToggleShift(false)
+ExpectString("Long Start")
+ExpectNoString("# Long Start")
+ExpectString("  0%")
+
+// Down moves the top by one rendered line: the heading row scrolls off, the next row stays.
+TypeDown()
+ExpectNoString("Long Start")
+ExpectString("Row 001")
+
+// PgDn moves by a screen minus one line: the first rows go, later rows show, never a blank screen.
+TypePageDown()
+ExpectNoString("Row 001")
+ExpectString("Row 030")
+
+// PgUp moves back by the same step: the first rows return.
+TypePageUp()
+ExpectString("Row 001")
+ExpectNoString("Row 030")
+
+// End shows the last page: the final heading is drawn, not its raw "# " markup.
+TypeEnd()
+ExpectString("Long End")
+ExpectString("Final paragraph")
+ExpectNoString("# Long End")
+ExpectNoString("Row 030")
+ExpectString("100%")
+
+// Home goes back to the first page.
+TypeHome()
+ExpectString("Long Start")
+ExpectString("  0%")
 
 TypeEscape()
 TypeFKey(10)

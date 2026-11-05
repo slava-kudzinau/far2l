@@ -122,6 +122,10 @@ private:
 	MarkdownDoc m_md_doc;
 	std::vector<MdLine> m_md_screen;   // runs for the rows shown (parallel to Strings)
 	bool m_md_ready = false;
+	// Markdown scrolls by rendered line: the top row is an index into m_md_doc.Lines().
+	// FilePos follows it (the line's source offset), so the status line and position cache use it.
+	int64_t m_md_top = 0;
+	int64_t m_md_top_pos = -1;         // the FilePos m_md_top was last synced to
 
 	FAR_FIND_DATA_EX ViewFindData;
 
@@ -204,8 +208,14 @@ private:
 	size_t SkipZeroWidthSubsequence(const wchar_t *buf, size_t index, size_t length);
 
 	void ReadString(ViewerString &rString, int MaxSize, int StrSize);
-	void ReadStringMarkdown(ViewerString &rString, int MaxSize, int StrSize);
+	void ReadStringMarkdown(ViewerString &rString, int64_t index);
 	void ShowMarkdown();
+	void SyncMarkdownTop();
+	void SetMarkdownTop(int64_t top);
+	int64_t MarkdownLineAtPos(int64_t pos) const;
+	int64_t MarkdownMaxTop() const;
+	int MarkdownPercent() const;
+	void MarkdownPage(int dir);
 	int CalcStrSize(const wchar_t *Str, int Length);
 	void ChangeViewKeyBar();
 	void SetCRSym();

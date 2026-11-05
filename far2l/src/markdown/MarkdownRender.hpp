@@ -15,8 +15,9 @@ struct MdRun {
     uint64_t attr = 0;
 };
 
-// One display line: an ordered sequence of styled runs plus the file offset of
-// the source line it came from (used by the viewer for poscache / scrollbar).
+// One display line: an ordered sequence of styled runs plus its source offset: the
+// file offset of the line's first source text.  Offsets never decrease down the doc, so the
+// viewer finds the line for a file position (poscache, mode switch) by searching them.
 struct MdLine {
     std::vector<MdRun> runs;
     int64_t nFilePos = 0;
@@ -50,8 +51,7 @@ public:
     int64_t FirstBlockFilePos() const { return m_first_pos; }
 
     bool IsValid() const { return m_valid; }
-    // The rendered display lines (for MarkdownPrinter, which consumes rows
-    // sequentially starting at the cursor primed by the last NextLines call).
+    // The rendered display lines; the viewer draws rows from them by index.
     const std::vector<MdLine> &Lines() const { return m_lines; }
     int64_t Cursor() const { return m_cursor; }
     void SetCursor(int64_t c) { m_cursor = c; m_cursor_pos = (c >= 0 && c < (int64_t)m_lines.size()) ? m_lines[c].nFilePos : -1; }

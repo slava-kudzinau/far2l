@@ -13,11 +13,9 @@
 // ---------------------------------------------------------------------------
 // md4c event -> styled display lines.
 //
-// md4c reports UTF-8 text in `text` callbacks and per-block/span events.  We
-// keep no byte offsets in block details (md4c 0.5.2 exposes none), so a
-// running byte offset (the contingency from the plan) tracks the source line
-// start: every `text` call advances it by `size`, and each block start records
-// it as that block's display-line nFilePos.
+// md4c reports UTF-8 text in `text` callbacks and per-block/span events.  md4c 0.5.2 gives
+// no byte offsets in block details, but its text callbacks point into the input, so each
+// display line takes the offset of its first source text (see cb_text).
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -91,13 +89,27 @@ std::string one_line(const std::string &s)
 }
 
 struct Builder {
-    // running source offset (bytes consumed so far)
+    // Source offset: bytes of the input consumed so far.  md4c hands out most text as a pointer
+    // into the input, so a text callback sets this to that text's offset (see cb_text); other
+    // pieces (the static "\n" of a break) advance it by their size.
     size_t pos = 0;
+    const char *base = nullptr;   // the UTF-8 input md4c parses
+    size_t base_size = 0;
+
+    // File offset of `p` when it points into the input, else -1.
+    int64_t offset_of(const MD_CHAR *p) const
+    {
+        const uintptr_t at = (uintptr_t)p, start = (uintptr_t)base;
+        if (!base || at < start || at >= start + base_size)
+            return -1;
+        return (int64_t)(at - start);
+    }
 
     std::vector<MdLine> out;
 
     std::vector<MdRun> cur;       // current display line runs
     int64_t cur_pos = 0;          // file pos of the current display line
+    bool cur_pos_set = false;     // cur_pos came from source text (else see flush())
     bool cur_started = false;
 
     uint64_t base_attr;           // viewer text color; every run takes it
@@ -118,7 +130,8 @@ struct Builder {
     bool in_code = false;
     std::wstring code_lang;
     std::wstring code_text;       // verbatim text incl '\n'
-    int64_t code_pos = 0;
+    // (index in code_text, file offset) of each piece of source text in the block
+    std::vector<std::pair<size_t, int64_t>> code_marks;
 
     // table
     bool in_table = false;
@@ -126,6 +139,8 @@ struct Builder {
     bool header_done = false;
     std::vector<std::vector<MdRun>> table_row;
     std::vector<std::vector<std::vector<MdRun>>> table_rows;
+    std::vector<int64_t> table_row_pos;   // file offset of each row's first cell text
+    int64_t row_pos = -1;                 // the row being collected (-1: no source text yet)
     std::vector<MdRun> cell;
 
     // span context
@@ -149,7 +164,7 @@ struct Builder {
         if (cur_started)
             return;
         cur.clear();
-        cur_pos = (int64_t)pos;
+        cur_pos_set = false;      // set by the line's first source text, see append()
         cur_started = true;
         // leading indent: list depth (2 cells) + blockquote prefix.
         std::wstring lead;
@@ -166,11 +181,20 @@ struct Builder {
             cur.push_back(MdRun{lead, base_attr});
     }
 
-    void append(const std::wstring &text)
+    void set_line_pos(int64_t p)
+    {
+        cur_pos = p;
+        cur_pos_set = true;
+    }
+
+    // `off` is the file offset of `text` when it comes from the source, else -1.
+    void append(const std::wstring &text, int64_t off = -1)
     {
         if (text.empty())
             return;
         begin_line();
+        if (!cur_pos_set && off >= 0)
+            set_line_pos(off);
         if (!cur.empty() && cur.back().attr == base_attr)
             cur.back().text += text;
         else
@@ -183,7 +207,9 @@ struct Builder {
             return;
         MdLine line;
         line.runs = std::move(cur);
-        line.nFilePos = cur_pos;
+        // A line with no source text of its own (rules, table borders, blank code lines) takes the
+        // position of the line before it, so it groups with that line and never ties with a source line.
+        line.nFilePos = cur_pos_set ? cur_pos : (out.empty() ? 0 : out.back().nFilePos);
         out.push_back(std::move(line));
         cur.clear();
         cur_started = false;
@@ -191,6 +217,15 @@ struct Builder {
 
     void line_break() { flush(); }   // paragraph soft/hard break = new display line
 };
+
+// File offset of the first source text in the code line [s, e) of code_text, or -1 when the line
+// has none (a blank line; the indent is not source text).
+int64_t code_line_pos(const Builder &b, size_t s, size_t e)
+{
+    auto it = std::lower_bound(b.code_marks.begin(), b.code_marks.end(), s,
+        [](const std::pair<size_t, int64_t> &m, size_t v) { return m.first < v; });
+    return (it != b.code_marks.end() && it->first < e) ? it->second : -1;
+}
 
 int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
 {
@@ -244,7 +279,7 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             auto *d = (MD_BLOCK_CODE_DETAIL *)detail;
             b.in_code = true;
             b.code_text.clear();
-            b.code_pos = (int64_t)b.pos;
+            b.code_marks.clear();
             if (d)
                 b.code_lang = attr_to_wide(d->lang);
             break;
@@ -252,7 +287,7 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_HTML:
             b.in_code = true;   // verbatim, same treatment as code
             b.code_text.clear();
-            b.code_pos = (int64_t)b.pos;
+            b.code_marks.clear();
             b.code_lang.clear();
             break;
         case MD_BLOCK_HR: {
@@ -267,11 +302,15 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_TABLE:
             b.in_table = true;
             b.table_rows.clear();
+            b.table_row_pos.clear();
             b.header_done = false;
             break;
         case MD_BLOCK_THEAD: break;
         case MD_BLOCK_TBODY: b.header_done = true; break;
-        case MD_BLOCK_TR: b.table_row.clear(); break;
+        case MD_BLOCK_TR:
+            b.table_row.clear();
+            b.row_pos = -1;
+            break;
         case MD_BLOCK_TH:
         case MD_BLOCK_TD:
             b.in_cell = true;
@@ -330,11 +369,17 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             // engine's box art when available (Step 6 splice below).
             size_t first_line = b.out.size();
             size_t count = 0, start = 0;
+            // The art of a fence is placed at the fence's first source text.
+            const int64_t fence_pos = b.code_marks.empty() ? (int64_t)b.pos : b.code_marks.front().second;
             while (start <= text.size()) {
                 size_t nl = text.find(L'\n', start);
                 std::wstring line = (nl == std::wstring::npos)
                     ? text.substr(start) : text.substr(start, nl - start);
+                const size_t end = (nl == std::wstring::npos) ? text.size() : nl;
                 b.begin_line();
+                const int64_t line_pos = code_line_pos(b, start, end);
+                if (line_pos >= 0)
+                    b.set_line_pos(line_pos);
                 b.append(std::wstring(CODE_INDENT, L' ') + line);
                 b.flush();
                 ++count;
@@ -342,7 +387,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                 start = nl + 1;
             }
             if (is_mermaid)
-                b.fences.push_back(Builder::Fence{b.code_pos, fence_src, first_line, count});
+                b.fences.push_back(Builder::Fence{fence_pos, fence_src, first_line, count});
             break;
         }
         case MD_BLOCK_TH:
@@ -354,6 +399,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_TR:
             b.table_rows.push_back(std::move(b.table_row));
             b.table_row.clear();
+            b.table_row_pos.push_back(b.row_pos >= 0 ? b.row_pos : (int64_t)b.pos);
             break;
         case MD_BLOCK_TABLE:
             b.in_table = false;
@@ -367,8 +413,10 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                     for (auto &r : b.table_rows)
                         for (size_t c = 0; c < r.size(); ++c)
                             w[c] = std::max(w[c], (int)concat(r[c]).size());
-                    auto render_row = [&](std::vector<std::vector<MdRun>> &row) {
+                    // Rows take their own source offset; the borders take the line before them (flush()).
+                    auto render_row = [&](std::vector<std::vector<MdRun>> &row, int64_t pos) {
                         b.begin_line();
+                        b.set_line_pos(pos);
                         b.append(std::wstring(1, BoxSymbols[BS_V1]));
                         for (size_t c = 0; c < cols; ++c) {
                             std::wstring cell_txt = (c < row.size()) ? concat(row[c]) : L"";
@@ -389,7 +437,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                     };
                     render_sep(BoxSymbols[BS_LT_H1V1], BoxSymbols[BS_T_H1V1], BoxSymbols[BS_RT_H1V1]);
                     for (size_t ri = 0; ri < b.table_rows.size(); ++ri) {
-                        render_row(b.table_rows[ri]);
+                        render_row(b.table_rows[ri], b.table_row_pos[ri]);
                         if (ri == 0)
                             render_sep(BoxSymbols[BS_L_H1V1], BoxSymbols[BS_C_H1V1], BoxSymbols[BS_R_H1V1]);
                     }
@@ -455,8 +503,14 @@ int cb_text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *userdata)
 {
     Builder &b = *(Builder *)userdata;
     std::wstring w = utf8_to_wide((const char *)text, size);
+    // Source text points into the input, so its offset is exact; other text keeps the running pos.
+    const int64_t off = b.offset_of(text);
+    if (off >= 0)
+        b.pos = (size_t)off;
     b.pos += size;
     if (b.in_code) {
+        if (off >= 0)
+            b.code_marks.emplace_back(b.code_text.size(), off);
         b.code_text += w;
         return 0;
     }
@@ -469,10 +523,12 @@ int cb_text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *userdata)
             b.append(L" ");
             break;
         default:
-            if (b.in_cell)
+            if (b.in_cell) {
+                if (b.row_pos < 0 && off >= 0)
+                    b.row_pos = off;
                 b.cell.push_back(MdRun{w, b.base_attr});
-            else {
-                b.append(w);
+            } else {
+                b.append(w, off);
                 b.link_label += w;   // accumulate link/label text
             }
             break;
@@ -506,6 +562,8 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width, uint64_t base
     Builder b;
     b.base_attr = base_attr;
     b.width = width;
+    b.base = utf8.data();
+    b.base_size = utf8.size();
 
     MD_PARSER parser = {};
     parser.flags = MD_FLAG_TABLES | MD_FLAG_TASKLISTS | MD_FLAG_STRIKETHROUGH
@@ -557,8 +615,8 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width, uint64_t base
         if (cell == m_mermaid_cache.end() || cell->second.empty())
             continue;
         std::vector<MdLine> &lines = cell->second;
-        // Every art row carries the fence position: the viewer reads nFilePos as the row's
-        // position, and a 0 in the middle of the sequence breaks the lookup in NextLines().
+        // Every art row carries the fence position: the viewer finds lines by nFilePos, so the
+        // offsets must stay non-decreasing down the doc (a 0 in the middle would break that).
         for (MdLine &line : lines)
             line.nFilePos = it->file_pos;
         m_lines.erase(m_lines.begin() + it->first_line,

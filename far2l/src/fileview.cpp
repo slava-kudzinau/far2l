@@ -564,7 +564,8 @@ void FileViewer::ShowStatus()
 		NameLength = 20;
 
 	TruncPathStr(strName, NameLength);
-	const int percent = View.LastPage ? 100 : ToPercent64(View.FilePos, View.FileSize);
+	const int percent = View.VM.Markdown ? View.MarkdownPercent()
+			: (View.LastPage ? 100 : ToPercent64(View.FilePos, View.FileSize));
 	FARString str_codepage;
 	ShortReadableCodepageName(View.VM.CodePage,str_codepage);
 	FormatString status_builder;
