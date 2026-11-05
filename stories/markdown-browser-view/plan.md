@@ -6,7 +6,7 @@ Tier: lite (`flow tier=lite`). No `spec.md`: the spec is the section below.
 
 | Call | Result |
 |---|---|
-| `sh far2l/bootstrap/md-open.sh <file.md> --out <page.html> --no-open` | exits 0; `page.html` exists; it holds the markdown text, the `marked` library inline, one `<script src>` for mermaid from the CDN (pinned version, with an `integrity` hash and `crossorigin="anonymous"`), and the init call `mermaid.initialize` with `securityLevel:'strict'`; that one script is the only network use |
+| `sh far2l/bootstrap/md-open.sh <file.md> --out <page.html> --no-open` | exits 0; `page.html` exists; it holds the markdown text, the `marked` library inline, one script for mermaid from the CDN, added by the page after the text shows (pinned version, with an `integrity` hash and `crossorigin="anonymous"`), the init call `mermaid.initialize` with `securityLevel:'strict'`, and a `Content-Security-Policy` meta that allows that script and local images only; that one script is the only network use |
 | Same, file with a mermaid fence | the page, opened in Chrome headless (`--dump-dom --virtual-time-budget=5000`), has an `<svg>` inside the diagram block and the text of the heading |
 | Same, file that contains the text `</script>` | the page still renders the rest of the file (the text is not able to close the script tag) |
 | Same, file that does not exist, or no argument | exits non-zero, prints a usage line, writes no page |
@@ -41,7 +41,7 @@ The check exits 0 and the page test shows an `<svg>` and the heading. The owner 
   - `fixtures/diagram.md` is a copy of the flowchart; paste its text in (the copy is a fixture, it is not kept in sync).
   - `check.sh` needs network for the CDN script (if `curl -sI` to the CDN fails, print `no network` and exit 1). It matches in the dumped DOM: `<svg` inside the text between `class="mermaid"` and the next `</pre>`, the heading text by `grep -F`; the hostile fixture passes when the dumped DOM holds the text after `</script>` and no element with `id="x"`. If Chrome is missing, `check.sh` prints `chrome not found` and exits 1 (fail, not skip).
   - Install: `install(PROGRAMS md-open.sh ...)` for the script (executable), `install(FILES ...)` for `marked.min.js` and its license, into the same destination as the other bootstrap files. The association command runs the script by its installed absolute path, with `sh` in front; `--print-association` prints that path from the script's own folder.
-  - Association entry format: print the lines for far2l's dialog: Mask `*.md`; Command for Alt-F3 view: `sh "<abs path>/md-open.sh" "!.!"`, with numbered steps to add them.
+  - Association entry format: print the lines for far2l's dialog: Mask `*.md`; Command for Alt-F3 view: `sh <abs path>/md-open.sh !.!` (ruling 1: `!.!` unquoted, the script path quoted only when it needs it), with numbered steps to add them.
   - Final-review rulings (fix round; the reviewer's findings are in `.build/final-review.md`):
     1. The Alt-F3 command prints and documents `sh <abs path to md-open.sh> !.!` with `!.!` unquoted: far2l already escapes it (`fnparce.cpp:102-111`). Quote only the script path if it has spaces. The spec row "(`\"!.!\"`)" is amended to this. Test with a file name that has a space and a quote.
     2. The page renders the Markdown text first; mermaid is added by a script element created after the text is shown (load or error), so a slow or blocked CDN never blanks the page.
@@ -66,3 +66,10 @@ Write `md-open.sh`, vendor `marked`, add `fixtures/plain.md` (a heading, a table
 **Done check:** `sh far2l/bootstrap/md-open.sh --print-association` exits 0 and prints the mask `*.md`; `cmake` configure of the far2l tree exits 0 and the generated install rule copies the script, `marked.min.js` and its license
 **Role:** implementer — review final
 Implement `--print-association`. Verify the install rule (configure into a temp build dir; do not run the full build).
+
+## T3: Final-review fixes
+
+**Depends on:** T1
+**Done check:** `sh stories/markdown-browser-view/check.sh` exits 0
+**Role:** implementer — review scoped re-review, then final
+Fix the six Important findings (#1 to #6 of `.build/final-review.md`, except #6, which the main session already did in `story.md`) and Minor #7, #8, #14 and #15, exactly as the "Final-review rulings" 1 to 7 above say. Add checks to `check.sh` and fixtures for each ruling (name with a space and a quote; stalled CDN shows text; `<\/` and `<\!--` literal text survives; CSP present and the svg still draws; mermaid syntax error shows its text; leading-dash name). Update the gate text for ruling 5 (remote images do not load) and the stale `mermaid.min.js` line (#15). For #14 add a one-line note in `marked.LICENSE.md` or a grep in `check.sh`. Do not edit `story.md`.

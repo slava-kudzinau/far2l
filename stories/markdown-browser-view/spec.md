@@ -5,7 +5,7 @@ This is the plan's `## Spec` table, kept as the story's spec for the standard ti
 
 | Call | Result |
 |---|---|
-| `sh far2l/bootstrap/md-open.sh <file.md> --out <page.html> --no-open` | exits 0; `page.html` exists; it holds the markdown text, the `marked` library inline, one `<script src>` for mermaid from the CDN (pinned version, with an `integrity` hash and `crossorigin="anonymous"`), and the init call `mermaid.initialize` with `securityLevel:'strict'`; that one script is the only network use |
+| `sh far2l/bootstrap/md-open.sh <file.md> --out <page.html> --no-open` | exits 0; `page.html` exists; it holds the markdown text, the `marked` library inline, one script for mermaid from the CDN, added by the page after the text shows (pinned version, with an `integrity` hash and `crossorigin="anonymous"`), the init call `mermaid.initialize` with `securityLevel:'strict'`, and a `Content-Security-Policy` meta that allows that script and local images only; that one script is the only network use |
 | Same, file with a mermaid fence | the page, opened in Chrome headless (`--dump-dom --virtual-time-budget=5000`), has an `<svg>` inside the diagram block and the text of the heading |
 | Same, file that contains the text `</script>` | the page still renders the rest of the file (the text is not able to close the script tag) |
 | Same, file that does not exist, or no argument | exits non-zero, prints a usage line, writes no page |

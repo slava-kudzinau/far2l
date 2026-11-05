@@ -12,7 +12,7 @@
 LC_ALL=C
 export LC_ALL
 
-self_dir=$(cd "$(dirname "$0")" && pwd) || exit 2
+self_dir=$(cd "$(dirname -- "$0")" && pwd) || exit 2
 
 usage() {
     echo 'usage: md-open.sh <file.md> [--out <page.html>] [--no-open]' >&2
@@ -22,17 +22,29 @@ usage() {
 
 print_association() {
     exe=$self_dir/md-open.sh
+    # far2l escapes the file name in !.! before the shell reads the command, so
+    # !.! stays unquoted. The script path is quoted only when the shell needs it.
+    case $exe in
+        *[!A-Za-z0-9_./+:@%,=-]*)
+            q=$(printf '%s' "$exe" | sed -e 's/["$`\\]/\\&/g')
+            cmd="sh \"$q\" !.!" ;;
+        *)
+            cmd="sh $exe !.!" ;;
+    esac
     cat <<EOF
 far2l file association for Markdown (add it once):
 
   Mask:                              *.md
-  View command (used for Alt+F3):    sh "$exe" "!.!"
+  View command (used for Alt+F3):    $cmd
+
+far2l already escapes the file name in !.!, so the command does not quote it.
+The command above shows this copy's path; print the entry from the installed copy.
 
 Steps in far2l:
   1. Press F9, open the Commands menu and choose File associations.
   2. Press Ins to add an entry.
   3. In "A file mask or several file masks", type: *.md
-  4. Tick "View command (used for Alt+F3)" and type: sh "$exe" "!.!"
+  4. Tick "View command (used for Alt+F3)" and type: $cmd
   5. Press OK. Alt+F3 on a .md file now opens it in the browser.
 EOF
 }
@@ -51,6 +63,12 @@ while [ $# -gt 0 ]; do
             [ $# -ge 2 ] || usage
             out=$2
             shift ;;
+        --)
+            # After "--" the one argument is the file name, even if it starts with "-".
+            shift
+            [ -z "$file" ] && [ $# -eq 1 ] || usage
+            file=$1
+            break ;;
         -*)
             # A file whose name starts with "-" still works when it exists.
             { [ -z "$file" ] && [ -f "$1" ]; } || usage
@@ -75,7 +93,7 @@ else
     tmp_dir=${tmp_dir%/}
     page=$tmp_dir/far2l-md-$$.html
 fi
-if [ -d "$page" ] || [ ! -d "$(dirname "$page")" ]; then
+if [ -d "$page" ] || [ ! -d "$(dirname -- "$page")" ]; then
     echo "md-open: cannot write the page $page (its folder must exist)" >&2
     exit 2
 fi
@@ -87,7 +105,7 @@ if [ ! -r "$marked_js" ]; then
 fi
 
 # Folder of the Markdown file as a file:// URL for <base href>.
-dir=$(cd "$(dirname "$file")" && pwd) || exit 2
+dir=$(cd "$(dirname -- "$file")" && pwd) || exit 2
 case $dir in
     */) ;;
     *) dir=$dir/ ;;
@@ -95,7 +113,7 @@ esac
 base_url=file://$(printf '%s' "$dir" | sed -e 's/%/%25/g' -e 's/ /%20/g' -e 's/#/%23/g' \
     -e 's/?/%3F/g' -e 's/"/%22/g' -e "s/'/%27/g" -e 's/</%3C/g' -e 's/>/%3E/g' -e 's/&/%26/g')
 
-title=$(basename "$file" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g')
+title=$(basename -- "$file" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g')
 bom=$(printf '\357\273\277')
 cr=$(printf '\r')
 
@@ -105,6 +123,7 @@ cr=$(printf '\r')
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline'; img-src data: file:">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 HTML
     printf '<base href="%s">\n' "$base_url"
@@ -114,8 +133,9 @@ HTML
 :root { color-scheme: light dark; }
 body { max-width: 50em; margin: 2em auto; padding: 0 1em; font: 16px/1.5 system-ui, -apple-system, "Helvetica Neue", sans-serif; }
 pre { overflow-x: auto; padding: 0.75em; border-radius: 6px; background: #f2f2f2; }
-pre.mermaid { background: none; text-align: center; }
+pre.mermaid[data-processed] { background: none; text-align: center; }
 code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; }
+.mermaid-error { color: #b00020; font-size: 0.85em; text-align: left; }
 table { border-collapse: collapse; }
 th, td { border: 1px solid #bbb; padding: 0.3em 0.6em; text-align: left; }
 @media (prefers-color-scheme: dark) {
@@ -123,6 +143,7 @@ th, td { border: 1px solid #bbb; padding: 0.3em 0.6em; text-align: left; }
   pre { background: #2a2a2a; }
   th, td { border-color: #555; }
   a { color: #7ab8ff; }
+  .mermaid-error { color: #ff8a8a; }
 }
 </style>
 </head>
@@ -130,28 +151,27 @@ th, td { border: 1px solid #bbb; padding: 0.3em 0.6em; text-align: left; }
 <main id="content"></main>
 <script type="text/markdown" id="md">
 HTML
-    # The text cannot end its script element: "</" becomes "<\/" and "<!--"
-    # becomes "<\!--" (the page script undoes both). A BOM and CRs go too.
-    sed -e "1s/^$bom//" -e "s/$cr\$//" -e 's|</|<\\/|g' -e 's|<!--|<\\!--|g' < "$file"
+    # The text cannot end its script element or open a comment there. Backslashes
+    # are doubled first, then "</" becomes "<\/" and "<!--" becomes "<\!--"; the
+    # page undoes the steps in reverse order. A BOM and CRs go too.
+    sed -e "1s/^$bom//" -e "s/$cr\$//" -e 's/\\/\\\\/g' -e 's|</|<\\/|g' -e 's|<!--|<\\!--|g' < "$file"
     printf '\n</script>\n<script>\n'
     cat "$marked_js"
-    printf '\n</script>\n'
-    # mermaid: the pinned CDN build, checked by its SRI hash. When it does not
-    # load, the page script below shows the diagrams as code blocks.
-    cat <<'HTML'
-<script src="https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.min.js" integrity="sha384-HHW54r639fK42Ip0coGF3mz8oSiGn0eEoWNTLs75X7H63pLSDBa0Tqs0RwGmLlXE" crossorigin="anonymous"></script>
-<script>
-HTML
+    printf '\n</script>\n<script>\n'
     cat <<'JS'
 (function () {
   'use strict';
+  var MERMAID_URL = 'https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.min.js';
+  var MERMAID_SRI = 'sha384-HHW54r639fK42Ip0coGF3mz8oSiGn0eEoWNTLs75X7H63pLSDBa0Tqs0RwGmLlXE';
   function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
+  // Undo the escapes of the embedded text, in the reverse of the shell's order.
   var src = document.getElementById('md').textContent
+    .split('<\\!--').join('<!--')
     .split('<\\/').join('</')
-    .split('<\\!--').join('<!--');
+    .split('\\\\').join('\\');
   marked.use({
     renderer: {
       // Raw HTML in the file is shown as text, never as markup.
@@ -172,21 +192,68 @@ HTML
       a.removeAttribute('href');
     }
   });
-  var diagrams = content.querySelectorAll('pre.mermaid');
-  if (typeof mermaid === 'undefined') {
-    // The CDN script did not load: show each diagram as a code block.
-    Array.prototype.forEach.call(diagrams, function (pre) {
-      var code = document.createElement('code');
-      code.className = 'language-mermaid';
-      code.textContent = pre.textContent;
-      pre.removeAttribute('class');
-      pre.textContent = '';
-      pre.appendChild(code);
-    });
-  } else if (diagrams.length) {
+
+  // The text is shown now. Mermaid is added by a script element created here, so
+  // a slow or blocked CDN cannot hide the text. Its load or its error decides how
+  // the diagrams are shown.
+  var items = Array.prototype.map.call(content.querySelectorAll('pre.mermaid'), function (pre) {
+    return { pre: pre, src: pre.textContent };
+  });
+  if (!items.length) return;
+  var s = document.createElement('script');
+  s.src = MERMAID_URL;
+  s.integrity = MERMAID_SRI;
+  s.crossOrigin = 'anonymous';
+  s.onload = function () {
+    if (typeof mermaid === 'undefined') {
+      items.forEach(function (it) { showCode(it.pre, it.src, null); });
+    } else {
+      drawDiagrams(items);
+    }
+  };
+  s.onerror = function () {
+    items.forEach(function (it) { showCode(it.pre, it.src, null); });
+  };
+  document.head.appendChild(s);
+
+  // Shows a diagram's source as a code block, with the error text when there is one.
+  function showCode(pre, text, err) {
+    pre.removeAttribute('class');
+    pre.removeAttribute('data-processed');
+    pre.textContent = '';
+    var code = document.createElement('code');
+    code.className = 'language-mermaid';
+    code.textContent = text;
+    pre.appendChild(code);
+    if (err) {
+      var msg = document.createElement('div');
+      msg.className = 'mermaid-error';
+      msg.textContent = 'mermaid: ' + (err && err.message ? err.message : String(err));
+      pre.appendChild(msg);
+    }
+  }
+
+  function drawDiagrams(list) {
     var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     mermaid.initialize({ startOnLoad: false, securityLevel:'strict', theme: dark ? 'dark' : 'default' });
-    mermaid.run({ nodes: diagrams }).catch(function (e) { console.error(e); });
+    // Each diagram is parsed alone first, so a broken one shows its error and the
+    // others still draw.
+    var parsed = list.map(function (it) {
+      return mermaid.parse(it.src).then(function () { return it; }, function (err) {
+        showCode(it.pre, it.src, err);
+        return null;
+      });
+    });
+    Promise.all(parsed).then(function (results) {
+      var good = results.filter(Boolean);
+      if (!good.length) return;
+      return mermaid.run({ nodes: good.map(function (it) { return it.pre; }) }).catch(function (e) {
+        console.error(e);
+        good.forEach(function (it) {
+          if (!it.pre.querySelector('svg')) showCode(it.pre, it.src, null);
+        });
+      });
+    }).catch(function (e) { console.error(e); });
   }
 })();
 JS
