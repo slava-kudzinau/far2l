@@ -1,0 +1,1 @@
+Invalid mermaid header: "graph XX". Expected "graph TD", "flowchart LR", "stateDiagram-v2", etc.
