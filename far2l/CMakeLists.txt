@@ -192,6 +192,7 @@ src/markdown/md4c/md4c.c
 src/markdown/MarkdownRender.cpp
 src/markdown/MermaidEngine.cpp
 src/markdown/SvgCanvas.cpp
+src/markdown/AsciiMermaid.cpp
 )
 
 # Option to disable building macro subsystem completely
