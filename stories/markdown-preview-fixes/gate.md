@@ -50,13 +50,19 @@ _Pasted from the fresh read before the build._
 ## At merge
 
 ### What was built
-_At close-out._
+As planned. Mermaid fences become box art (flowchart and swimlane-beta checked in test 0007). All markdown runs use the viewer text color of the far theme, so the black and red backgrounds are gone. More than planned: engine time (5 s) and stack limits, and parser limits in SvgCanvas, after the final review. Less than hoped: scrolling with Down and PgDn in Markdown mode is still broken (see closeout.md).
 
 ### Decisions changed during the build
-_At close-out._
+- Your color ruling replaced per-element colors with the theme color; structure shows by layout (heading rule, quote prefix, indented code).
+- The sample uses `swimlane-beta`, because the bundled mermaid has no alpha grammar.
+- One token changed in `viewer.cpp:661` (selection color), because the cause was proved there.
+- `testing/src/main.go` got its Environment block back (the baseline commit had dropped it); the net diff against master is empty.
 
 ### What the reviews caught
-_At close-out._
+- Stale callbacks and timer errors in the mermaid engine (T1).
+- Unbounded CSS matching on hostile SVG (T2).
+- Wrong selection color and dead code (T4).
+- No time or stack limit on a mermaid render (final review).
 
 ### Run it
-_At close-out._
+Open `testing/tests/0007-view-file-markdown/initdir/left/sample.md` with F3, press Shift-F4, press End. You should see the swimlane as box art with Start and Finish, and no black or red blocks. Test: `cd testing && ./far2l-smoke -t 30 ../../far2l.build/install/far2l.app/Contents/MacOS/far2l tests/0007-view-file-markdown` (refresh `workdir` from `initdir` first).
