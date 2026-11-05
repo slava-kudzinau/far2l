@@ -52,3 +52,10 @@ The check exits 0. It builds far2l in `../far2l.default-on.build` and runs smoke
 **Done check:** `sh stories/markdown-default-on/check.sh` exits 0
 **Role:** implementer — review final
 Implement the option, the open rule at the three places named above, the dialog check box and string, test 0008, and `check.sh` (configure and build far2l in the build dir, run test 0008 and the existing 0007).
+
+## T2: Final-review fixes
+
+**Depends on:** T1
+**Done check:** `sh stories/markdown-default-on/check.sh` exits 0
+**Role:** implementer — review task-reviewer (scoped)
+Apply the three "Final-review rulings" in Global Constraints (they are binding and override the earlier cache ruling): (1) the new cache scheme in `far2l/src/viewer.cpp` (save 0 when the mode equals the rule default, 1 or 2 only for a deviation; read 1 Markdown, 2 plain, else the rule); (2) fix test 0008 (inherit regression, wrong comment, setting-off path via a seeded `Markdown_Auto=0` or a test 0009, and a hand-changed file keeps its choice in each setting); (3) update the stale comments and the option description for `ViewerMarkdownMode` (write-only now); leave `poscache.hpp` alone. Add 0009 to `check.sh` if you create it. One commit.
