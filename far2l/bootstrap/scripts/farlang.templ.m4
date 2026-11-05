@@ -4607,6 +4607,17 @@ upd:"Zeichentabelle &automatisch erkennen"
 "&Автовизначення кодової сторінки"
 "С&амавызначэнне кадыроўкі"
 
+ViewConfigMarkdownAuto
+upd:"Open &Markdown files in Markdown mode"
+"Open &Markdown files in Markdown mode"
+upd:"Open &Markdown files in Markdown mode"
+upd:"Open &Markdown files in Markdown mode"
+upd:"Open &Markdown files in Markdown mode"
+upd:"Open &Markdown files in Markdown mode"
+upd:"Open &Markdown files in Markdown mode"
+upd:"Open &Markdown files in Markdown mode"
+upd:"Open &Markdown files in Markdown mode"
+
 ViewConfigTabSize
 "Раз&мер табуляции"
 "Tab si&ze"

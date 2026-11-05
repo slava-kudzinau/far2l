@@ -1121,6 +1121,7 @@ void ViewerConfig(ViewerOptions &ViOpt, bool Local)
 	if (!Local) {
 		Builder.AddEmptyLine();
 		Builder.AddCheckbox(Msg::ViewAutoDetectCodePage, &ViOpt.AutoDetectCodePage);
+		Builder.AddCheckbox(Msg::ViewConfigMarkdownAuto, &Opt.ViOpt.ViewerMarkdownAuto);
 		Builder.AddText(Msg::ViewConfigDefaultCodePage);
 		Builder.AddCodePagesBox(&ViOpt.DefaultCodePage, 40, false, false);
 	}

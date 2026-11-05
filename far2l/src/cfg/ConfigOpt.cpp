@@ -288,6 +288,8 @@ const ConfigOpt g_cfg_opts[] {
 		L"Viewer", L"Uses word wrapping in the viewer instead of simple line wrapping" },
 	{OST_COMMON, NSecViewer, "Markdown", &Opt.ViOpt.ViewerMarkdownMode, 0,
 		L"Viewer", L"Enables markdown preview mode in the viewer" },
+	{OST_COMMON, NSecViewer, "Markdown_Auto", &Opt.ViOpt.ViewerMarkdownAuto, 1,
+		L"ViewerSettings", L"Opens .md and .markdown files in Markdown mode unless the viewer has a saved mode for the file" },
 	{OST_COMMON, NSecViewer, "PersistentBlocks", &Opt.ViOpt.PersistentBlocks, 0,
 		L"ViewerSettings", L"Keeps viewer selections visible after cursor movement and commands" },
 	{OST_COMMON, NSecViewer, "DefaultCodePage", &Opt.ViOpt.DefaultCodePage, CP_UTF8,

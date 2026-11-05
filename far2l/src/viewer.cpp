@@ -80,7 +80,40 @@ static void PR_ViewerSearchMsg();
 static void ViewerSearchMsg(const wchar_t *Name, int Percent);
 
 static int InitHex = FALSE, SearchHex = FALSE;
-static int InitMarkdown = FALSE;
+
+// F3 markdown rule: the file name ends in .md or .markdown, ASCII case-insensitive.
+// A name that is only the suffix (".md") does not match.
+static bool IsMarkdownFileName(const wchar_t *path)
+{
+	const wchar_t *name = PointToName(path);
+	const size_t name_len = StrLength(name);
+	for (const wchar_t *suffix : {L".md", L".markdown"}) {
+		const size_t suffix_len = StrLength(suffix);
+		if (name_len <= suffix_len)
+			continue;
+		const wchar_t *tail = name + name_len - suffix_len;
+		bool match = true;
+		for (size_t i = 0; match && i < suffix_len; ++i) {
+			wchar_t c = tail[i];
+			if (c >= L'A' && c <= L'Z')
+				c = c - L'A' + L'a';
+			match = (c == suffix[i]);
+		}
+		if (match)
+			return true;
+	}
+	return false;
+}
+
+// Position cache Param[3] for the viewer mode. The cache drops all-zero entries, so a plain
+// choice on a Markdown file name is saved as 2 (not 0): 1 is Markdown, 2 is plain by choice
+// for a Markdown name, 0 is plain otherwise.
+static DWORD64 MarkdownCacheParam(int markdown, const wchar_t *path)
+{
+	if (markdown)
+		return 1;
+	return IsMarkdownFileName(path) ? 2 : 0;
+}
 
 static int NextViewerID = 0;
 
@@ -174,12 +207,7 @@ Viewer::Viewer(bool bQuickView, UINT aCodePage)
 	VM.WordWrap = Opt.ViOpt.ViewerWrap;
 	VM.Hex = InitHex;
 	VM.Processed = 0;
-	{	// F3 markdown preview: first viewer seeds from persisted option,
-		// later viewers inherit the last session value.
-		static bool s_md_seeded = false;
-		if (!s_md_seeded) { InitMarkdown = Opt.ViOpt.ViewerMarkdownMode; s_md_seeded = true; }
-		VM.Markdown = InitMarkdown;
-	}
+	VM.Markdown = FALSE;	// the start mode is set by OpenFile (saved state, then the file name rule)
 	ViewKeyBar = nullptr;
 	FilePos = 0;
 	LeftPos = 0;
@@ -235,7 +263,7 @@ void Viewer::SavePosCache()
 		poscache.Param[0] = FilePos;
 		poscache.Param[1] = LeftPos;
 		poscache.Param[2] = VM.Hex;
-		poscache.Param[3] = VM.Markdown;
+		poscache.Param[3] = MarkdownCacheParam(VM.Markdown, FHP->GetPathName().CPtr());
 		poscache.Param[4] = CodePage;
 
 		if (Opt.ViOpt.SaveShortPos) {
@@ -296,7 +324,6 @@ void Viewer::KeepInitParameters()
 	Opt.ViOpt.ViewerWrap = VM.WordWrap;
 	Opt.ViOpt.SearchRegexp = LastSearchRegexp;
 	InitHex = VM.Hex;
-	InitMarkdown = VM.Markdown;
 }
 
 void Viewer::Show()
@@ -389,6 +416,7 @@ int Viewer::OpenFile(FileHolderPtr NewFileHolder, int warning)
 	ConvertNameToFull(GotPathName, strFullFileName);
 	apiGetFindDataForExactPathName(GotPathName, ViewFindData);
 	UINT CachedCodePage = 0;
+	bool HasSavedState = false;
 
 	if (Opt.ViOpt.SavePos) {
 		int64_t NewLeftPos, NewFilePos;
@@ -403,11 +431,11 @@ int Viewer::OpenFile(FileHolderPtr NewFileHolder, int warning)
 			// poscache.Position[3]=;
 		}
 
-		CtrlObject->ViewerPosCache->GetPosition(strCacheName, poscache);
+		HasSavedState = CtrlObject->ViewerPosCache->GetPosition(strCacheName, poscache);
 		NewFilePos = poscache.Param[0];
 		NewLeftPos = poscache.Param[1];
 		VM.Hex = (int)poscache.Param[2];
-		VM.Markdown = (int)poscache.Param[3];
+		VM.Markdown = (poscache.Param[3] == 1) ? 1 : 0;	// 2 and 0 are plain (see MarkdownCacheParam)
 		CachedCodePage = (UINT)poscache.Param[4];
 
 		// Проверяем поддерживается или нет загруженная из кэша кодовая страница
@@ -418,6 +446,11 @@ int Viewer::OpenFile(FileHolderPtr NewFileHolder, int warning)
 	} else {
 		FilePos = 0;
 	}
+
+	// Start mode: a saved choice for this file wins; otherwise a Markdown file name opens in
+	// Markdown mode while the setting is on, and any other file opens plain.
+	if (!HasSavedState)
+		VM.Markdown = (Opt.ViOpt.ViewerMarkdownAuto && IsMarkdownFileName(GotPathName.CPtr())) ? 1 : 0;
 
 	/*
 		$ 26.07.2002 IS
@@ -1957,7 +1990,7 @@ int Viewer::ProcessKey(FarKey Key)
 							poscache.Param[0] = FilePos;
 							poscache.Param[1] = LeftPos;
 							poscache.Param[2] = VM.Hex;
-							poscache.Param[3] = VM.Markdown;
+							poscache.Param[3] = MarkdownCacheParam(VM.Markdown, FHP->GetPathName().CPtr());
 							poscache.Param[4] = CodePage;
 
 							if (Opt.ViOpt.SaveShortPos) {

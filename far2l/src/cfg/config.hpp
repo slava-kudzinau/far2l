@@ -257,6 +257,7 @@ struct ViewerOptions
 	int SearchRegexp;
 	int ShowMenuBar;
 	int ViewerMarkdownMode;	// F3 markdown preview mode (persisted)
+	int ViewerMarkdownAuto;	// open .md/.markdown files in Markdown mode when no saved mode exists
 };
 
 // "Полиция"
