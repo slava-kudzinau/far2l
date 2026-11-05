@@ -126,6 +126,9 @@ private:
 	// FilePos follows it (the line's source offset), so the status line and position cache use it.
 	int64_t m_md_top = 0;
 	int64_t m_md_top_pos = -1;         // the FilePos m_md_top was last synced to
+	// The F3 rule (Markdown name and setting on) captured when the file was opened, so a save
+	// uses the rule the file was opened with, even if the setting changed while it was shown.
+	bool m_md_rule = false;
 
 	FAR_FIND_DATA_EX ViewFindData;
 

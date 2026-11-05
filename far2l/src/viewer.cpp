@@ -112,25 +112,26 @@ static bool MarkdownRuleMode(const wchar_t *path)
 	return Opt.ViOpt.ViewerMarkdownAuto && IsMarkdownFileName(path);
 }
 
-// Position cache Param[3] for the viewer mode. Only a deviation from the rule is saved: 0 when
-// the mode is the rule's, 1 for Markdown against a plain rule, 2 for plain against a Markdown
-// rule. The cache drops all-zero entries, so a plain choice on a Markdown name is 2, not 0.
-static DWORD64 MarkdownCacheParam(int markdown, const wchar_t *path)
+// Position cache Param[3] for the viewer mode, against the rule the file was opened with. Only a
+// deviation from the rule is saved: 0 when the mode is the rule's, 1 for Markdown against a plain
+// rule, 2 for plain against a Markdown rule. The cache drops all-zero entries, so with the setting
+// on, a plain choice on a Markdown name is 2, not 0.
+static DWORD64 MarkdownCacheParam(int markdown, bool rule)
 {
-	if ((markdown != 0) == MarkdownRuleMode(path))
+	if ((markdown != 0) == rule)
 		return 0;
 	return markdown ? 1 : 2;
 }
 
 // Start mode of a file: a saved choice wins (1 Markdown, 2 plain). Any other saved value, 0 or a
 // legacy one, applies the rule.
-static int MarkdownStartMode(DWORD64 saved, const wchar_t *path)
+static int MarkdownStartMode(DWORD64 saved, bool rule)
 {
 	if (saved == 1)
 		return 1;
 	if (saved == 2)
 		return 0;
-	return MarkdownRuleMode(path) ? 1 : 0;
+	return rule ? 1 : 0;
 }
 
 static int NextViewerID = 0;
@@ -281,7 +282,7 @@ void Viewer::SavePosCache()
 		poscache.Param[0] = FilePos;
 		poscache.Param[1] = LeftPos;
 		poscache.Param[2] = VM.Hex;
-		poscache.Param[3] = MarkdownCacheParam(VM.Markdown, FHP->GetPathName().CPtr());
+		poscache.Param[3] = MarkdownCacheParam(VM.Markdown, m_md_rule);
 		poscache.Param[4] = CodePage;
 
 		if (Opt.ViOpt.SaveShortPos) {
@@ -466,7 +467,9 @@ int Viewer::OpenFile(FileHolderPtr NewFileHolder, int warning)
 	}
 
 	// Start mode: a saved choice for this file wins; otherwise the rule (Markdown name and setting on).
-	VM.Markdown = MarkdownStartMode(SavedMarkdown, GotPathName.CPtr());
+	// The rule is kept for the saves of this file (see m_md_rule).
+	m_md_rule = MarkdownRuleMode(GotPathName.CPtr());
+	VM.Markdown = MarkdownStartMode(SavedMarkdown, m_md_rule);
 
 	/*
 		$ 26.07.2002 IS
@@ -2006,7 +2009,7 @@ int Viewer::ProcessKey(FarKey Key)
 							poscache.Param[0] = FilePos;
 							poscache.Param[1] = LeftPos;
 							poscache.Param[2] = VM.Hex;
-							poscache.Param[3] = MarkdownCacheParam(VM.Markdown, FHP->GetPathName().CPtr());
+							poscache.Param[3] = MarkdownCacheParam(VM.Markdown, m_md_rule);
 							poscache.Param[4] = CodePage;
 
 							if (Opt.ViOpt.SaveShortPos) {

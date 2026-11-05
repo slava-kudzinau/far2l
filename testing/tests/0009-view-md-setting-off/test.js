@@ -20,6 +20,13 @@ function CheckPlainSample() {
 		Panic("sample.md: plain heading has a rule line under it")
 }
 
+// Plain view of plain.txt: its "# plain" line shows as is, with no rule line under it.
+function CheckPlainTxt() {
+	var line = ExpectString("# plain")
+	if (CellCharMatches(line.X, line.Y + 1, "═"))
+		Panic("plain.txt: plain line has a rule line under it")
+}
+
 // A fresh profile shows the help screen on start; a reused one would not.
 RemoveAll(profile)
 
@@ -41,8 +48,9 @@ ExpectString("Do you want to quit FAR?")
 TypeEnter()
 ExpectAppExit(0)
 
-// Setting off: Markdown_Auto=0 in the config far2l wrote on exit. The position cache is kept.
-// sample.md has no saved choice, so with the setting off it must open plain, not Markdown.
+// Setting off: the test writes config.ini with only [Viewer] Markdown_Auto=0, replacing the file
+// the first start wrote. The position cache is kept. sample.md has no saved choice, so with the
+// setting off it must open plain, not Markdown.
 SaveTextFile(config, ["[Viewer]", "Markdown_Auto=0"])
 StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
 ExpectString("sample.md")
@@ -61,6 +69,14 @@ TypeEscape()
 TypeFKey(3)
 ExpectString("left/sample.md")
 CheckMarkdownSample()
+TypeEscape()
+
+// plain.txt was never opened in this profile. The setting is off, so it opens plain. The Markdown
+// mode Shift+F4 set above is not a start mode: it must not make plain.txt open in Markdown.
+TypeUp()
+TypeFKey(3)
+ExpectString("left/plain.txt")
+CheckPlainTxt()
 TypeEscape()
 
 TypeFKey(10)
