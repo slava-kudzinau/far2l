@@ -21,7 +21,8 @@
 | Case | Result |
 |---|---|
 | Any markdown text cell, table cell, box glyph | background equals the viewer background (`COL_VIEWERTEXT`) |
-| Foreground of heading, strong, emphasis, code, link, quote | stays as in `MarkdownRender.cpp` constants |
+| Foreground of every run (heading, strong, emphasis, code, link, quote, table, box glyph, mermaid art) | the viewer text color of the current far theme (`COL_VIEWERTEXT`); no per-element rainbow colors |
+| Structure that color showed before (heading, quote, code) | shown by layout only: heading rule line, `│ ` quote prefix, indent for code, bullets, table borders |
 | Any cell | no black and no red background unless the viewer theme itself uses it |
 | Selected text | uses the viewer selection color |
 

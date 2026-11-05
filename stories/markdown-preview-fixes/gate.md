@@ -34,6 +34,7 @@ No new contract, file format or dependency. `mermaid.min.js` and quickjs stay as
 | Fix the shim by running the real mermaid bundle and reading each error | Replace the shim with a full DOM library (linkedom or jsdom) | A new dependency needs your approval; the shim is close to working |
 | Test the engine with a standalone driver | Debug only inside the TUI | The driver shows the JS error and stack in seconds |
 | Combine each run's foreground with the viewer background | Set a new fixed background color | The viewer theme then stays correct |
+| Draw all markdown text in the far theme's viewer text color, and show structure by layout | Keep per-element colors (cyan headings, green emphasis) | Your ruling: far theme colors only, no rainbow |
 | Keep the raw-text fallback when the engine fails | Show an error banner in the viewer | No behavior change for other users |
 
 ### How you'll see it working

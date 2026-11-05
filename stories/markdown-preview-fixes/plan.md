@@ -41,4 +41,4 @@ Trace `MarkdownDoc::Render` mermaid splice and the cache for the real result. Ma
 **Depends on:** none
 **Done check:** the Check command exits 0 with 0007 asserting that the background of a table cell, a box glyph cell and a text cell equals the background of a plain viewer cell (use `READ_CELL` attrs through the smoke API)
 **Role:** implementer — review task-reviewer
-Fix the cause named in Global Constraints. Selection still uses `_sel_color`. Do not change hex or text modes.
+Owner ruling (2026-11-05): use the usual far theme colors, not rainbow colors. Set every `ATTR_*` constant in `MarkdownRender.cpp:26-34` to the viewer text color of the theme (read at render time from `COL_VIEWERTEXT`, so theme changes apply), and keep structure visible by layout only (heading underline rule, `│ ` quote prefix, indented code, bullets, table borders). Then fix the cause named in Global Constraints. Selection still uses `_sel_color`. Do not change hex or text modes.
