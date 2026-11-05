@@ -658,7 +658,7 @@ void Viewer::ShowPage(int nMode)
 		if (VM.Processed)
 			printer.reset(new AnsiEsc::Printer(B_BLACK | F_WHITE));
 		else if (VM.Markdown)
-			printer.reset(new MarkdownPrinter(FarColorToReal(COL_VIEWERTEXT), &m_md_screen));
+			printer.reset(new MarkdownPrinter(FarColorToReal(COL_VIEWERSELECTEDTEXT), &m_md_screen));
 		else
 			printer.reset(new PlainViewerPrinter(FarColorToReal(COL_VIEWERTEXT)));
 		if (IsUnicodeOrUtfCodePage(VM.CodePage))

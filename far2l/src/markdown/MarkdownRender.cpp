@@ -78,8 +78,7 @@ struct Builder {
     int64_t cur_pos = 0;          // file pos of the current display line
     bool cur_started = false;
 
-    uint64_t base_attr;
-    uint64_t attr;                // active inline attr (always base_attr)
+    uint64_t base_attr;           // viewer text color; every run takes it
     int width;
 
     // block context
@@ -108,7 +107,6 @@ struct Builder {
     std::vector<MdRun> cell;
 
     // span context
-    std::vector<uint64_t> attr_stack;
     std::wstring link_href;       // set on span enter, appended on span leave
     std::wstring link_label;      // label text captured while the link is open
 
@@ -151,10 +149,10 @@ struct Builder {
         if (text.empty())
             return;
         begin_line();
-        if (!cur.empty() && cur.back().attr == attr)
+        if (!cur.empty() && cur.back().attr == base_attr)
             cur.back().text += text;
         else
-            cur.push_back(MdRun{text, attr});
+            cur.push_back(MdRun{text, base_attr});
     }
 
     void flush()
@@ -214,12 +212,10 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_H: {
             auto *d = (MD_BLOCK_H_DETAIL *)detail;
             b.heading_level = d ? (int)d->level : 1;
-            b.attr = b.base_attr;
             b.begin_line();
             break;
         }
         case MD_BLOCK_P:
-            b.attr = b.base_attr;
             b.begin_line();
             break;
         case MD_BLOCK_CODE: {
@@ -242,9 +238,7 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             std::wstring hr;
             int n = std::max(1, b.width - (int)(2 * b.list_stack.size()));
             hr.append((size_t)n, BoxSymbols[BS_H1]);
-            b.attr = b.base_attr;
             b.append(hr);
-            b.attr = b.base_attr;
             b.flush();
             break;
         }
@@ -260,7 +254,6 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_TD:
             b.in_cell = true;
             b.cell.clear();
-            b.attr = b.base_attr;
             break;
         default: break;
     }
@@ -287,8 +280,8 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             break;
         case MD_BLOCK_H:
             b.flush();
-            // Heading rule under H1-H3 (double for H1); H4-H6 get none.
-            if (b.heading_level >= 1 && b.heading_level <= 3) {
+            // Heading rule under every level (double for H1, single for H2-H6).
+            if (b.heading_level >= 1 && b.heading_level <= 6) {
                 b.begin_line();
                 int lead = (int)concat(b.cur).size();
                 int n = std::max(1, b.width - lead);
@@ -296,11 +289,9 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                 b.flush();
             }
             b.heading_level = 0;
-            b.attr = b.base_attr;
             break;
         case MD_BLOCK_P:
             b.flush();
-            b.attr = b.base_attr;
             break;
         case MD_BLOCK_CODE:
         case MD_BLOCK_HTML: {
@@ -313,7 +304,6 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             std::wstring text = fence_src;
             if (!text.empty() && text.back() == L'\n')
                 text.pop_back();
-            b.attr = b.base_attr;
             // The fence body is the placeholder; Render() replaces it with the
             // engine's box art when available (Step 6 splice below).
             size_t first_line = b.out.size();
@@ -338,7 +328,6 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             b.table_row.push_back(std::move(b.cell));
             b.cell.clear();
             b.in_cell = false;
-            b.attr = b.base_attr;
             break;
         case MD_BLOCK_TR:
             b.table_rows.push_back(std::move(b.table_row));
@@ -356,35 +345,29 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                     for (auto &r : b.table_rows)
                         for (size_t c = 0; c < r.size(); ++c)
                             w[c] = std::max(w[c], (int)concat(r[c]).size());
-                    auto render_row = [&](std::vector<std::vector<MdRun>> &row, uint64_t attr) {
+                    auto render_row = [&](std::vector<std::vector<MdRun>> &row) {
                         b.begin_line();
-                        b.attr = b.base_attr;
                         b.append(std::wstring(1, BoxSymbols[BS_V1]));
                         for (size_t c = 0; c < cols; ++c) {
-                            b.attr = attr;
                             std::wstring cell_txt = (c < row.size()) ? concat(row[c]) : L"";
                             int pad = w[c] - (int)cell_txt.size();
                             b.append(L" " + cell_txt + std::wstring(pad > 0 ? pad : 0, L' ') + L" ");
-                            b.attr = b.base_attr;
                             b.append(std::wstring(1, BoxSymbols[BS_V1]));
                         }
-                        b.attr = b.base_attr;
                         b.flush();
                     };
                     auto render_sep = [&](wchar_t l, wchar_t mid, wchar_t r) {
                         b.begin_line();
-                        b.attr = b.base_attr;
                         b.append(std::wstring(1, l));
                         for (size_t c = 0; c < cols; ++c) {
                             b.append(std::wstring((size_t)w[c] + 2, BoxSymbols[BS_H1]));
                             b.append(std::wstring(1, (c + 1 < cols) ? mid : r));
                         }
-                        b.attr = b.base_attr;
                         b.flush();
                     };
                     render_sep(BoxSymbols[BS_LT_H1V1], BoxSymbols[BS_T_H1V1], BoxSymbols[BS_RT_H1V1]);
                     for (size_t ri = 0; ri < b.table_rows.size(); ++ri) {
-                        render_row(b.table_rows[ri], b.base_attr);
+                        render_row(b.table_rows[ri]);
                         if (ri == 0)
                             render_sep(BoxSymbols[BS_L_H1V1], BoxSymbols[BS_C_H1V1], BoxSymbols[BS_R_H1V1]);
                     }
@@ -408,14 +391,8 @@ std::wstring concat(const std::vector<MdRun> &runs)
 int cb_enter_span(MD_SPANTYPE type, void *detail, void *userdata)
 {
     Builder &b = *(Builder *)userdata;
-    b.attr_stack.push_back(b.attr);
     switch (type) {
-        case MD_SPAN_STRONG: b.attr = b.base_attr; break;
-        case MD_SPAN_EM:     b.attr = b.base_attr; break;
-        case MD_SPAN_CODE:   b.attr = b.base_attr; break;
-        case MD_SPAN_DEL:    b.attr = b.base_attr; break;
         case MD_SPAN_A: {
-            b.attr = b.base_attr;
             auto *d = (MD_SPAN_A_DETAIL *)detail;
             b.link_href.clear();
             b.link_label.clear();
@@ -424,7 +401,6 @@ int cb_enter_span(MD_SPANTYPE type, void *detail, void *userdata)
             break;
         }
         case MD_SPAN_IMG: {
-            b.attr = b.base_attr;
             auto *d = (MD_SPAN_IMG_DETAIL *)detail;
             b.link_href.clear();
             b.link_label.clear();
@@ -440,19 +416,15 @@ int cb_enter_span(MD_SPANTYPE type, void *detail, void *userdata)
 int cb_leave_span(MD_SPANTYPE type, void *detail, void *userdata)
 {
     Builder &b = *(Builder *)userdata;
-    auto restore = [&]() {
-        if (!b.attr_stack.empty()) { b.attr = b.attr_stack.back(); b.attr_stack.pop_back(); }
-    };
+    (void)detail;
     switch (type) {
         case MD_SPAN_A:
-        case MD_SPAN_IMG: {
+        case MD_SPAN_IMG:
             // Label only; the URL stays reachable by toggling markdown off.
             b.link_href.clear();
             b.link_label.clear();
-            restore();
             break;
-        }
-        default: restore(); break;
+        default: break;
     }
     return 0;
 }
@@ -476,7 +448,7 @@ int cb_text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *userdata)
             break;
         default:
             if (b.in_cell)
-                b.cell.push_back(MdRun{w, b.attr});
+                b.cell.push_back(MdRun{w, b.base_attr});
             else {
                 b.append(w);
                 b.link_label += w;   // accumulate link/label text
@@ -511,7 +483,6 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width, uint64_t base
 
     Builder b;
     b.base_attr = base_attr;
-    b.attr = base_attr;
     b.width = width;
 
     MD_PARSER parser = {};

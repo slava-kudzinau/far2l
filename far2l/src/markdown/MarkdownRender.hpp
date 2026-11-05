@@ -12,7 +12,7 @@
 // entry resolved, 24-bit parts included), drawn with SetColor() by the viewer.
 struct MdRun {
     std::wstring text;
-    uint64_t attr = F_LIGHTGRAY | B_BLACK;
+    uint64_t attr = 0;
 };
 
 // One display line: an ordered sequence of styled runs plus the file offset of
@@ -65,7 +65,7 @@ private:
     int64_t m_first_pos = 0;
     int64_t m_cursor_pos = 0;   // last at_file_pos the cursor was primed to
     int m_width = 0;
-    uint64_t m_base_attr = F_LIGHTGRAY | B_BLACK;
+    uint64_t m_base_attr = 0;
     bool m_valid = false;
 
     // The original text + base attr, retained so Invalidate(width) re-renders.
