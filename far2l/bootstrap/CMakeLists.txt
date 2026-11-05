@@ -88,3 +88,19 @@ else ()
         COMMAND "cp" "${CMAKE_CURRENT_SOURCE_DIR}/*.js" "${INSTALL_DIR}"
     )
 endif ()
+
+# Markdown in the browser (Alt-F3, md-open.sh): the script reads marked.min.js
+# from its own folder, so the script and the library install to one folder.
+# On macOS that is the bundle's Resources, where the mermaid asset goes too.
+if (APPLE)
+    set(MD_OPEN_DEST "${APP_NAME}.app/Contents/Resources")
+    set(MD_OPEN_COMPONENT app)
+else ()
+    set(MD_OPEN_DEST "share/far2l")
+    set(MD_OPEN_COMPONENT base)
+endif ()
+
+install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/md-open.sh"
+    DESTINATION "${MD_OPEN_DEST}" COMPONENT ${MD_OPEN_COMPONENT})
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/marked.min.js" "${CMAKE_CURRENT_SOURCE_DIR}/marked.LICENSE.md"
+    DESTINATION "${MD_OPEN_DEST}" COMPONENT ${MD_OPEN_COMPONENT})
