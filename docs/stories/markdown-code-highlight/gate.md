@@ -52,7 +52,9 @@ Open a Markdown file with a fenced block in the new build: `../far2l.markdown-co
 
 ### A fresh reader's paraphrase
 
-_Pasted from the fresh read before the build._
+**What this builds:** A fenced code block in the F3 Markdown viewer of far2l gets syntax colors, so keywords, strings, comments and numbers stand out. The colors come from Colorer, the same syntax-coloring plugin the F4 editor uses, so the two views agree on the language rules. Four new palette roles — keyword, string, comment, number — follow the user theme, with a 24-bit true-color path and a 16-color fallback. The work is optional: with no Colorer plugin, a fence keeps today's plain code color and the viewer shows no message.
+
+**How the parts fit, per this page:** The render parses a fence with md4c and sends its language and lines to a new core bridge, `MdColorer`. The bridge loads the Colorer plugin once and calls its new export, `ColorerTokenizeV1`, which uses the plugin's own `ParserFactory` to return token spans: keyword, string, comment, number. The render stores the spans as a token group on the code line and caches them by the fence language and a hash of its text, so a resize does not parse again. The viewer printer draws each token span with the color of its role. Every fence gets a share of a 40 ms time budget for one render, plus fixed caps on lines, bytes and characters, so a hostile file stays responsive.
 
 ## At merge
 
