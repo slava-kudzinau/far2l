@@ -71,5 +71,5 @@ Implement `--print-association`. Verify the install rule (configure into a temp 
 
 **Depends on:** T1
 **Done check:** `sh stories/markdown-browser-view/check.sh` exits 0
-**Role:** implementer — review scoped re-review, then final
+**Role:** implementer — review task-reviewer
 Fix the six Important findings (#1 to #6 of `.build/final-review.md`, except #6, which the main session already did in `story.md`) and Minor #7, #8, #14 and #15, exactly as the "Final-review rulings" 1 to 7 above say. Add checks to `check.sh` and fixtures for each ruling (name with a space and a quote; stalled CDN shows text; `<\/` and `<\!--` literal text survives; CSP present and the svg still draws; mermaid syntax error shows its text; leading-dash name). Update the gate text for ruling 5 (remote images do not load) and the stale `mermaid.min.js` line (#15). For #14 add a one-line note in `marked.LICENSE.md` or a grep in `check.sh`. Do not edit `story.md`.
