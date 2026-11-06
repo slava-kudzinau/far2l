@@ -58,7 +58,7 @@ The decisions are in [docs/architecture/decisions/](../../decisions), because a 
 
 ## Risks and open questions
 
-- **No durable test of the browser contract.** The only check is a story `check.sh`. It also fails in place after the move to `docs/`. → [browser spec](markdown-browser-view.spec.md), [how-we-build.md](../../../how-we-build.md)
+- **No durable test of the browser contract.** The only check is a story `check.sh`. One row, about the story base, fails after later stories by design. → [browser spec](markdown-browser-view.spec.md), [how-we-build.md](../../../how-we-build.md)
 - **CI does not run the Markdown golden tests.** See the CI risk in the [blueprint](../../blueprint.md).
 - **Plugin ABI change.** `ViewerMode` grew by one `int` and `FARMANAGERVERSION` stayed. An old plugin binary reads `ViewerInfo` at wrong offsets. → [viewer spec](markdown-viewer.spec.md)
 - **No file-size limit.** F3 on a large `.md` file reads it all on the UI thread, now by default. The document has no diagram budget either. → [viewer spec](markdown-viewer.spec.md)

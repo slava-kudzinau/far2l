@@ -20,10 +20,8 @@ The proof of concept `mermaid-image-poc` (status `approved`) is not in this fold
 
 ## Moves that broke paths
 
-The folders moved from `stories/` to `docs/stories/`. These paths are now wrong:
+The folders moved from `stories/` to `docs/stories/`. The `check.sh` files are fixed. These paths in the story text are still old:
 
-- `check.sh` in `markdown-ascii-diagrams`, `markdown-browser-view` and `markdown-default-on` finds the repository root with `../..` from the script. It now gets `docs/`, so every `testing/` and `far2l/` path in them fails. It needs `../../..`.
-- `check.sh` in `markdown-default-on` also copies `far2l/bootstrap/mermaid.min.js` from an absolute path of the main checkout. No code uses that file any more.
 - The text `sh stories/<name>/check.sh` in the gate, spec, plan and close-out files of the same three stories, and in `markdown-preview-fixes/plan.md` and `markdown-preview-reading/plan.md`.
 - The line `Owner-checked paths: stories/*/story.md` in four `story.md` files and three plans. The pattern now needs `docs/stories/*/story.md`.
 

@@ -28,3 +28,4 @@ packaging/osx/Setup.scpt
 far2l_askpass
 far2l_sudoapp
 
+.worktrees/
