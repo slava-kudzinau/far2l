@@ -50,13 +50,13 @@ _Settled after the read (details in `plan.md` Rulings):_ the script shows an err
 ## At merge
 
 ### What was built
-_At close-out._
+`md-open.sh` writes one self-contained page (Markdown text, vendored `marked`, mermaid from a pinned CDN with SRI) and opens it. `--print-association` prints the Alt-F3 entry. Install rules ship the script, `marked.min.js` and the license. `far2l/src` is unchanged.
 
 ### Decisions changed during the build
-_At close-out._
+Mermaid comes from the CDN, not a local file. The printed command leaves `!.!` unquoted (far2l escapes it). The text renders before the CDN script. A CSP blocks remote images. `story.md` no longer promises a shipped association.
 
 ### What the reviews caught
-_At close-out._
+The first final review found six Important issues: the printed command broke on names with spaces, a blank page while the CDN stalled, lossy escaping, a bad macOS install layout, remote images loading, and a stale story promise. All are fixed. The second final review: Ready for close-out, with two Minor items parked.
 
 ### Run it
-_At close-out._
+Run `sh far2l/bootstrap/md-open.sh --print-association`, add the entry in far2l, then press Alt-F3 on a `.md` file.
