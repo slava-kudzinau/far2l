@@ -51,13 +51,13 @@ _Settled after the read (details in `plan.md` Rulings):_ the first-word list dec
 ## At merge
 
 ### What was built
-_At close-out._
+`mermaid-ascii.js` (beautiful-mermaid 1.1.3 packed with esbuild) and the `AsciiMermaid` class run it in quickjs with a 2 s deadline. `MarkdownRender` draws six diagram types as box art in the art role and shows code plus the hint for other types. `MermaidEngine`, `SvgCanvas` and `mermaid.min.js` use are gone. A pre-pass spaces unspaced flowchart edges (`A-->B`).
 
 ### Decisions changed during the build
-_At close-out._
+Package 1.1.3 does not throw on a dangling edge (`A -->`), so the broken-source test row uses a header error (spec rows 12 and 24 reworded). The package drew `A-->B` as one wrong box; a pre-pass in `entry.js` fixes it (task T4). Open limits: a 26-node `graph LR` chain can hit the 2 s timeout; a leading `%%` line sends a fence to the hint.
 
 ### What the reviews caught
-_At close-out._
+The final review found the `A-->B` defect, fixed in T4. Task reviews found only Minor items (see closeout.md). The T4 review confirmed the pre-pass leaves labels unchanged.
 
 ### Run it
-_At close-out._
+`sh stories/markdown-ascii-diagrams/check.sh` (golden, driver, far2l build in the ascii build dir, smoke test 0007). Then open a Markdown file with a flowchart in F3, Shift-F4.
