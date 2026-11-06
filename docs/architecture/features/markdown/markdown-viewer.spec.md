@@ -125,20 +125,44 @@ Other viewer functions act on the source file:
 
 ### Palette roles
 
-A run holds an `MdRole`. `MarkdownRunColor` reads the palette when it draws, so a new theme shows on the next redraw. The background of each cell is always the `COL_VIEWERTEXT` background.
+A run holds an `MdRole`. `MarkdownRunColor` calls `MdRunColor` in `far2l/src/markdown/` when it draws, so a new theme shows on the next redraw. The background of each cell is always the `COL_VIEWERTEXT` background.
 
-| Role | Elements | Foreground entry |
-|---|---|---|
-| body | Body text, lists, emphasis, quote bars, horizontal rules, body table cells, the hint row | `COL_VIEWERTEXT` |
-| heading | Heading text, links, strong text, table header text | `COL_HELPTOPIC` |
-| code | Code spans, code fences, HTML blocks | `COL_HELPHIGHLIGHTTEXT` |
-| art | Mermaid art, table borders | `COL_PANELHIGHLIGHTTEXT` |
+| Role | Elements |
+|---|---|
+| body | Body text, lists, emphasis, table body cells, the hint row |
+| h1, h2, h3 | Heading text by level. H3 covers H3 to H6. |
+| strong | Bold text, table header text |
+| link | Link text, autolinks (see the open item on autolinks) |
+| code | Code spans, code fences, HTML blocks |
+| quote | Quote text, quote bars |
+| rule | Horizontal rules, table borders |
+| art | Mermaid art |
+
+Precedence for a run: code, link, strong, heading level, quote, body. A heading in a quote keeps the heading role. A code span in a table header keeps the code role.
+
+The resolver order:
+
+1. A value in `settings/markdown-colors.ini`, section `[markdown]`. Each role has one key. The keys are:
+     - `body`, `heading1`, `heading2`, `heading3`
+     - `strong`, `link`, `code`, `quote`
+     - `rule`, `art`
+
+   far2l reads this file and never writes it. A value is `foreground:<value>` or `<value>`. A `<value>` is `#rrggbb`, `#rgb`, an `F_*` color name, or `@Name`. The names are `@Viewer.Text`, `@Help.Topic`, `@Help.Text.Highlight` and `@Panel.Text.Highlight`. A bad value, an unknown name or key, or a missing file leaves the role default.
+2. Today's look, when the contrast rule fails. The entries are:
+   - `COL_HELPTOPIC` for h1, h2, h3 and strong
+   - `COL_HELPHIGHLIGHTTEXT` for code
+   - `COL_VIEWERTEXT` for quote and for rule (horizontal rules and table borders)
+   - `COL_PANELHIGHLIGHTTEXT` for art
+3. The fork's RGB default, when `GetConsoleColorPalette` reports 8 bits or more.
+4. The fork's 16-color fallback.
+
+The contrast rule is all or none. Each RGB default needs 3:1 or more against the real viewer background (`wcagComputeContrast`), or all defaults use step 2. An override has no contrast check. The defaults are in `far2l/src/markdown/MdPalette.cpp`.
 
 ### Tables
 
 - The width of a column is the largest cell in that column, counted in `wchar_t` units.
 - Text is left-aligned in all columns. The alignment markers in the source have no effect.
-- The first row uses the heading role. Other cells keep their inline roles, so a link in a body cell uses the heading role.
+- The first row uses the strong role. A cell keeps its inline role, so a code span or a link in a header cell keeps the code or link role. Borders use the rule role.
 - A separator row follows the header. Body rows have no separators, and the table has no top or bottom border.
 - A table never shrinks to the screen. A row that is too wide is cut at the right edge.
 
@@ -234,9 +258,10 @@ States are checked against the code of branch `next/2.9.1-ovr.1`.
 |---|---|---|
 | Long lines are cut at the right edge, and in the default Wrap mode Right does nothing. F2 is a workaround. The owner must choose a soft wrap or a change to the key guard. | markdown-preview-reading | Open |
 | No text selection. `ReadStringMarkdown` sets `bSelection` to false, so search shows no highlight. `MarkdownPrinter` has the selection color, but no row uses it. | markdown-preview-fixes | Open |
-| In `BlackColorsIndex16`, code and art have the same foreground as body. Only heading differs. | markdown-preview-reading | Open |
-| In the default palette, art (light gray) and code (white) are the closest pair. A real terminal must show if this is good enough. | markdown-preview-reading | Open |
-| The manual check in macOS Terminal and ghostty has no record. | markdown-preview-fixes | Open (unverified) |
+| In `BlackColorsIndex16`, code and art have the same foreground as body. Only heading differs. | markdown-preview-reading | Partly closed by markdown-palette: on the RGB path each role has its own color; the 16-color fallbacks stay close. |
+| In the default palette, art (light gray) and code (white) are the closest pair. A real terminal must show if this is good enough. | markdown-preview-reading | Closed by markdown-palette: code and art have different colors on both paths. The look needs the owner's manual check. |
+| The manual check in macOS Terminal and ghostty has no record. | markdown-preview-fixes | Open. Story markdown-palette adds `manual-checks.md` with the steps; the result waits for the owner. |
+| An autolink cell shows the viewer link highlight (`#ff8833`), not the link role. `Viewer::UnderlineLinks` recolors it after the printer. | markdown-palette | Open. A fix needs `viewer.cpp` or `LinkHighlighter.cpp`, outside that story's files. |
 | A fence that starts with `%%` goes to the hint (`unsupported: %%`), although the package can draw it. | markdown-ascii-diagrams | Open |
 | The pre-pass can split circle, cross and edge-id endpoints. `A--B` becomes `A -- B`. | markdown-ascii-diagrams | Open |
 | Large diagrams: a 26-node `graph TD` failed at once (stack overflow), and a 26-node `graph LR` chain can use the full 2 s. The limits in the code are the same, but the run is not repeated. | markdown-ascii-diagrams | Open |

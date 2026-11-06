@@ -57,13 +57,12 @@ The background is always the `COL_VIEWERTEXT` background. For the foreground:
 2. If the viewer background fails the contrast rule (below), use today's look. The entries are:
    - `COL_HELPTOPIC` for h1, h2, h3 and strong
    - `COL_HELPHIGHLIGHTTEXT` for code
-   - `COL_VIEWERTEXT` for quote and body
-   - `COL_PANELHIGHLIGHTTEXT` for art and for table borders
-   - `COL_VIEWERTEXT` for horizontal rules
+   - `COL_VIEWERTEXT` for quote, body, horizontal rules and table borders (one role covers both)
+   - `COL_PANELHIGHLIGHTTEXT` for art
 3. If `GetConsoleColorPalette` reports at least 8 bits per channel, use the RGB default of the table with its 16-color index.
 4. Otherwise use the 16-color fallback of the table.
 
-`body` and `art` never take an RGB value: `body` stays `COL_VIEWERTEXT` and `art` stays `COL_PANELHIGHLIGHTTEXT` in every step.
+`body` and `art` never take an RGB value: outside a user override, `body` stays `COL_VIEWERTEXT` and `art` stays `COL_PANELHIGHLIGHTTEXT` in every step.
 
 ### Contrast rule
 

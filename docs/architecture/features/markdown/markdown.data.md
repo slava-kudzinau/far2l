@@ -32,7 +32,7 @@ flowchart LR
 | Element | Contents | Written by | Lifetime |
 |---|---|---|---|
 | Screen line, `MdLine` | Runs and `nFilePos` | `Builder`, `MarkdownDoc::Render` | Until the next render |
-| Color run, `MdRun` | Text and an `MdRole`, never a color | `Builder` | With its line |
+| Color run, `MdRun` | Text and an `MdRole` (body, h1, h2, h3, strong, link, code, quote, rule, art), never a color | `Builder` | With its line |
 | Source offset, `nFilePos` | Byte offset of the start of the source line that holds the first source text of the row | `cb_text`, `Builder::flush` | With its line |
 | Top row, `m_md_top` | Index into `Lines()`. `m_md_top_pos` is the `FilePos` of the last sync. | `SetMarkdownTop` | While the file is open |
 | Screen rows, `m_md_screen`, `Strings` | The rows on screen. `Strings` holds the joined text for length and link scans. | `ReadStringMarkdown` | One redraw |
@@ -49,6 +49,7 @@ flowchart LR
 | `Param[3]` | 0 follows the rule, 1 is Markdown, 2 is plain | `MarkdownCacheParam` | `MarkdownStartMode` |
 | `[Viewer] Markdown_Auto` | Default 1. Setting of the rule. | The settings dialog | `MarkdownRuleMode` |
 | `[Viewer] Markdown` | Default 0. The last Shift-F4 mode. | `ProcessMarkdownMode` | Nothing |
+| `settings/markdown-colors.ini`, section `[markdown]` | One key per role: `body`, `heading1`, `heading2`, `heading3`, `strong`, `link`, `code`, `quote`, `rule`, `art`. A value is `foreground:#rrggbb`, `#rrggbb`, `#rgb`, `F_*`, or `@Name`. | The user, by hand. far2l never writes it. | `MdRunColor` in `far2l/src/markdown/`, re-read when the file mtime changes |
 
 ## Generated files
 

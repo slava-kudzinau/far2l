@@ -45,7 +45,7 @@ _Terms: "today's look" is the coloring before this story — the four roles of [
 | h3 covers H3 to H6 (the story dictates this) — the test asserts H3 to H6 share one color | Six separate colors for H3 to H6 | Out of scope by the story; the owner set H1, H2, H3 only |
 | Table header text with no other span takes the strong role, resolved like any run (not a separate header role) | A separate `MD_ROLE_TABLEHEADER` role | The story names strong for header text; a separate role adds an enum value the table has no color for |
 | Quote bars (`│ `) take the quote role, not body | Bars stay body like today | The story says "The full lead of a row in a quote has the quote role" |
-| Horizontal rules take the rule role (today body), and table borders move from art to rule | Keep borders on art | The story's table names rule for both; the test asserts rule and art differ |
+| Horizontal rules and every table border glyph (separator rows and the `│` bars) share one `MD_ROLE_RULE`; its today's-look entry is `COL_VIEWERTEXT` for both | Two roles, so borders keep `COL_PANELHIGHLIGHTTEXT` as today's look | The story lists ten roles and names rule for both; a second role would change the contract, and a body-colored line still reads |
 | The user file is read with `KeyFileHelper` and re-read only when its mtime changed; a stat error counts as "no file" | Re-read the file on every draw | Per-call reads are I/O on the draw path; the spec only demands draw-time resolution of theme entries, which stays live |
 | The accepted value grammar is exactly `foreground:<value>` or `<value>`, with `<value>` = `#rrggbb`, `#rgb`, an `F_*` name, or `@Name`; no quoted values | Accept the full `ExprToFarColor` grammar | The resolver must tell a bad value from valid black; a narrow grammar it validates itself is the safe way |
 | The resolver validates the value syntax itself before `ExprToFarColor`, because that function returns 0 both for a bad value and for valid black | Trust `ExprToFarColor` return alone | A valid black would look like a bad value and silently drop the user's setting |
@@ -67,16 +67,49 @@ _Terms: "today's look" is the coloring before this story — the four roles of [
 
 ### What was built
 
-_Pending close-out._
+Same as planned, with four changes:
+
+- The resolver lives in `far2l/src/markdown/MdPalette.{hpp,cpp}` and `MarkdownRunColor` is a small dispatch, as planned.
+- The contrast verdict is cached and keyed on the viewer background's real color, so a theme change recomputes it. A per-process cache from the first pass was wrong and the review caught it.
+- The 0007 test reaches the RGB path through `COLORTERM=truecolor` in the smoke wrapper, as planned. The `--norgb` case covers the 16-color fallback.
+- One item is parked, not built. An autolink cell shows the viewer's own link highlight `#ff8833` instead of the link role, because `Viewer::UnderlineLinks` recolors it after the printer. The fix needs `viewer.cpp` or `LinkHighlighter.cpp`, outside this story's file list.
+
+Verified colors on the RGB path:
+
+| Role | ForeTC |
+|---|---|
+| body | `ffff00` |
+| h1 | `ffff5f` |
+| h2 | `ffaf5f` |
+| h3 to h6 | `87afff` |
+| strong | `ffffff` |
+| labeled link | `87ff87` |
+| code | `ff87ff` |
+| quote | `afafd7` |
+| rule and borders | `8787af` |
+| art | `c0c0c0` |
 
 ### Decisions changed during the build
 
-_Pending close-out._
+| Decision | Change | Why |
+|---|---|---|
+| Horizontal rules and table borders both take the rule role | Horizontal rules use `COL_VIEWERTEXT` in the fallback look, borders use `COL_PANELHIGHLIGHTTEXT` | The spec's "today's look" values govern; the plan's single entry was wrong |
+| The contrast verdict cache | Keyed on the viewer background instead of set once per process | A theme change with a different background must recompute the verdict |
+| The `--norgb` assertion | Asserts the fallbacks of palette-driven roles only, not the body cell | The body fore is the viewer's own `COL_VIEWERTEXT` true color |
+| The `link=@Help.Topic` override case | Rewritten so the assertion can fail | The first version could not fail (T4 review) |
 
 ### What the reviews caught
 
-_Pending close-out._
+- T2: a stale "heading role" comment, a 133-character line, C-style casts. Fixed.
+- T3: the contrast rule checked each role alone instead of all or none, and the h4 assertion could not fail. Fixed. The re-review found a process-lifetime contrast cache that ignored theme changes. Fixed.
+- T4: missing rule-color assertions, an unfalsifiable link override, a near-vacuous `--norgb` pair, H6 uncovered, a missing `CheckBack`, a duplicate h2/h3 relation. Fixed.
+- Final review: 1 Critical, 4 Important, 3 Minor, 7 uncovered spec rows. The Critical was real: `@Name` overrides kept a color resolved at ini-load time, so a theme change never reached them. Fixed in `fcd63acce` together with the rule-role border move, the exact 16-color fallbacks, the falsifiable link override and a light-background contrast case. Check green after the fix.
 
 ### Run it
 
-_Pending close-out._
+1. Build: `cmake --build ../far2l.palette.build -j8` from the worktree root (full build with plugins).
+2. Start: `../far2l.palette.build/install/far2l.app/Contents/MacOS/far2l`.
+3. Press F3 on a `.md` file. H1, H2, H3, bold text, links, code, quotes and rules show distinct colors.
+4. Put `heading1=foreground:#00FF00` under `[markdown]` in `~/.config/far2l/settings/markdown-colors.ini` and press Shift-F4 twice. H1 turns green.
+5. `sh docs/stories/markdown-palette/check.sh` prints `check ok`.
+6. The manual checks that need your eyes: `docs/stories/markdown-palette/manual-checks.md`.
