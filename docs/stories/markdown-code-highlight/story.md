@@ -130,4 +130,4 @@ M. One new plugin file, about five lines in `pcolorer.cpp` and one line in the p
 - Started: 2026-11-06T21:41:52Z (UTC).
 - Flow: `flow tier=full docs=spec,plan design=no orchestrator=yes final=final-reviewer gate=stop scan=yes verifier=none`. Gate page: the owner reads it before the build (G2-design).
 - Check: "The check" in `AGENTS.md` with `BUILD=../far2l.markdown-code-highlight.build` and `TESTS="0007-view-file-markdown 0008-view-md-default 0009-view-md-setting-off"`, plus the plugin smoke test named in the plan.
-- Check: "The check" in `AGENTS.md`, plus the plugin test that the gate names.
+- Baseline at base `54bd9cc79`, before any task: `check ok` in `../far2l.markdown-code-highlight.build` (2026-11-06).
