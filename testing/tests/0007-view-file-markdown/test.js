@@ -74,10 +74,11 @@ CheckBack("heading", ReadCell(heading.X, heading.Y))
 var heading_cell = ReadCell(heading.X, heading.Y)
 CheckForeOther("heading", heading_cell, plain, "viewer")
 CheckBack("blank viewer cell", ReadCell(60, heading.Y))
-// A level-4 heading takes the heading entry too; its layout cue is the rule line below it.
+// A level-4 heading takes the heading entry too; the list comes on the row right under it.
 var h4 = ExpectString("Heading Four")
-CheckCellChar(h4.X, h4.Y + 1, "─")
-CheckForeSame("heading four rule", ReadCell(h4.X, h4.Y + 1), heading_cell, "heading")
+CheckForeSame("heading four", ReadCell(h4.X, h4.Y), heading_cell, "heading")
+var bullet = ExpectString("bullet one")
+CheckRowOf("list right under the heading", bullet, h4.Y + 1)
 // Code takes its own palette entry, different from the heading and from the body.
 var code = ExpectString("Code Fence Body")
 CheckBack("code", ReadCell(code.X, code.Y))
@@ -149,11 +150,18 @@ function CheckRowOf(name, found, y) {
 	}
 }
 
-// Spacing: a blank row follows the heading and its rule, then the first paragraph.
+// R7: a table has one rule, under its header row, and no top or bottom border. No page of the
+// spacing file shows a corner glyph of a border.
+function CheckNoBorder() {
+	ExpectNoString("┌", 0, 0, 80, 24, 1000)
+	ExpectNoString("└", 0, 0, 80, 24, 1000)
+}
+
+// Spacing: a blank row follows the heading, then the first paragraph.
 var start_row = ExpectString("Long Start");
-CheckBlankRow("blank row after the heading", start_row.Y + 2);
+CheckBlankRow("blank row after the heading", start_row.Y + 1);
 var first_para = ExpectString("Row 001");
-if (first_para.Y != start_row.Y + 3) {
+if (first_para.Y != start_row.Y + 2) {
 	Log("heading on row " + start_row.Y + ", first paragraph on row " + first_para.Y);
 	Panic("the first paragraph does not follow the heading after one blank row");
 }
@@ -211,13 +219,10 @@ if (still_last.Y != last_row.Y) {
 }
 ExpectString("100%")
 
-// The last heading has one blank row after it, then its paragraph.
+// The last heading keeps one blank row after it, then its paragraph.
 var end_head = ExpectString("Long End")
-CheckBlankRow("blank row after the last heading", end_head.Y + 2)
-if (ExpectString("Final paragraph").Y != end_head.Y + 3) {
-	Log("Long End on row " + end_head.Y + ", final paragraph is not on row " + (end_head.Y + 3));
-	Panic("the final paragraph does not follow the heading after one blank row");
-}
+CheckBlankRow("blank row after the last heading", end_head.Y + 1);
+CheckRowOf("paragraph after the last heading", ExpectString("Final paragraph"), end_head.Y + 2);
 
 // Home goes back to the first page.
 TypeHome()
@@ -236,18 +241,18 @@ ToggleShift(false)
 ExpectNoString("# Long Start")
 CheckTop("heading back in markdown", ExpectString("Long Start"))
 
-// The blank rows of the spacing moved the list down: after three pages the top row is Item 057.
+// After three pages the top row is Item 060, a list item of long.md, so the round trip below tests a list row.
 TypePageDown(3)
-CheckTop("list item in markdown", ExpectString("Item 057"))
+CheckTop("list item in markdown", ExpectString("Item 060"))
 ToggleShift(true)
 TypeFKey(4)
 ToggleShift(false)
-CheckTop("list item in plain", ExpectString("- Item 057 list text for the scrolling tests."))
+CheckTop("list item in plain", ExpectString("- Item 060 list text for the scrolling tests."))
 ToggleShift(true)
 TypeFKey(4)
 ToggleShift(false)
-ExpectNoString("- Item 057")
-CheckTop("list item back in markdown", ExpectString("Item 057"))
+ExpectNoString("- Item 060")
+CheckTop("list item back in markdown", ExpectString("Item 060"))
 
 // Hex with the Markdown flag still set: Down moves by one 16-byte row, not by a markdown line.
 TypeHome()
@@ -267,69 +272,196 @@ TypeDown(2)
 TypeFKey(3)
 ExpectString("left/spacing.md")
 
+// Page 1: the title, the lead paragraph, the lists, the table, the quote and the code fences.
 var title = ExpectString("Spacing Title");
 CheckRowOf("title as the first row", title, 1);
-CheckBlankRow("blank row after the title", title.Y + 2);
+CheckBlankRow("blank row after the title", title.Y + 1);
 var lead = ExpectString("Lead paragraph of the spacing test.");
-CheckRowOf("lead paragraph after the title", lead, title.Y + 3);
+CheckRowOf("lead paragraph after the title", lead, title.Y + 2);
 var heading = ExpectString("Spacing Heading");
 CheckBlankRow("blank row before the heading", heading.Y - 1);
 CheckRowOf("heading after the lead paragraph", heading, lead.Y + 2);
-CheckBlankRow("blank row after the heading", heading.Y + 2);
 var p1 = ExpectString("Paragraph before two source blanks.");
-CheckRowOf("paragraph after the heading", p1, heading.Y + 3);
+CheckRowOf("paragraph after the heading", p1, heading.Y + 1);
 var p2 = ExpectString("Paragraph after two source blanks.");
 CheckBlankRow("blank row between two paragraphs", p1.Y + 1);
 CheckRowOf("two source blank lines give one blank row", p2, p1.Y + 2);
 
-// Items of a list stay tight; the nested list gets no blank row; the list has one before and after.
+// Items of a list stay tight; the nested list gets no blank row; a list has none before or after.
 var item1 = ExpectString("Spacing item one");
-CheckBlankRow("blank row before the list", item1.Y - 1);
+CheckRowOf("list right after the paragraph", item1, p2.Y + 1);
 var nested = ExpectString("Spacing nested item");
 var item2 = ExpectString("Spacing item two");
 CheckRowOf("nested item right under its item", nested, item1.Y + 1);
 CheckRowOf("next item right under the nested item", item2, item1.Y + 2);
-CheckBlankRow("blank row after the list", item2.Y + 1);
 
-var table = ExpectString("Spacing A");
-CheckBlankRow("blank row before the table", table.Y - 2);
-CheckBlankRow("blank row after the table", table.Y + 4);
-
-// The rest of the file: the last page (End) holds the quote to the last paragraph.
-TypeEnd();
-var quote = ExpectString("Spacing quote line.");
-CheckBlankRow("blank row after the quote", quote.Y + 1);
+// The table header is right after the list. The table has one rule and no top or bottom border.
+var table_sp = ExpectString("Spacing A");
+CheckRowOf("table header right after the list", table_sp, item2.Y + 1);
+CheckCellChar(table_sp.X - 2, table_sp.Y + 1, "├");
+CheckRowOf("table body row under the rule", ExpectString("spacing 1"), table_sp.Y + 2);
+CheckBlankRow("blank row after the table", table_sp.Y + 3);
+var quote_sp = ExpectString("Spacing quote line.");
+CheckRowOf("quote after the table and its blank row", quote_sp, table_sp.Y + 4);
+CheckBlankRow("blank row after the quote", quote_sp.Y + 1);
 var fence = ExpectString("Spacing fence line.");
-CheckRowOf("code fence after the quote", fence, quote.Y + 2);
+CheckRowOf("code fence after the quote", fence, quote_sp.Y + 2);
 CheckBlankRow("blank row after the code fence", fence.Y + 1);
 var after_fence = ExpectString("Paragraph after the fence.");
 CheckRowOf("paragraph after the code fence", after_fence, fence.Y + 2);
+CheckRowOf("code fence with an empty last line", ExpectString("Fence with an empty last line."), after_fence.Y + 2);
+CheckNoBorder();
 
-// A fence whose last source line is empty: its own empty code row, then the blank row after the fence.
+// Page 2: a fence whose last source line is empty, a list with a fence, a loose list, and the start
+// of the compact blocks.
+TypePageDown();
+CheckNoBorder();
 var empty_last = ExpectString("Fence with an empty last line.");
-CheckRowOf("code fence with an empty last line", empty_last, after_fence.Y + 2);
 CheckBlankRow("empty last source line inside the fence", empty_last.Y + 1);
 CheckBlankRow("blank row after the fence with an empty last line", empty_last.Y + 2);
 var after_empty = ExpectString("Paragraph after the empty last line.");
 CheckRowOf("paragraph after that fence", after_empty, empty_last.Y + 3);
 
-// Blocks inside list items: a fence after the item's text, and a second paragraph in a loose item.
+// The fence in a list item keeps a blank row after the item text, and the paragraph after the list
+// keeps a blank row from the fence.
 var item_fence = ExpectString("Spacing item with a fence:");
-CheckRowOf("list after the paragraph", item_fence, after_empty.Y + 2);
-CheckBlankRow("blank row before the fence in the item", item_fence.Y + 1);
+CheckRowOf("list right after the paragraph", item_fence, after_empty.Y + 1);
+CheckBlankRow("blank row after the item text", item_fence.Y + 1);
 var item_code = ExpectString("Spacing item fence line.");
 CheckRowOf("fence in the item after its text and a blank row", item_code, item_fence.Y + 2);
 CheckBlankRow("blank row after the fence in the item", item_code.Y + 1);
 var after_list = ExpectString("Spacing paragraph after the list.");
-CheckRowOf("paragraph after the list", after_list, item_code.Y + 2);
+CheckRowOf("paragraph after the list, from the fence", after_list, item_code.Y + 2);
 var item_p = ExpectString("Spacing item with a paragraph.");
-CheckRowOf("loose list after the paragraph", item_p, after_list.Y + 2);
+CheckRowOf("loose list right after the paragraph", item_p, after_list.Y + 1);
 CheckBlankRow("blank row between the item's paragraphs", item_p.Y + 1);
 var item_p2 = ExpectString("Spacing item paragraph two.");
 CheckRowOf("second paragraph in the item", item_p2, item_p.Y + 2);
-CheckBlankRow("blank row after the list item", item_p2.Y + 1);
 var last = ExpectString("Spacing last paragraph.");
-CheckRowOf("paragraph after the list item", last, item_p2.Y + 2);
+CheckRowOf("paragraph right after the list item", last, item_p2.Y + 1);
+
+// Compact layout: a list sits right after the paragraph before it, and the paragraph after the list
+// sits right under it.
+var c_para = ExpectString("Compact para before list.");
+var c_item = ExpectString("Compact item after para.");
+CheckRowOf("list right after the paragraph", c_item, c_para.Y + 1);
+var c_after_list = ExpectString("Compact para after list.");
+CheckRowOf("paragraph right after the list", c_after_list, c_item.Y + 1);
+
+// R1 and R2: a heading of level 1 keeps one blank row before it and one after it.
+var c_top = ExpectString("Compact Top");
+CheckRowOf("level 1 heading after the list and its blank row", c_top, c_after_list.Y + 2);
+CheckBlankRow("blank row before the level 1 heading", c_top.Y - 1);
+CheckBlankRow("blank row after the level 1 heading", c_top.Y + 1);
+var c_top_item = ExpectString("Compact item after top.");
+CheckRowOf("list after the heading and its blank row", c_top_item, c_top.Y + 2);
+CheckNoBorder();
+
+// Page 3: the level 2 headings, the level 3 heading, the fences around the lists.
+TypePageDown();
+CheckNoBorder();
+
+// R1 and R3: a heading of level 2 keeps its blank row before it and none after it.
+var c_second = ExpectString("Compact Second");
+CheckBlankRow("blank row before a level 2 heading", c_second.Y - 1);
+var c_second_item = ExpectString("Compact item after second.");
+CheckRowOf("list right after a level 2 heading", c_second_item, c_second.Y + 1);
+
+// C1: a heading after a heading of level 2 keeps one blank row.  R3: a paragraph right under a heading.
+var c_upper = ExpectString("Compact Upper");
+CheckRowOf("heading after the list and its blank row", c_upper, c_second_item.Y + 2);
+var c_lower = ExpectString("Compact Lower");
+CheckRowOf("heading under a heading with a blank row", c_lower, c_upper.Y + 2);
+CheckBlankRow("blank row between two headings", c_upper.Y + 1);
+var c_after_lower = ExpectString("Compact para after lower.");
+CheckRowOf("paragraph right under a heading", c_after_lower, c_lower.Y + 1);
+
+// C2: a code fence right under a heading of level 2.  C5: a list after a code fence has a blank row.
+var c_fence_head = ExpectString("Compact Before Fence");
+CheckRowOf("heading after the paragraph and its blank row", c_fence_head, c_after_lower.Y + 2);
+var c_fence_line = ExpectString("Compact fence after heading.");
+CheckRowOf("code fence right under a heading", c_fence_line, c_fence_head.Y + 1);
+var c_fence_item = ExpectString("Compact item after fence.");
+CheckRowOf("list after a code fence with a blank row", c_fence_item, c_fence_line.Y + 2);
+CheckBlankRow("blank row between the fence and the list", c_fence_line.Y + 1);
+
+// C6: a code fence after a list has a blank row.  C7: a heading after a list has a blank row.
+var c_fence_after_item = ExpectString("Compact fence after item.");
+CheckRowOf("code fence after the list item and its blank row", c_fence_after_item, c_fence_item.Y + 2);
+CheckBlankRow("blank row between the list item and the fence", c_fence_item.Y + 1);
+var c_item_before_head = ExpectString("Compact item before heading.");
+CheckRowOf("list item after the fence and its blank row", c_item_before_head, c_fence_after_item.Y + 2);
+var c_after_item = ExpectString("Compact After Item");
+CheckRowOf("heading after a list with a blank row", c_after_item, c_item_before_head.Y + 2);
+CheckBlankRow("blank row before the heading after the list", c_item_before_head.Y + 1);
+var c_fence_item_one = ExpectString("Compact fence item one:");
+CheckRowOf("list right after a heading", c_fence_item_one, c_after_item.Y + 1);
+
+// The fence in a list item: a blank row after the item text, then the fence.
+var c_fence_in_item = ExpectString("Compact fence in item.");
+CheckBlankRow("blank row after the item text", c_fence_item_one.Y + 1);
+CheckRowOf("fence in the item after its text and a blank row", c_fence_in_item, c_fence_item_one.Y + 2);
+CheckNoBorder();
+
+// Page 4: the next item after the fence, the ordered list, the headings of levels 6 and 1, and the
+// thematic break.
+TypePageDown();
+CheckNoBorder();
+var c_fence_in_item_p4 = ExpectString("Compact fence in item.");
+var c_fence_item_two = ExpectString("Compact fence item two.");
+CheckRowOf("next item after the fence with a blank row", c_fence_item_two, c_fence_in_item_p4.Y + 2);
+CheckBlankRow("blank row between the fence and the next item", c_fence_in_item_p4.Y + 1);
+var c_ordered = ExpectString("Compact ordered item.");
+CheckRowOf("ordered list right after the bullet list", c_ordered, c_fence_item_two.Y + 1);
+
+// R3 for heading level 6: the paragraph sits right under it.
+var c_six = ExpectString("Compact Six");
+CheckRowOf("level 6 heading after the list and its blank row", c_six, c_ordered.Y + 2);
+var c_after_six = ExpectString("Compact para after six.");
+CheckRowOf("paragraph right under a level 6 heading", c_after_six, c_six.Y + 1);
+
+// A setext heading of level 2 has no rule row under it: the paragraph is on the next row.
+var c_setext = ExpectString("Compact Setext");
+CheckRowOf("setext heading after the paragraph and its blank row", c_setext, c_after_six.Y + 2);
+CheckBlankRow("blank row before a setext heading", c_setext.Y - 1);
+var c_after_setext = ExpectString("Compact para after setext.");
+CheckRowOf("paragraph right under a setext heading", c_after_setext, c_setext.Y + 1);
+
+// A setext heading of level 1 keeps one blank row after it, and the thematic break keeps its line.
+var c_setext_top = ExpectString("Compact Setext Top");
+CheckBlankRow("blank row before a setext heading of level 1", c_setext_top.Y - 1);
+CheckBlankRow("blank row after a setext heading of level 1", c_setext_top.Y + 1);
+var c_above_break = ExpectString("Compact para above break.");
+CheckRowOf("paragraph after a level 1 heading and its blank row", c_above_break, c_setext_top.Y + 2);
+CheckBlankRow("blank row before the thematic break", c_above_break.Y + 1);
+CheckCellChar(0, c_above_break.Y + 2, "─");
+CheckCellChar(70, c_above_break.Y + 2, "─");
+var c_break = ExpectString("Compact para below break.");
+CheckRowOf("paragraph right after the thematic break and its blank row", c_break, c_above_break.Y + 4);
+CheckBlankRow("blank row after the thematic break", c_break.Y - 1);
+CheckNoBorder();
+
+// Page 5, the last page: the table, its rules and the list item with a heading.
+TypeEnd();
+CheckNoBorder();
+var c_break_end = ExpectString("Compact para below break.");
+// R6 and R7: the table has a blank row before it and one rule under its header row.
+var c_head = ExpectString("Compact A");
+CheckBlankRow("blank row before the table", c_head.Y - 1);
+CheckRowOf("table header after the paragraph and its blank row", c_head, c_break_end.Y + 2);
+CheckCellChar(c_head.X - 2, c_head.Y + 1, "├");
+var c_cell = ExpectString("compact 1");
+CheckRowOf("body row right under the header rule", c_cell, c_head.Y + 2);
+CheckCellChar(c_cell.X - 2, c_cell.Y - 1, "├");
+CheckBlankRow("blank row after the table", c_cell.Y + 1);
+var c_after_table = ExpectString("Compact para after table.");
+CheckRowOf("paragraph after the table and its blank row", c_after_table, c_cell.Y + 2);
+
+// C13: a heading as the first block of a list item stays on the row of the bullet.
+var c_item_head = ExpectString("Compact Item Heading");
+CheckRowOf("list item right after the paragraph", c_item_head, c_after_table.Y + 1);
+CheckCellChar(c_item_head.X - 2, c_item_head.Y, "•");
+
 
 TypeEscape()
 TypeFKey(10)

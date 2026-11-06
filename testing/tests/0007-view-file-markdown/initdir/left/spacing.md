@@ -44,3 +44,72 @@ Spacing paragraph after the list.
   Spacing item paragraph two.
 
 Spacing last paragraph.
+
+Compact para before list.
+- Compact item after para.
+
+Compact para after list.
+
+# Compact Top
+
+- Compact item after top.
+
+## Compact Second
+
+- Compact item after second.
+
+## Compact Upper
+
+### Compact Lower
+
+Compact para after lower.
+
+## Compact Before Fence
+
+```text
+Compact fence after heading.
+```
+
+- Compact item after fence.
+
+```text
+Compact fence after item.
+```
+
+- Compact item before heading.
+
+## Compact After Item
+
+- Compact fence item one:
+  ```text
+  Compact fence in item.
+  ```
+- Compact fence item two.
+
+1. Compact ordered item.
+
+###### Compact Six
+
+Compact para after six.
+
+Compact Setext
+---
+
+Compact para after setext.
+
+Compact Setext Top
+===
+
+Compact para above break.
+
+---
+
+Compact para below break.
+
+| Compact A | Compact B |
+|-----------|-----------|
+| compact 1 | compact 2 |
+
+Compact para after table.
+
+- ## Compact Item Heading

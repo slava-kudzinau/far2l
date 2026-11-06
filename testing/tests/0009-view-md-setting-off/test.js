@@ -4,27 +4,22 @@ left=mydir + "/left"
 right=mydir + "/right"
 config=profile + "/.config/settings/config.ini"
 
-// Markdown view of sample.md: the heading shows without its "# " marker, with a double rule
-// line under it.
+// Markdown view of sample.md: the heading shows without its "# " marker, with one blank row
+// under it.
 function CheckMarkdownSample() {
-	ExpectString("═")
-	ExpectNoString("# Heading One")
 	var heading = ExpectString("Heading One")
-	CheckCellChar(heading.X, heading.Y + 1, "═")
+	ExpectNoString("# Heading One")
+	CheckCellChar(heading.X, heading.Y + 2, "A")
 }
 
-// Plain view of sample.md: the "# " marker shows and no rule line is drawn under the heading.
+// Plain view of sample.md: the "# " marker shows.
 function CheckPlainSample() {
-	var heading = ExpectString("# Heading One")
-	if (CellCharMatches(heading.X, heading.Y + 1, "═"))
-		Panic("sample.md: plain heading has a rule line under it")
+	ExpectString("# Heading One")
 }
 
-// Plain view of plain.txt: its "# plain" line shows as is, with no rule line under it.
+// Plain view of plain.txt: its "# plain" line shows as is, with its "# " marker.
 function CheckPlainTxt() {
-	var line = ExpectString("# plain")
-	if (CellCharMatches(line.X, line.Y + 1, "═"))
-		Panic("plain.txt: plain line has a rule line under it")
+	ExpectString("# plain")
 }
 
 // A fresh profile shows the help screen on start; a reused one would not.

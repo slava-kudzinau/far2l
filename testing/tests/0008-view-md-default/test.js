@@ -3,26 +3,27 @@ profile=mydir + "/profile"
 left=mydir + "/left"
 right=mydir + "/right"
 
-// Markdown view of sample.md: the heading shows without its "# " marker, with a double rule
-// line under it.
+// Markdown view of sample.md: the heading shows without its "# " marker, and its paragraph sits
+// on the blank row under it.
 function CheckMarkdownSample() {
-	ExpectString("═")
-	ExpectNoString("# Heading One")
 	var heading = ExpectString("Heading One")
-	CheckCellChar(heading.X, heading.Y + 1, "═")
+	ExpectNoString("# Heading One")
+	CheckCellChar(heading.X, heading.Y + 2, "A")
 }
 
-// Plain view of sample.md: the "# " marker shows and no rule line is drawn under the heading.
+// Plain view of sample.md: the "# " marker shows.
 function CheckPlainSample() {
-	var heading = ExpectString("# Heading One")
-	if (CellCharMatches(heading.X, heading.Y + 1, "═"))
-		Panic("sample.md: plain heading has a rule line under it")
+	ExpectString("# Heading One")
 }
 
-// Markdown view of plain.txt: its "# plain" line renders as a heading with a rule line.
+// Markdown view of plain.txt: its "# plain" line renders as a heading, at the left edge.
 function CheckMarkdownPlainTxt() {
-	ExpectString("═")
 	ExpectNoString("# plain")
+	var line = ExpectString("plain", 0, 1, 80, 1)
+	if (line.X != 0) {
+		Log("plain.txt: the heading starts at column " + line.X);
+		Panic("plain.txt: the heading is not at the left edge");
+	}
 }
 
 // A fresh profile shows the help screen on start; a reused one would not.

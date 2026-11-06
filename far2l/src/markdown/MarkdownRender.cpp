@@ -23,7 +23,7 @@ namespace {
 // Styling: each run takes a palette role (MdRole); the viewer maps roles to colors when it draws.
 // Body text has the body role.  Headings, links, strong text and table header text take the heading
 // role; code spans and fences the code role; mermaid art and table borders the art role.  Structure
-// is also shown by layout: heading rule lines, the box-line quote prefix, indented code, bullets.
+// is also shown by layout: the box-line quote prefix, the table rules, indented code, bullets.
 constexpr int      CODE_INDENT   = 4;     // cells of indent before each code line
 constexpr wchar_t  BULLET        = L'\u2022';
 // The row after a mermaid fence that AsciiMermaid cannot draw; the fence's code rows stay above it.
@@ -258,8 +258,9 @@ struct Builder {
             return;
         MdLine line;
         line.runs = std::move(cur);
-        // A line with no source text of its own (rules, table borders, blank code lines) takes the
-        // position of the line before it, so it groups with that line and never ties with a source line.
+        // A line with no source text of its own (a table rule, a blank code line, a queued blank
+        // row) takes the position of the line before it, so it groups with that line and never ties
+        // with a source line.
         line.nFilePos = cur_pos_set ? cur_pos : (out.empty() ? 0 : out.back().nFilePos);
         out.push_back(std::move(line));
         cur.clear();
@@ -268,26 +269,33 @@ struct Builder {
 
     void line_break() { flush(); }   // paragraph soft/hard break = new display line
 
-    // --- spacing (Spacing table in the story spec) ------------------------
+    // --- spacing ------------------------------------------------------------
     // A block that ends queues one blank row, and the block that comes next emits it before its
     // first row.  So repeated blanks collapse into one, and no blank row comes before the first
-    // row.  Source blank lines never produce rows here, so only code fences keep theirs.  Items of
-    // a list stay tight (an item start drops the queued blank), a nested list is part of its outer
-    // list (no blank before or after it), and the outermost list has one before and after.
-    bool gap_pending = false;
-    size_t spacer_row = (size_t)-1;   // index in out of the last blank row queued here
+    // row.  Source blank lines never produce rows here, so only code fences keep theirs.  A queued
+    // blank is soft by default, and a list drops it.  Heading level 1 and code or HTML blocks make
+    // it hard, so a list keeps it.  A heading, a code block or an HTML block gets a hard blank before
+    // it (force_gap).  A block that starts a list item gets none, and a code or HTML block gets none
+    // after a heading of level 2 to 6.  Items of a list stay tight (an item start drops the queued
+    // blank), a nested list is part of its outer list, and the outermost list has no blank row around it.
+    enum Gap { GAP_NONE, GAP_SOFT, GAP_HARD };
+    Gap gap = GAP_NONE;
+    size_t spacer_row = (size_t)-1;         // index in out of the last blank row queued here
+    size_t tight_heading_row = (size_t)-1;  // index in out of the last heading row of level 2 to 6
 
     bool last_row_is_spacer() const { return !out.empty() && spacer_row == out.size() - 1; }
+    bool after_tight_heading() const { return !out.empty() && tight_heading_row == out.size() - 1; }
 
     void open_block()
     {
         if (cur_started) {            // text of a tight list item: a block of its own before this one
             flush();
-            gap_pending = true;
+            if (gap < GAP_SOFT)
+                gap = GAP_SOFT;
         }
-        if (!gap_pending)
+        if (gap == GAP_NONE)
             return;
-        gap_pending = false;
+        gap = GAP_NONE;
         if (out.empty() || last_row_is_spacer())
             return;
         // Offset of the row before, so the offsets never decrease (see flush()).
@@ -300,7 +308,10 @@ struct Builder {
         spacer_row = out.size() - 1;
     }
 
-    void close_block() { gap_pending = true; }
+    // A hard gap survives a list; a soft gap does not.
+    void close_block(Gap kind = GAP_SOFT) { if (gap < kind) gap = kind; }
+    void force_gap() { gap = GAP_HARD; }
+    void drop_soft_gap() { if (gap == GAP_SOFT) gap = GAP_NONE; }
 };
 
 // File offset of the first source text in the code line [s, e) of code_text, or -1 when the line
@@ -320,15 +331,15 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_QUOTE: b.open_block(); b.quote_depth++; break;
         case MD_BLOCK_UL: {
             auto *d = (MD_BLOCK_UL_DETAIL *)detail;
-            // The outermost list has a blank before it; a nested one is part of its outer list.
-            if (b.list_stack.empty()) b.open_block(); else b.flush();
+            // The outermost list has no blank row before it; a nested one is part of its outer list.
+            if (b.list_stack.empty()) { b.drop_soft_gap(); b.open_block(); } else b.flush();
             b.list_stack.push_back(0);
             (void)d;
             break;
         }
         case MD_BLOCK_OL: {
             auto *d = (MD_BLOCK_OL_DETAIL *)detail;
-            if (b.list_stack.empty()) b.open_block(); else b.flush();
+            if (b.list_stack.empty()) { b.drop_soft_gap(); b.open_block(); } else b.flush();
             b.list_stack.push_back(1);
             b.ol_counter.push_back(d ? (long)d->start : 1);
             break;
@@ -336,7 +347,8 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_LI: {
             auto *d = (MD_BLOCK_LI_DETAIL *)detail;
             b.li_open = true;
-            b.gap_pending = false;   // items stay tight: no blank row between two items
+            b.drop_soft_gap();   // items stay tight: no blank row between two items
+            b.open_block();      // a hard blank left by a code block that ended the previous item stays
             std::wstring pfx;
             if (!b.list_stack.empty() && b.list_stack.back() == 1) {
                 pfx += std::to_wstring(b.ol_counter.back());
@@ -357,6 +369,8 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         }
         case MD_BLOCK_H: {
             auto *d = (MD_BLOCK_H_DETAIL *)detail;
+            if (!b.li_prefix_pending)
+                b.force_gap();   // a heading keeps its blank row next to a list
             b.open_block();
             b.heading_level = d ? (int)d->level : 1;
             b.begin_line();
@@ -368,6 +382,9 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             break;
         case MD_BLOCK_CODE: {
             auto *d = (MD_BLOCK_CODE_DETAIL *)detail;
+            // A heading of level 2 to 6 and a list item keep their code block on the row right under them.
+            if (!b.after_tight_heading() && !b.li_prefix_pending)
+                b.force_gap();
             b.open_block();
             b.in_code = true;
             b.code_text.clear();
@@ -377,6 +394,9 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             break;
         }
         case MD_BLOCK_HTML:
+            // A heading of level 2 to 6 and a list item keep their HTML block on the row right under them.
+            if (!b.after_tight_heading() && !b.li_prefix_pending)
+                b.force_gap();
             b.open_block();
             b.in_code = true;   // verbatim, same treatment as code
             b.code_text.clear();
@@ -429,12 +449,12 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_UL:
             if (!b.list_stack.empty()) b.list_stack.pop_back();
             if (!b.ol_counter.empty() && b.list_stack.empty()) b.ol_counter.clear();
-            if (b.list_stack.empty()) b.close_block();
+            if (b.list_stack.empty()) b.drop_soft_gap();   // the outermost list has no blank row after it
             break;
         case MD_BLOCK_OL:
             if (!b.list_stack.empty()) b.list_stack.pop_back();
             if (!b.ol_counter.empty() && b.list_stack.empty()) b.ol_counter.clear();
-            if (b.list_stack.empty()) b.close_block();
+            if (b.list_stack.empty()) b.drop_soft_gap();
             break;
         case MD_BLOCK_LI:
             b.flush();
@@ -442,17 +462,12 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             break;
         case MD_BLOCK_H:
             b.flush();
-            // Heading rule under every level (double for H1, single for H2-H6).
-            if (b.heading_level >= 1 && b.heading_level <= 6) {
-                b.begin_line();
-                int lead = (int)concat(b.cur).size();
-                int n = std::max(1, b.width - lead);
-                b.append(std::wstring((size_t)n, b.heading_level == 1 ? BoxSymbols[BS_H2] : BoxSymbols[BS_H1]),
-                         MD_ROLE_HEADING);
-                b.flush();
-            }
+            // No rule row under a heading: its own palette entry is its layout cue.
+            if (b.heading_level == 1)
+                b.close_block(Builder::GAP_HARD);   // heading level 1 keeps a blank row after it
+            else if (!b.out.empty())
+                b.tight_heading_row = b.out.size() - 1;   // level 2 to 6: the next block sits right under it
             b.heading_level = 0;
-            b.close_block();
             break;
         case MD_BLOCK_P:
             b.flush();
@@ -492,7 +507,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             }
             if (is_mermaid)
                 b.fences.push_back(Builder::Fence{fence_pos, fence_src, first_line, count, b.row_lead()});
-            b.close_block();
+            b.close_block(Builder::GAP_HARD);   // a code block keeps its blank row next to a list
             break;
         }
         case MD_BLOCK_TH:
@@ -519,8 +534,9 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                     for (auto &r : b.table_rows)
                         for (size_t c = 0; c < r.size(); ++c)
                             w[c] = std::max(w[c], (int)concat(r[c]).size());
-                    // Rows take their own source offset; the borders take the line before them (flush()).
-                    // The header row (the first) is drawn in the heading role; other cells keep their roles.
+                    // Rows take their own source offset; the rule under the header takes the line before it
+                    // (flush()).  The header row (the first) is drawn in the heading role; other cells keep
+                    // their roles.
                     auto render_row = [&](std::vector<std::vector<MdRun>> &row, int64_t pos, bool header) {
                         b.begin_line();
                         b.set_line_pos(pos);
@@ -546,13 +562,11 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                         }
                         b.flush();
                     };
-                    render_sep(BoxSymbols[BS_LT_H1V1], BoxSymbols[BS_T_H1V1], BoxSymbols[BS_RT_H1V1]);
                     for (size_t ri = 0; ri < b.table_rows.size(); ++ri) {
                         render_row(b.table_rows[ri], b.table_row_pos[ri], ri == 0);
                         if (ri == 0)
                             render_sep(BoxSymbols[BS_L_H1V1], BoxSymbols[BS_C_H1V1], BoxSymbols[BS_R_H1V1]);
                     }
-                    render_sep(BoxSymbols[BS_LB_H1V1], BoxSymbols[BS_B_H1V1], BoxSymbols[BS_RB_H1V1]);
                 }
             }
             break;
