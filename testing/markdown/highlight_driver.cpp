@@ -10,6 +10,10 @@
 
 #include <farplug-wide.h>
 
+#include "headers.hpp"
+#include "ctrlobj.hpp"
+#include "markdown/MdColorer.hpp"
+
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -36,9 +40,9 @@ StartupInfoFn g_set_startup_info = nullptr;
 ViewerEventFn g_viewer_event = nullptr;
 TokenizeFn g_tokenize = nullptr;
 ViewerInfo g_vi = {};
-
-// Set by the app (far2l/src/global.cpp, C linkage); WinPort's console layer reads it.
-extern "C" bool g_far2l_use_vs16 = true;
+// The plugin manager the bridge (MdColorer) asks. The driver owns it here:
+// `new ControlObject` scans and registers the plugins, as at startup.
+ControlObject *CtrlObject = nullptr;
 // The plugin's Info callbacks run headless here: the catalog path needs
 // SaveScreen/Message/RestoreScreen/GetMsg; ReadSettings needs the Cfg trio;
 // viewerEvent asks ViewerControl for the viewer info.
@@ -119,20 +123,13 @@ const Probe s_probes[] = {
 
 // ---- load the modules the way the core bridge (T2) will ----
 
-void* g_app_handle = nullptr;
 void* g_plugin_handle = nullptr;
 
 bool LoadModules(std::string& why)
 {
-	const char* app = getenv("FAR2L_APP");
 	const char* plugin = getenv("FAR2L_PLUGIN");
-	if (app == nullptr || plugin == nullptr) {
-		why = "FAR2L_APP and FAR2L_PLUGIN must name the binary and the plugin module";
-		return false;
-	}
-	g_app_handle = dlopen(app, RTLD_LAZY | RTLD_NOW | RTLD_GLOBAL);
-	if (g_app_handle == nullptr) {
-		why = std::string("dlopen app: ") + dlerror();
+	if (plugin == nullptr) {
+		why = "FAR2L_PLUGIN must name the colorer module";
 		return false;
 	}
 	g_plugin_handle = dlopen(plugin, RTLD_LAZY | RTLD_NOW);
@@ -171,6 +168,11 @@ bool LoadModules(std::string& why)
 	static FarStandardFunctions sfsf = {};
 	psi.FSF = &sfsf;
 	g_set_startup_info(&psi);
+	if (CtrlObject == nullptr) {
+		CtrlObject = new ControlObject;
+		printf("probe: ControlObject registered %d plugins\n",
+			CtrlObject->Plugins.GetPluginsCount());
+	}
 	return true;
 }
 
@@ -323,6 +325,127 @@ int probe_real_plugin()
 	return 0;
 }
 
+// The fake token source of the T2 cases: it owns canned tokens and counts
+// the calls, so the bridge needs no plugin (plan T2).
+class FakeSource : public MdTokenSource
+{
+public:
+	std::string last_lang;
+	int calls = 0;
+
+	bool Tokenize(const std::string &lang, const std::vector<std::string> &,
+		int, std::vector<MdToken> &out) override
+	{
+		last_lang = lang;
+		++calls;
+		out.push_back(MdToken{0, 3, 1}); // one keyword at the line start
+		return true;
+	}
+};
+
+// The T2 cases: the bridge's name rules and the source fallback.  They link
+// against far2l_md, so no plugin is needed.
+int alias_maps_cpp()
+{
+	if (MdNormalizeLangName("c++") != "cpp") {
+		printf("FAILED alias_maps_cpp: c++ maps to %s\n", MdNormalizeLangName("c++").c_str());
+		return 1;
+	}
+	return 0;
+}
+
+int alias_maps_zsh()
+{
+	if (MdNormalizeLangName("zsh") != "sh") {
+		printf("FAILED alias_maps_zsh: zsh maps to %s\n", MdNormalizeLangName("zsh").c_str());
+		return 1;
+	}
+	return 0;
+}
+
+int name_too_long()
+{
+	const std::string name(33, 'a');
+	if (!MdNormalizeLangName(name).empty()) {
+		printf("FAILED name_too_long: a 33-character name mapped to %s\n",
+			MdNormalizeLangName(name).c_str());
+		return 1;
+	}
+	return 0;
+}
+
+int name_bad_char()
+{
+	if (!MdNormalizeLangName("c+ x").empty()) {
+		printf("FAILED name_bad_char: a name with a space mapped to %s\n",
+			MdNormalizeLangName("c+ x").c_str());
+		return 1;
+	}
+	return 0;
+}
+
+int source_call_count()
+{
+	MdSetTokenSourceForTest(std::make_unique<FakeSource>());
+	std::vector<MdToken> out;
+	if (!MdGetTokenSource().Tokenize("js", {"var x;"}, 1000, out)
+		|| !MdGetTokenSource().Tokenize("js", {"var y;"}, 1000, out)) {
+		printf("FAILED source_call_count: Tokenize returned false\n");
+		return 1;
+	}
+	FakeSource* fake = dynamic_cast<FakeSource*>(&MdGetTokenSource());
+	if (fake == nullptr || fake->calls != 2 || out.size() != 2) {
+		printf("FAILED source_call_count: calls=%d tokens=%zu\n",
+			fake ? fake->calls : -1, out.size());
+		return 1;
+	}
+	MdSetTokenSourceForTest(nullptr);
+	return 0;
+}
+
+int manager_plugin_tokens()
+{
+	MdSetTokenSourceForTest(nullptr);
+	std::string why;
+	if (!LoadModules(why)) {
+		printf("FAILED manager_plugin_tokens: %s\n", why.c_str());
+		return 1;
+	}
+	if (CtrlObject == nullptr) {
+		CtrlObject = new ControlObject;
+	}
+	std::vector<MdToken> out;
+	if (!MdGetTokenSource().Tokenize("js", {"var x; // c"}, 1000, out)) {
+		printf("FAILED manager_plugin_tokens: Tokenize returned false\n");
+		return 1;
+	}
+	if (out.empty() || out[0].start != 0 || out[0].end != 3 || out[0].cls != 1) {
+		printf("FAILED manager_plugin_tokens: %zu tokens, first %d-%d cls %d\n",
+			out.size(), out.empty() ? -1 : out[0].start,
+			out.empty() ? -1 : out[0].end, out.empty() ? -1 : out[0].cls);
+		return 1;
+	}
+	return 0;
+}
+
+int no_source_falls_back()
+{
+	MdSetTokenSourceForTest(nullptr);
+	std::string why;
+	if (!LoadModules(why)) {
+		printf("FAILED no_source_falls_back: %s\n", why.c_str());
+		return 1;
+	}
+	std::vector<MdToken> out;
+	// No ControlObject here: the bridge finds no plugin manager, Tokenize
+	// reports no colors, the viewer keeps the plain code role.
+	if (MdGetTokenSource().Tokenize("js", {"var x;"}, 1000, out)) {
+		printf("FAILED no_source_falls_back: Tokenize returned true with no plugin\n");
+		return 1;
+	}
+	return 0;
+}
+
 struct Case
 {
 	const char* name;
@@ -330,6 +453,13 @@ struct Case
 };
 
 const Case s_cases[] = {
+	{"alias_maps_cpp", alias_maps_cpp},
+	{"alias_maps_zsh", alias_maps_zsh},
+	{"name_too_long", name_too_long},
+	{"name_bad_char", name_bad_char},
+	{"source_call_count", source_call_count},
+	{"manager_plugin_tokens", manager_plugin_tokens},
+	{"no_source_falls_back", no_source_falls_back},
 	{"probe_real_plugin", probe_real_plugin},
 };
 } // namespace

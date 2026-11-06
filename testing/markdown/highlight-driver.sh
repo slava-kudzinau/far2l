@@ -21,26 +21,41 @@ build="$app_dir"
 mkdir -p "$build/testing"
 cand="$build/highlight_driver"
 src="$script_dir/highlight_driver.cpp"
-if [ ! -f "$cand" ] || [ "$src" -nt "$cand" ]; then
-  # -Wl,-u pins each WINPORT_* entry point so the plugin's dynamic links find
-  # them in the driver image.
+link_file="$build/far2l/CMakeFiles/far2l.dir/link.txt"
+app_bin="$build/install/far2l.app/Contents/MacOS/far2l"
+if [ ! -f "$cand" ] || [ "$src" -nt "$cand" ] || [ "$app_bin" -nt "$cand" ]; then
+  # The driver image carries the whole far2l core (the app's own link line),
+  # so CtrlObject and the plugin's dynamic links resolve inside one binary;
+  # the colorer module is the only dlopen.
   undefs=""
   for sym in $(nm "$build/install/far2l.app/Contents/MacOS/Plugins/colorer/plug/colorer.far-plug-wide" | awk '/U _WINPORT_/ {print $2}'); do
     undefs="$undefs -Wl,-u,$sym"
   done
-  c++ -std=c++17 -o "$cand" -I "$project_dir/far2l/far2sdk" -I "$project_dir/WinPort" \
+  obj="$build/testing/highlight_driver.o"
+  incs="-I $project_dir/far2l -I $project_dir/far2l/far2sdk -I $project_dir/far2l/src"
+  for d in base mix bookmarks cfg console panels filemask hist locale macro plug vt shoco markdown; do
+    incs="$incs -I $project_dir/far2l/src/$d"
+  done
+  c++ -std=c++17 -c -o "$obj" $incs \
+    -I "$project_dir/far2l/src/markdown/md4c" -I "$build/far2l" \
+    -I "$project_dir/WinPort" -I "$project_dir/utils/include" \
     "$script_dir/highlight_driver.cpp" \
-    $undefs "$build/WinPort/libWinPort.a" "$build/utils/libutils.a" \
-    "$build/WinPort/wineguts/libwineguts.a" -framework CoreFoundation \
     2>"$build/testing/highlight-driver.log" || {
-    echo "FAILED build: $(cat "$build/testing/highlight-driver.log")"; exit 1; }
+    echo "FAILED compile: $(cat "$build/testing/highlight-driver.log")"; exit 1; }
+  inputs=$(sed -e 's/^[^ ]*//' -e 's/ -o [^ ]*//' -e 's|CMakeFiles/far2l.dir/src/main.cpp.o ||' "$link_file")
+  ( cd "$build/far2l" && c++ -o "$cand" "$obj" \
+      $inputs -Wl,-undefined,dynamic_lookup ) \
+    2>>"$build/testing/highlight-driver.log" || {
+    echo "FAILED link: $(cat "$build/testing/highlight-driver.log")"; exit 1; }
 fi
 
-# The app exports its symbols on macOS; the plugin links them from the binary.
-export FAR2L_APP="$build/install/far2l.app/Contents/MacOS/far2l"
+# The plugin manager scans `Plugins` next to the running binary: give the
+# driver the app's tree there, so FindPlugin sees the colorer module.
+ln -sfn install/far2l.app/Contents/MacOS/Plugins "$build/Plugins"
+
 export FAR2L_PLUGIN="$build/install/far2l.app/Contents/MacOS/Plugins/colorer/plug/colorer.far-plug-wide"
-if [ ! -f "$FAR2L_APP" ] || [ ! -f "$FAR2L_PLUGIN" ]; then
-  echo "no app or plugin under $build/install: run cmake --build $build --target all install first"
+if [ ! -f "$FAR2L_PLUGIN" ]; then
+  echo "no plugin under $build/install: run cmake --build $build first"
   exit 2
 fi
 
