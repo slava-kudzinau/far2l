@@ -35,6 +35,14 @@ APP=$(cd ../far2l.build && pwd)/install/far2l.app/Contents/MacOS/far2l
 
 On this Mac, `0004-vt-shell` and `000b-find-file` fail today. The cause is not known. Any other failure is new, so stop and find the cause.
 
+**Worktrees.** A worktree is in `.worktrees/{story}`. Its build folder is next to the main checkout, at `../../../far2l.{story}.build` from the worktree root. Set `BUILD` to that folder.
+
+The path of a worktree is long. Thus the unix socket of a smoke test can land in `testing/tests/` as a stale file, for example `0007-view-fi`. The next run of `far2l-smoke-run.sh` then stops with `mkdir: tests/0007-view-fi: Not a directory`, and the check prints `FAILED` for a test with no code fault. Before each smoke test in a worktree, delete only the sockets at that level:
+
+```sh
+(cd testing && find tests -maxdepth 1 -type s -delete)
+```
+
 Do not trust the exit code of `far2l-smoke-run.sh`. It returns 0 when a test only logs `[FAILED]`. There is no `make test`, and `ctest` at the build root finds nothing. CI does not run on the branches of this fork, so run the check on your own machine.
 
 ## Where things are
