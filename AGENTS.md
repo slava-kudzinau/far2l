@@ -120,7 +120,7 @@ Before you open files, get a list of all docs: `grep -r '^description:' docs --i
 - `AGENTS.md`, `docs/architecture/`, `docs/how-we-build.md`
 - `testing/markdown/golden/*.txt`
 - Vendored code: `far2l/src/markdown/md4c/`, `far2l/third_party/quickjs/`
-- `.claude/settings.json`, `.github/workflows/`
+- `.github/workflows/`
 
 ## Main session
 
