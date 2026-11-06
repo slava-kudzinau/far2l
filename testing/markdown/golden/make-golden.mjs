@@ -14,8 +14,12 @@ const { renderMermaidASCII } = await import(pathToFileURL(join(pkgDir, 'dist/ind
 const SUPPORTED = ['graph', 'flowchart', 'stateDiagram', 'stateDiagram-v2', 'sequenceDiagram',
     'classDiagram', 'erDiagram', 'xychart-beta'];
 
+// A golden may be the package's render of another sample's source. The unspaced flowchart
+// has the golden of its spaced form, so the bundle's edge pre-pass is checked against the package.
+const GOLDEN_SOURCE = { 'flowchart-nospace.mmd': 'flowchart-spaced.mmd' };
+
 for (const mmd of readdirSync(here).filter((f) => f.endsWith('.mmd')).sort()) {
-    const src = readFileSync(join(here, mmd), 'utf8');
+    const src = readFileSync(join(here, GOLDEN_SOURCE[mmd] ?? mmd), 'utf8');
     const word = src.trim().split(/[\s;]/)[0];
     let out;
     if (word !== '' && !SUPPORTED.includes(word)) {
