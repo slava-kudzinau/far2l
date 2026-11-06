@@ -1,11 +1,39 @@
 # Manual checks: markdown palette
 
-Two things the automated checks cannot see. Run both on a real build from the worktree root.
+These two checks need a real terminal. The smoke test cannot judge how a color looks.
+Run the build from the worktree root.
 
-## macOS Terminal (no 256 colors)
+## 1. macOS Terminal (no 256-color support)
 
-Open a sample `.md` in the viewer (F3) under macOS Terminal, which reports fewer than 256 colors. What to look at: each role shows its 16-color fallback from the spec table (h1 yellow, h2 light red, h3 light gray, strong white, link light green, code light magenta, quote and rule cyan) and stays readable against the viewer background — no unreadable-on-dark or washed-out role. Record what the `38;2` RGB sequences do there: Terminal does not honor them, so note whether they are emitted at all and whether they degrade to garbage, a wrong color, or are simply ignored.
+macOS Terminal reports fewer colors than 256. The RGB path must not run there.
 
-## Ghostty (dark and light)
+1. Start far2l in macOS Terminal.
+2. Press F3 on a sample `.md` file with every role in it.
+3. Look at the 16-color fallback of each role:
+   - H1 yellow, H2 light red, H3 light gray.
+   - Strong white, link light green, code light magenta.
+   - Quote and rule cyan.
+4. Check that each role stays readable on the viewer background.
+   Look for a role that is too dim or washed out.
+5. Note what the terminal does with the `38;2` sequences.
+   They can be ignored, mapped to a wrong color, or printed as garbage.
+6. Record the color you saw for each role and any unreadable role.
+7. Record the `38;2` behavior in one sentence.
 
-Open the same sample `.md` in Ghostty twice, once with a dark theme and once with a light theme. What to look at: the RGB defaults read well on both backgrounds — with a light background the all-or-none contrast rule should send everything to today's look, and on dark every role keeps its RGB color; also judge whether the H2 orange (`#FFAF5F`), the link green (`#87FF87`) and the code magenta (`#FF87FF`) suit a full code fence — the owner decides on the look here.
+Result:
+
+## 2. Ghostty, one dark theme and one light theme
+
+The owner decides the look here. The automated checks only prove the values.
+
+1. Open the same sample `.md` in Ghostty with a dark theme.
+2. Check that the RGB defaults read well on the dark background.
+3. Check H2 orange (`#FFAF5F`), link green (`#87FF87`) and code magenta (`#FF87FF`).
+   Look at a full code fence, not only one token.
+4. Check that no role fights the theme or the cursor line.
+5. Switch to a light theme and open the file again.
+   The contrast rule should send every role to today's look, with no RGB.
+6. Record the dark-theme look, the fence look, and the light-theme result.
+7. State whether the owner accepts the look or wants a value changed.
+
+Result:
