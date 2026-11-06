@@ -1,17 +1,17 @@
 # Close-out: markdown palette
 
 Status: build complete on `feat/markdown-palette`, stacked on the unmerged `feat/markdown-compact-layout` (a7b61f26f).
-Check: `sh docs/stories/markdown-palette/check.sh` -> exit 0, `check ok`, verified by the main session at 452d97c31.
+Check: `sh docs/stories/markdown-palette/check.sh` -> exit 0, `check ok`, verified by the main session at 48cb801c7.
 Manual checks: `manual-checks.md`, two items, results pending from the owner.
 
 ## What was built against the plan
 
 | Task | Commit | Result |
 |---|---|---|
-| T1 probe and test hooks | d6a62d121 | `COLORTERM=truecolor` in `testing/far2l-smoke-run.sh`; RGB path reachable |
-| T2 roles in the renderer | a870f964a + 2175761aa | `MdRole` split into body/h1/h2/h3/strong/link/code/quote/rule/art |
-| T3 palette module and resolve | 69768b418 + b83de954e + 9e679fd0f | `MdPalette.hpp/.cpp`, draw-time resolve, ini overrides, contrast, mtime cache |
-| T4 smoke coverage | b6dd439b3 + 452d97c31 | 0007 assertions and fixtures, `--norgb`, override and hostile-ini cases |
+| T1 probe and test hooks | 8ac6c428a | `COLORTERM=truecolor` in `testing/far2l-smoke-run.sh`; RGB path reachable |
+| T2 roles in the renderer | e99382fce + 0449ddea7 | `MdRole` split into body/h1/h2/h3/strong/link/code/quote/rule/art |
+| T3 palette module and resolve | c8d162cc2 + 616bc7c82 + 131105939 | `MdPalette.hpp/.cpp`, draw-time resolve, ini overrides, contrast, mtime cache |
+| T4 smoke coverage | be44a2bcc + 48cb801c7 | 0007 assertions and fixtures, `--norgb`, override and hostile-ini cases |
 
 Verified role colors (ForeTC, RGB path):
 
@@ -44,15 +44,26 @@ Layout, text and row count are unchanged; the check includes the golden and asci
 
 ## What the reviews caught
 
-- T2 (critical): stale "heading role" comment, a 133-char line, C-style casts. All fixed in 2175761aa.
-- T3 (critical): per-role contrast instead of all-or-none, and a vacuous h4 assertion. Fixed in b83de954e.
-  The re-review found a process-lifetime verdict cache that ignored theme changes. Fixed in 9e679fd0f.
+- T2 (critical): stale "heading role" comment, a 133-char line, C-style casts. All fixed in 0449ddea7.
+- T3 (critical): per-role contrast instead of all-or-none, and a vacuous h4 assertion. Fixed in 616bc7c82.
+  The re-review found a process-lifetime verdict cache that ignored theme changes. Fixed in 131105939.
 - T4 (task review): missing rule-color assertions, the unfalsifiable link override, a near-vacuous
-  norgb pair, H6 uncovered, missing `CheckBack`, a duplicate h2/h3 relation. All fixed in 452d97c31.
+  norgb pair, H6 uncovered, missing `CheckBack`, a duplicate h2/h3 relation. All fixed in 48cb801c7.
 - Final review: 1 Critical, 4 Important and 3 Minor. The Critical: an `@Name` override was frozen at ini load. The Important: no contrast assertion, an unfalsifiable link override, the rule fallback split, a partial `--norgb` set.
-  All are fixed in `fcd63acce`. The contrast case now runs a light `Viewer.Text` theme and asserts the fallback.
+  All are fixed in `2fe21e34d`. The contrast case now runs a light `Viewer.Text` theme and asserts the fallback.
 - Parked on purpose: reparse on a failed load, unknown role mapping to body override, duplicated
   `kBackBits`, mtime-only cache key. Recorded for the final review.
+
+## Verification of the new assertions
+
+Each new assertion was run against the regression it guards. The mutation was built, 0007 was run, the mutation was reverted, and the suite went green again.
+
+| Mutation | Result |
+|---|---|
+| The contrast verdict forced to pass | FAILED: "light background: h1 kept its RGB default" |
+| The h1 fallback changed to `F_CYAN` | FAILED: "norgb h1: fore 3, expected 14" |
+| The `@Name` value resolved to the body color | FAILED: "link override vs body foreground is the same as the viewer foreground" |
+| The `link` key skipped at load | FAILED: "link override vs default link foreground is the same as the default link foreground" |
 
 ## Rulings
 

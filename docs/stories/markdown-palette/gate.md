@@ -103,7 +103,7 @@ Verified colors on the RGB path:
 - T2: a stale "heading role" comment, a 133-character line, C-style casts. Fixed.
 - T3: the contrast rule checked each role alone instead of all or none, and the h4 assertion could not fail. Fixed. The re-review found a process-lifetime contrast cache that ignored theme changes. Fixed.
 - T4: missing rule-color assertions, an unfalsifiable link override, a near-vacuous `--norgb` pair, H6 uncovered, a missing `CheckBack`, a duplicate h2/h3 relation. Fixed.
-- Final review: 1 Critical, 4 Important, 3 Minor, 7 uncovered spec rows. The Critical was real: `@Name` overrides kept a color resolved at ini-load time, so a theme change never reached them. Fixed in `fcd63acce` together with the rule-role border move, the exact 16-color fallbacks, the falsifiable link override and a light-background contrast case. Check green after the fix.
+- Final review: 1 Critical, 4 Important, 3 Minor, 7 uncovered spec rows. The Critical was real: `@Name` overrides kept a color resolved at ini-load time, so a theme change never reached them. Fixed in `2fe21e34d` together with the rule-role border move, the exact 16-color fallbacks, the falsifiable link override and a light-background contrast case. Check green after the fix.
 
 ### Run it
 
