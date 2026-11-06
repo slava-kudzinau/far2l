@@ -11,10 +11,16 @@
 // Palette role of a run.  The viewer maps it to a far palette entry when it draws, so a theme
 // change shows on the next redraw.  Plain integers, so the layout code can build runs as (text, role).
 enum MdRole : uint64_t {
-    MD_ROLE_BODY = 0,      // body text, list text, quote bars (the viewer text entry)
-    MD_ROLE_HEADING,       // headings, their rules, links, strong text, table header text
+    MD_ROLE_BODY = 0,      // body text and list text (the viewer text entry)
+    MD_ROLE_H1,            // heading level 1
+    MD_ROLE_H2,            // heading level 2
+    MD_ROLE_H3,            // headings level 3 to 6
+    MD_ROLE_STRONG,        // strong text and table header text with no other span
+    MD_ROLE_LINK,          // link text
     MD_ROLE_CODE,          // code spans and code fences
-    MD_ROLE_ART,           // mermaid art and table borders
+    MD_ROLE_QUOTE,         // block quote text and quote bars
+    MD_ROLE_RULE,          // horizontal rules and table borders
+    MD_ROLE_ART,           // mermaid art
 };
 
 // A run of text sharing one palette role.

@@ -1,10 +1,13 @@
 ---
 description: Give each heading level its own color and give code blocks a background tint, with 24-bit colors derived from the active theme.
-status: planned
+status: superseded
+superseded-by: markdown-palette
 size: M
 risk: contract
 depends-on: markdown-compact-layout
 ---
+
+> Do not build this story. On 2026-11-06 the owner replaced it with story markdown-palette, and the tint moved to story markdown-code-tint. This file stays as a record.
 
 # Story: Theme-derived heading and code block colors
 

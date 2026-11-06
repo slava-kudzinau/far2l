@@ -191,6 +191,7 @@ set(MD_SOURCES
 src/markdown/md4c/md4c.c
 src/markdown/MarkdownRender.cpp
 src/markdown/AsciiMermaid.cpp
+src/markdown/MdPalette.cpp
 )
 
 # Option to disable building macro subsystem completely

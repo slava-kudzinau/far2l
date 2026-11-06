@@ -99,7 +99,7 @@ Before you open files, get a list of all docs: `grep -r '^description:' docs --i
 - If you add a new top-level file or folder, check it with `git check-ignore`. The root `.gitignore` has wide patterns.
 - Keep the fork's changes to upstream files small. The fork must merge from `upstream` with few conflicts. Put new code in `far2l/src/markdown/` and not in the upstream files, where you can.
 - Treat Markdown files and mermaid text as untrusted input. A render has a time limit and a stack limit, and a failed render must not stop the viewer.
-- Use palette roles for colors. Do not use fixed ANSI colors.
+- A Markdown run holds a role, never a color. The role resolves at draw time from the user file, the fork table of defaults, or a far palette entry. Code outside the fork table holds no color value. See [ADR-004](docs/architecture/decisions/adr-004-palette-roles.md).
 
 **Tests**
 - Do not regenerate `testing/markdown/golden/*.txt` to make a test pass. The golden files come from the `beautiful-mermaid` package, not from our bundle.

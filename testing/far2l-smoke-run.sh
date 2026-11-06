@@ -30,4 +30,5 @@ for test in tests/*; do
 	fi
 done
 
+export COLORTERM=truecolor
 ./far2l-smoke "$APP" tests/"$2"*

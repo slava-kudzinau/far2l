@@ -70,15 +70,32 @@ ExpectString("Code Fence Body")
 
 var heading = ExpectString("Heading One")
 CheckBack("heading", ReadCell(heading.X, heading.Y))
-// Headings take the heading palette entry, not the body foreground.
+// Headings take their own role colors, not the body foreground.
 var heading_cell = ReadCell(heading.X, heading.Y)
 CheckForeOther("heading", heading_cell, plain, "viewer")
+// ForeTC holds a color as 0xBBGGRR (COMPOSE_RGB), so #FFFF5F reads 0x5fffff. The channels are not
+// equal here on purpose: a swapped R and B draws h1 pale cyan, close to the body text. The low
+// nibble is the 16-color index that a terminal without RGB shows, F_YELLOW for h1.
+if (heading_cell.ForeTC != 0x5fffff || heading_cell.Fore != 14) {
+	Log("h1 foreTC " + heading_cell.ForeTC.toString(16) + " fore " + heading_cell.Fore)
+	Panic("h1 is not #FFFF5F with the F_YELLOW index")
+}
 CheckBack("blank viewer cell", ReadCell(60, heading.Y))
-// A level-4 heading takes the heading entry too; the list comes on the row right under it.
+// The strong span in the first paragraph takes its own color, distinct from heading and body.
+var strong_text = ExpectString("strong")
+var strong_cell = ReadCell(strong_text.X, strong_text.Y)
+CheckForeOther("strong", strong_cell, plain, "viewer")
+CheckForeOther("strong", strong_cell, heading_cell, "heading")
+// A level-4 heading shares the h3 color (H3 to H6 are one role); the list comes on the row
+// right under it.
 var h4 = ExpectString("Heading Four")
-CheckForeSame("heading four", ReadCell(h4.X, h4.Y), heading_cell, "heading")
+CheckForeOther("heading four", ReadCell(h4.X, h4.Y), heading_cell, "h1")
+var h3 = ExpectString("Heading Three")
+var h3_cell = ReadCell(h3.X, h3.Y)
+CheckForeSame("heading four", ReadCell(h4.X, h4.Y), h3_cell, "h3")
+CheckForeOther("h3", h3_cell, heading_cell, "h1")
 var bullet = ExpectString("bullet one")
-CheckRowOf("list right under the heading", bullet, h4.Y + 1)
+CheckRowOf("list right under the h3 heading", bullet, h3.Y + 1)
 // Code takes its own palette entry, different from the heading and from the body.
 var code = ExpectString("Code Fence Body")
 CheckBack("code", ReadCell(code.X, code.Y))
@@ -89,17 +106,24 @@ var table = ExpectString("│ cell1")
 CheckBack("table box glyph", ReadCell(table.X, table.Y))
 CheckBack("table cell", ReadCell(table.X + 2, table.Y))
 CheckFore("table cell text", ReadCell(table.X + 2, table.Y))
-// Table header text takes the heading entry; the borders take the art entry, read from the
-// line glyph of the separator row under the header.
+// Table header text takes the strong color; the borders take the rule color, read from the line
+// glyph of the separator row under the header.
 var table_head = ExpectString("Col A")
 CheckBack("table header", ReadCell(table_head.X, table_head.Y))
-CheckForeSame("table header", ReadCell(table_head.X, table_head.Y), heading_cell, "heading")
+CheckForeSame("table header", ReadCell(table_head.X, table_head.Y), strong_cell, "strong")
 CheckCellChar(table.X + 1, table.Y - 1, "─")
-var art_cell = ReadCell(table.X + 1, table.Y - 1)
-CheckForeSame("table border", ReadCell(table.X, table.Y), art_cell, "table art")
-CheckForeOther("table art", art_cell, plain, "viewer")
-CheckForeOther("table art", art_cell, heading_cell, "heading")
-CheckForeOther("table art", art_cell, code_cell, "code")
+// The borders take the rule color: the separator line, the bars of the header row and the
+// bars of the data rows all share it, and it differs from strong and from the body fore.
+var border_cell = ReadCell(table.X + 1, table.Y - 1)
+CheckForeOther("table border", border_cell, strong_cell, "strong")
+CheckForeOther("table border", border_cell, plain, "viewer")
+var table_bar = ReadCell(table.X, table.Y)
+CheckForeSame("table bar", table_bar, border_cell, "table border")
+// A code span in the table header keeps the code role: the header markup is strong for plain
+// text, but spans of their own win over it (the spec's precedence).
+var hcode = ExpectString("hcode")
+var hcode_cell = ReadCell(hcode.X, hcode.Y)
+CheckForeSame("code span in table header", hcode_cell, code_cell, "code")
 
 // Scroll to the bottom, where the mermaid fences are.
 TypeEnd()
@@ -108,8 +132,10 @@ ExpectString("Start")
 ExpectString("Finish")
 ExpectNoString("```mermaid")
 // The flowchart is drawn as box art in the art role, with no source text left on screen.
-var flow = ExpectString("┌───────┐     ┌────────┐")
-CheckForeSame("flowchart art", ReadCell(flow.X, flow.Y), art_cell, "table art")
+var flow = ExpectString("└───────┘     └────────┘")
+var flow_art = ReadCell(flow.X, flow.Y)
+CheckForeOther("flowchart art", flow_art, border_cell, "table border")
+CheckForeOther("flowchart art", flow_art, plain, "viewer")
 ExpectNoString("graph LR")
 // The swimlane block is not drawn: its code shows, and the hint row follows the code.
 var swim_last = ExpectString("a1[Start] --> a2[Finish]")
@@ -119,14 +145,99 @@ if (hint.Y != swim_last.Y + 2) {
 	Panic("the hint does not follow the swimlane code after its end line");
 }
 CheckFore("diagram hint", ReadCell(hint.X, hint.Y))
+// Quote text and the quote bar take the quote role: today the viewer text, so the check reads
+// the first quote and keeps the cell for the later pairs.
 var quote = ExpectString("│ block quote line")
-CheckFore("block quote", ReadCell(quote.X + 2, quote.Y))
+var quote_cell = ReadCell(quote.X + 2, quote.Y)
+CheckForeOther("block quote", quote_cell, border_cell, "table border")
+CheckForeOther("block quote", quote_cell, plain, "viewer")
 
+
+// --- T4: the rest of the palette roles, checked against the cells read above. ---
+// H3, H4, H5 and H6 share one color; each heading level differs from the ones next to it.
+var h2 = ExpectString("Heading Two")
+var h2_cell = ReadCell(h2.X, h2.Y)
+var h3r = ExpectString("Heading Three Renamed")
+var h3r_cell = ReadCell(h3r.X, h3r.Y)
+var h5 = ExpectString("Heading Five")
+CheckForeSame("heading five", ReadCell(h5.X, h5.Y), h3_cell, "h3")
+var h6 = ExpectString("Heading Six")
+CheckForeSame("heading six", ReadCell(h6.X, h6.Y), h3_cell, "h3")
+CheckForeOther("h2", h2_cell, heading_cell, "h1")
+CheckForeOther("h2", h2_cell, h3_cell, "h3")
+CheckForeSame("renamed h3", h3r_cell, h3_cell, "h3")
+CheckBack("h2", h2_cell)
+CheckBack("renamed h3", h3r_cell)
+CheckBack("heading five", ReadCell(h5.X, h5.Y))
+CheckBack("heading six", ReadCell(h6.X, h6.Y))
+// A labeled link takes the link role: its own color, different from strong, code and body.
+var llink = ExpectString("labeled link")
+var link_cell = ReadCell(llink.X, llink.Y)
+CheckForeOther("labeled link", link_cell, strong_cell, "strong")
+CheckForeOther("labeled link", link_cell, code_cell, "code")
+CheckForeOther("labeled link", link_cell, plain, "viewer")
+CheckBack("labeled link", link_cell)
+// The autolink URL cell is recolored by the viewer's own link highlighting, not by the palette,
+// so it can only be asserted against the body text around it: it differs from the body cell.
+var linkpara = ExpectString("https://example.com")
+CheckForeOther("autolink url", ReadCell(linkpara.X, linkpara.Y), plain, "viewer")
+CheckBack("autolink url", ReadCell(linkpara.X, linkpara.Y))
+// A bold span in a heading shows the strong color, not the heading color; a quote keeps its
+// quote color under strong and code spans (the spec's precedence).
+var hbold = ExpectString("bold head")
+CheckForeSame("bold span in h2", ReadCell(hbold.X, hbold.Y), strong_cell, "strong")
+CheckBack("bold span in h2", ReadCell(hbold.X, hbold.Y))
+var qbold = ExpectString("bold quote span")
+CheckForeSame("bold span in quote", ReadCell(qbold.X, qbold.Y), strong_cell, "strong")
+CheckBack("bold span in quote", ReadCell(qbold.X, qbold.Y))
+var qcode = ExpectString("quote code span")
+CheckForeSame("code span in quote", ReadCell(qcode.X, qcode.Y), code_cell, "code")
+CheckBack("code span in quote", ReadCell(qcode.X, qcode.Y))
+var quote2 = ExpectString("block quote line")
+CheckForeSame("quote text", ReadCell(quote2.X + 2, quote2.Y), quote_cell, "quote")
+CheckBack("quote text", ReadCell(quote2.X + 2, quote2.Y))
+// A setext-style `---` under a paragraph renders as an H2: the h2 color, and no rule row
+// under it (the paragraph text moves up into the heading row, the quote follows after a blank).
+var setext_h2 = ExpectString("setext-style break")
+var setext_h2_cell = ReadCell(setext_h2.X, setext_h2.Y)
+CheckForeSame("setext break as h2", setext_h2_cell, h2_cell, "h2")
+CheckForeSame("row after the setext break", ReadCell(0, setext_h2.Y + 1), quote_cell, "quote")
+CheckCellChar(0, setext_h2.Y + 1, "│")
+CheckBack("setext break as h2", setext_h2_cell)
+// The trailing thematic break shares the rule color of the table borders, and the quote text
+// differs from it: close the viewer and read the rule row on the last page.
 TypeEscape()
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0);
+
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+if (Exists(profile + "/.config/history/viewer.pos"))
+	Remove(profile + "/.config/history/viewer.pos")
+TypeDown(2)
+TypeFKey(3)
+ExpectString("left/sample.md")
+TypeEnd()
+var rule_row = ExpectString("────────────────────────────────────────────────────────────────────────────────")
+var rule_cell = ReadCell(rule_row.X, rule_row.Y)
+CheckForeSame("thematic break", rule_cell, border_cell, "rule")
+CheckForeOther("quote vs rule", quote_cell, rule_cell, "rule")
+CheckBack("thematic break", rule_cell)
+TypeEscape()
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0);
 
 // Scrolling by line index on long.md: several screens of rendered lines, so each
-// step lands on text that is not on the screen before it.
-TypeUp()
+// step lands on text that is not on the screen before it. The position cache removal makes
+// the panel the start screen again; the cursor sits on "/..", long.md is one row down.
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+if (Exists(profile + "/.config/history/viewer.pos"))
+	Remove(profile + "/.config/history/viewer.pos")
+ExpectString("sample.md")
+TypeDown()
 TypeFKey(3)
 ExpectString("left/long.md")
 ExpectString("Long Start")
@@ -536,6 +647,183 @@ CheckRowOf("html block after the list and its blank row", r_html4, r_item6.Y + 2
 CheckBlankRow("blank row between the list and the html block", r_item6.Y + 1);
 
 
+TypeEscape()
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0);
+
+// --- T4: --norgb and the settings/markdown-colors.ini overrides, each in a fresh far2l. ---
+// Every restart below reopens the first page of sample.md; the first screen (h1, strong,
+// code fence, body) is all these cases need.
+
+// --norgb: the truecolor palette must not reach the screen; every role falls back to its
+// readable 16-color index (IsForeTC false, a non-black Fore). A reused profile shows no
+// help screen, so the start waits for the panels.
+StartAppWithSize(["--tty", "--nodetect", "--norgb", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+if (Exists(profile + "/.config/history/viewer.pos"))
+	Remove(profile + "/.config/history/viewer.pos")
+TypeDown(2)
+TypeFKey(3)
+ExpectString("left/sample.md")
+var norgb_heading = ExpectString("Heading One")
+var norgb_h3 = ExpectString("Heading Three")
+var norgb_strong = ExpectString("strong")
+var norgb_code = ExpectString("Code Fence Body")
+// The exact 4-bit index of each spec fallback: F_YELLOW 14, F_LIGHTRED 12, F_LIGHTGRAY 7,
+// F_WHITE 15, F_LIGHTGREEN 10, F_LIGHTMAGENTA 13, F_CYAN 3. A wrong index fails here.
+function CheckNorgb(name, cell, expected) {
+	if (cell.IsForeTC) {
+		Log(name + ": IsForeTC is true, foreTC " + cell.ForeTC)
+		Panic(name + " still shows a 24-bit color under --norgb")
+	}
+	if (cell.Fore != expected) {
+		Log(name + ": fore " + cell.Fore + ", expected " + expected)
+		Panic(name + " shows the wrong 16-color fallback")
+	}
+}
+// The palette-driven roles must show their readable 16-color fallback; the plain body text
+// keeps the viewer's own COL_VIEWERTEXT truecolor, which the palette module does not control.
+CheckNorgb("norgb h1", ReadCell(norgb_heading.X, norgb_heading.Y), 14)
+CheckNorgb("norgb h3", ReadCell(norgb_h3.X, norgb_h3.Y), 7)
+CheckNorgb("norgb strong", ReadCell(norgb_strong.X, norgb_strong.Y), 15)
+CheckNorgb("norgb code", ReadCell(norgb_code.X, norgb_code.Y), 13)
+// The H2, link and quote cells sit on the last page; the thematic break is the last row.
+TypeEnd()
+var norgb_h2 = ExpectString("Heading Two")
+CheckNorgb("norgb h2", ReadCell(norgb_h2.X, norgb_h2.Y), 12)
+var norgb_link = ExpectString("labeled link")
+CheckNorgb("norgb link", ReadCell(norgb_link.X, norgb_link.Y), 10)
+var norgb_quote = ExpectString("block quote line")
+CheckNorgb("norgb quote", ReadCell(norgb_quote.X + 2, norgb_quote.Y), 3)
+var norgb_rule = ExpectString("────────────────────────────────────────────────────────────────────────────────")
+// The rule takes the spec's 16-color fallback F_CYAN (3), the same index as quote.
+CheckNorgb("norgb rule", ReadCell(norgb_rule.X, norgb_rule.Y), 3)
+TypeEscape()
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0);
+
+// heading1=foreground:#FF8000: the h1 cell must show the override, the other roles keep their
+// RGB defaults (strong stays white). The value has unequal R and B, so a swap fails the check.
+var config = profile + "/.config"
+SaveTextFile(config + "/settings/markdown-colors.ini", ["[markdown]", "heading1=foreground:#FF8000"])
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+if (Exists(profile + "/.config/history/viewer.pos"))
+	Remove(profile + "/.config/history/viewer.pos")
+TypeDown(2)
+TypeFKey(3)
+ExpectString("left/sample.md")
+var ovr_heading = ExpectString("Heading One")
+var ovr_strong = ExpectString("strong")
+var ovr_heading_cell = ReadCell(ovr_heading.X, ovr_heading.Y)
+var ovr_strong_cell = ReadCell(ovr_strong.X, ovr_strong.Y)
+if (ovr_heading_cell.ForeTC != 0x0080ff) {
+	Log("h1 foreTC " + ovr_heading_cell.ForeTC.toString(16))
+	Panic("the heading1 override did not reach the h1 cell")
+}
+CheckForeOther("overridden h1", ovr_heading_cell, ovr_strong_cell, "strong")
+TypeEscape()
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0);
+
+// link=@Help.Topic: a palette entry resolves at draw time. If the override were dropped, the
+// cell would show the default link color, so it is compared with the first run's link cell.
+SaveTextFile(config + "/settings/markdown-colors.ini", ["[markdown]", "link=@Help.Topic"])
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+if (Exists(profile + "/.config/history/viewer.pos"))
+	Remove(profile + "/.config/history/viewer.pos")
+TypeDown(2)
+TypeFKey(3)
+ExpectString("left/sample.md")
+// The link paragraph is below the fold on the first screen: page down to it.
+TypePageDown()
+var ovr_link = ExpectString("labeled link")
+var ovr_link_cell = ReadCell(ovr_link.X, ovr_link.Y)
+Log("link override foreTC " + ovr_link_cell.ForeTC.toString(16) + " fore " + ovr_link_cell.Fore + " isTC " + ovr_link_cell.IsForeTC)
+var ovr_body = ReadCell(70, ovr_link.Y)
+// Compared with the default labeled link read in the first run: if the override is dropped,
+// the cell shows the default link color and this fails. The exact @Help.Topic color follows
+// the theme and is not pinned; it can equal the body fore, so that pair is not asserted.
+CheckForeOther("link override vs default link", ovr_link_cell, link_cell, "default link")
+// An ignored @Name would fall back to the body fore: this pair catches it.
+CheckForeOther("link override vs body", ovr_link_cell, ovr_body, "viewer")
+TypeEscape()
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0);
+
+// Hostile ini: unknown key, bad value, a very long value line. The viewer opens with defaults
+// for the bad entries; the h1 fore must equal its default and the code fence must too.
+SaveTextFile(config + "/settings/markdown-colors.ini", [
+	"[markdown]",
+	"unknown=foreground:#123456",
+	"heading1=not-a-color",
+	"code=" + new Array(40).join("foreground:#abcdef "),
+])
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+if (Exists(profile + "/.config/history/viewer.pos"))
+	Remove(profile + "/.config/history/viewer.pos")
+TypeDown(2)
+TypeFKey(3)
+ExpectString("left/sample.md")
+var bad_heading = ExpectString("Heading One")
+var bad_code = ExpectString("Code Fence Body")
+var bad_heading_cell = ReadCell(bad_heading.X, bad_heading.Y)
+CheckForeSame("hostile ini h1", bad_heading_cell, heading_cell, "default h1")
+CheckForeSame("hostile ini code", ReadCell(bad_code.X, bad_code.Y), code_cell, "default code")
+TypeEscape()
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0);
+
+// An empty ini file: all defaults again.
+SaveTextFile(config + "/settings/markdown-colors.ini", [])
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+if (Exists(profile + "/.config/history/viewer.pos"))
+	Remove(profile + "/.config/history/viewer.pos")
+TypeDown(2)
+TypeFKey(3)
+ExpectString("left/sample.md")
+var empty_heading = ExpectString("Heading One")
+CheckForeSame("empty ini h1", ReadCell(empty_heading.X, empty_heading.Y), heading_cell, "default h1")
+TypeEscape()
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0);
+
+// A light viewer background: the white and yellow RGB defaults fail the 3:1 contrast rule, so
+// the all-or-none rule sends every role to today's look. The h1 and h2 cells must then differ
+// from their RGB defaults (#FFFF5F and #FFAF5F, read as 5fffff and 5fafff): a per-role or missing verdict fails here.
+SaveTextFile(config + "/settings/farcolors.ini", [
+	"[farcolors]",
+	"Viewer.Text=background:#FFFFFF foreground:#000000, B_WHITE | F_BLACK",
+])
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+if (Exists(profile + "/.config/history/viewer.pos"))
+	Remove(profile + "/.config/history/viewer.pos")
+TypeDown(2)
+TypeFKey(3)
+ExpectString("left/sample.md")
+var light_h1 = ExpectString("Heading One")
+var light_h1_cell = ReadCell(light_h1.X, light_h1.Y)
+if (light_h1_cell.ForeTC == 0x5fffff) {
+	Log("light h1 foreTC " + light_h1_cell.ForeTC.toString(16))
+	Panic("light background: h1 kept its RGB default, the contrast rule did not fire")
+}
+TypeEnd()
+var light_h2 = ExpectString("Heading Two")
+var light_h2_cell = ReadCell(light_h2.X, light_h2.Y)
+if (light_h2_cell.ForeTC == 0x5fafff) {
+	Log("light h2 foreTC " + light_h2_cell.ForeTC.toString(16))
+	Panic("light background: h2 kept its RGB default, the contrast rule did not fire")
+}
 TypeEscape()
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
