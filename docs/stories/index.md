@@ -18,12 +18,9 @@ description: Index of the story records with their file status, the real merge s
 
 The proof of concept `mermaid-image-poc` (status `approved`) is not in this folder. Its records are only on branch `markdown-preview/image-poc` and are not merged. See the research note on the image PoC.
 
-## Moves that broke paths
+## The move to `docs/stories/`
 
-The folders moved from `stories/` to `docs/stories/`. The `check.sh` files are fixed. These paths in the story text are still old:
-
-- The text `sh stories/<name>/check.sh` in the gate, spec, plan and close-out files of the same three stories, and in `markdown-preview-fixes/plan.md` and `markdown-preview-reading/plan.md`.
-- The line `Owner-checked paths: stories/*/story.md` in four `story.md` files and three plans. The pattern now needs `docs/stories/*/story.md`.
+The folders moved from `stories/` to `docs/stories/`. The `check.sh` files and the paths in the story text are fixed.
 
 ## Open owner items
 

@@ -61,4 +61,4 @@ F3 on a `.md` or `.markdown` file opens the rendered Markdown view when the new 
 - Final review 2: Ready for close-out, 0 Critical, 0 Important, 6 Minor (parked in `closeout.md`).
 
 ### Run it
-Build and run `sh stories/markdown-default-on/check.sh` (tests 0007, 0008, 0009). By hand: press F3 on a `.md` file (rendered), on a `.txt` file (plain), press Shift-F4 on a `.md` file, close and reopen (plain stays). Turn off "Markdown" in Options, Viewer settings: unchanged `.md` files open plain. A `.md` file you read in plain before this change now opens in Markdown; press Shift-F4 once to keep plain.
+Build and run `sh docs/stories/markdown-default-on/check.sh` (tests 0007, 0008, 0009). By hand: press F3 on a `.md` file (rendered), on a `.txt` file (plain), press Shift-F4 on a `.md` file, close and reopen (plain stays). Turn off "Markdown" in Options, Viewer settings: unchanged `.md` files open plain. A `.md` file you read in plain before this change now opens in Markdown; press Shift-F4 once to keep plain.

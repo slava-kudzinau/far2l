@@ -60,4 +60,4 @@ Package 1.1.3 does not throw on a dangling edge (`A -->`), so the broken-source 
 The final review found the `A-->B` defect, fixed in T4. Task reviews found only Minor items (see closeout.md). The T4 review confirmed the pre-pass leaves labels unchanged.
 
 ### Run it
-`sh stories/markdown-ascii-diagrams/check.sh` (golden, driver, far2l build in the ascii build dir, smoke test 0007). Then open a Markdown file with a flowchart in F3, Shift-F4.
+`sh docs/stories/markdown-ascii-diagrams/check.sh` (golden, driver, far2l build in the ascii build dir, smoke test 0007). Then open a Markdown file with a flowchart in F3, Shift-F4.

@@ -1,6 +1,6 @@
 # Close-out draft: markdown-ascii-diagrams
 
-Commits: b9c8a92f5 (T1 bundle and goldens), fab0b73cb (T2 AsciiMermaid), eb4b3c287 (T3 viewer, old path removed), 65acd2903 (T4 unspaced-edge pre-pass), plus a docs commit (spec rows 12 and 24, plan T4). Check: `sh stories/markdown-ascii-diagrams/check.sh` exit 0 (golden, driver, far2l build, smoke 0007).
+Commits: b9c8a92f5 (T1 bundle and goldens), fab0b73cb (T2 AsciiMermaid), eb4b3c287 (T3 viewer, old path removed), 65acd2903 (T4 unspaced-edge pre-pass), plus a docs commit (spec rows 12 and 24, plan T4). Check: `sh docs/stories/markdown-ascii-diagrams/check.sh` exit 0 (golden, driver, far2l build, smoke 0007).
 
 ## Rulings
 

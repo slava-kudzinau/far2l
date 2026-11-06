@@ -111,6 +111,7 @@ Before you open files, get a list of all docs: `grep -r '^description:' docs --i
 - Do story work with the `fde-delivery:deliver-story` skill. Story folders go in `docs/stories/{story}/`.
 - Name each new branch `{type}/{slug}`. The type is `feat`, `fix`, `refactor`, `test`, `doc` or `chore`. A story branch is `feat/{story}` or `fix/{story}`. The old `markdown-preview/*` branches keep their names.
 - When stories run in parallel, each story has a worktree in `.worktrees/{story}`. Pull requests go into `next/2.9.1-ovr.1`.
+- Always pass `--repo slava-kudzinau/far2l` to `gh`. Without it, `gh` uses `elfmz/far2l` in this checkout.
 - Do not commit, push or merge if the owner did not ask. Do not push to `master`. Do not send a pull request to `upstream` if the owner did not ask.
 - Do not install from the network if the owner did not ask.
 - Do not put secrets, client data or personal paths in the repo.

@@ -36,7 +36,7 @@ The bundle defines one global function `renderAscii(src)`. It returns a string. 
 
 ## Done
 
-`sh stories/markdown-ascii-diagrams/check.sh` exits 0. It builds the bundle test (Node, golden files in `testing/markdown/golden/`), builds far2l and runs smoke test 0007.
+`sh docs/stories/markdown-ascii-diagrams/check.sh` exits 0. It builds the bundle test (Node, golden files in `testing/markdown/golden/`), builds far2l and runs smoke test 0007.
 
 ## Out of scope
 

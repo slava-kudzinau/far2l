@@ -23,5 +23,5 @@ The terminal Markdown view (Shift-F4 in F3) is good for quick reading, but it ca
 - Branch `markdown-preview/browser-view`, worktree `.worktrees/markdown-browser-view`, stacked on `markdown-preview/reading` (unmerged).
 - Budget/hard stop: S $8/$10.
 - Owner rules: no PR, no push until the owner says so. Commit trailer: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
-- Owner-checked paths: stories/*/story.md.
+- Owner-checked paths: docs/stories/*/story.md.
 - started: 2026-11-05T22:55:00Z
