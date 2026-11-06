@@ -25,7 +25,7 @@ Build these stories in this order. Each one changes `MarkdownRender.cpp` and the
 
 | Story | Status | Size | Outcome | Depends on | Branch |
 |---|---|---|---|---|---|
-| [markdown-palette](markdown-palette/story.md) | in-review | M | A color for each Markdown element, from a fork table that the user can override by value or by palette entry name. | markdown-compact-layout | `feat/markdown-palette` |
+| [markdown-palette](markdown-palette/story.md) | done | M | A color for each Markdown element, from a fork table that the user can override by value or by palette entry name. | markdown-compact-layout | `feat/markdown-palette` |
 | [markdown-code-highlight](markdown-code-highlight/story.md) | planned | M | Syntax colors in fenced code, with tokens from the Colorer plugin through one small export. | markdown-palette | `feat/markdown-code-highlight` |
 | [markdown-code-tint](markdown-code-tint/story.md) | planned | S | A full-width background tint on code blocks. | markdown-palette | `feat/markdown-code-tint` |
 
