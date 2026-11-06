@@ -181,7 +181,10 @@ public:
 		CollectCtx ctx{&out};
 		const int rc = m_tokenize(wide_lang.c_str(), pointers.data(),
 			static_cast<int>(pointers.size()), Collect, &ctx, budget_ms);
-		if (rc < 0) { // -1 no editorSet, -2 unknown language, -3 a Colorer exception
+		if (rc == -2) { // unknown language: this fence keeps the plain code role
+			return true;
+		}
+		if (rc < 0) { // -1 no editorSet, -3 a Colorer exception
 			m_broken = true;
 			return false;
 		}
