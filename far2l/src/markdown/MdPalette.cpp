@@ -25,6 +25,14 @@
 
 namespace {
 
+// A truecolor foreground of a color written as 0xRRGGBB.  A far attribute holds its 24-bit color
+// as 0xBBGGRR (COMPOSE_RGB in VT256ColorTable.h), so the red and blue bytes change place here.
+constexpr uint64_t TrueForeColor(uint32_t rgb)
+{
+	const uint64_t bgr = ((rgb & 0xff) << 16) | (rgb & 0xff00) | ((rgb >> 16) & 0xff);
+	return (bgr << 16) | FOREGROUND_TRUECOLOR;
+}
+
 // The user ini: read-only, one key per role in the [markdown] section.
 const char MD_COLORS_INI[] = "settings/markdown-colors.ini";
 const char MD_COLORS_SECTION[] = "markdown";
@@ -35,24 +43,22 @@ const char MD_COLORS_SECTION[] = "markdown";
 constexpr uint64_t kBackBits = 0xf0 | BACKGROUND_TRUECOLOR | (uint64_t(0xffffff) << 40);
 
 // The RGB defaults and 16-color fallbacks of the spec table (Roles), in MdRole order from
-// MD_ROLE_H1 up.  `index256` is the 256-color index the RGB value carries; body and art never
-// take an RGB value and have no row here.
+// MD_ROLE_H1 up.  body and art never take an RGB value and have no row here.
 struct RoleDefault
 {
-	uint16_t index256;   // the 256-color index carried in the truecolor real color
-	uint32_t rgb;        // 0xrrggbb
-	uint8_t  fallback16; // the 4-bit F_* fallback of the spec table
+	uint32_t rgb;        // the spec value, written as 0xRRGGBB
+	uint64_t fallback16; // the 4-bit foreground: the color without RGB, and the index under RGB
 };
 
 constexpr std::array<RoleDefault, MD_ROLE_ART - 1> kRoleDefaults {{
-	{227, 0xffff5f, F_YELLOW},        // h1
-	{215, 0xffaf5f, F_LIGHTRED},      // h2
-	{111, 0x87afff, F_LIGHTGRAY},     // h3
-	{231, 0xffffff, F_WHITE},         // strong
-	{120, 0x87ff87, F_LIGHTGREEN},    // link
-	{213, 0xff87ff, F_LIGHTMAGENTA},  // code
-	{146, 0xafafd7, F_CYAN},          // quote
-	{103, 0x8787af, F_CYAN},          // rule
+	{0xffff5f, F_YELLOW},        // h1
+	{0xffaf5f, F_LIGHTRED},      // h2
+	{0x87afff, F_LIGHTGRAY},     // h3
+	{0xffffff, F_WHITE},         // strong
+	{0x87ff87, F_LIGHTGREEN},    // link
+	{0xff87ff, F_LIGHTMAGENTA},  // code
+	{0xafafd7, F_CYAN},          // quote
+	{0x8787af, F_CYAN},          // rule
 }};
 
 // The user file key of each role, in MdRole order.
@@ -170,8 +176,7 @@ RoleOverride ParseOverrideValue(const std::string &value)
 		if (rgb < 0 || consumed != body.size() - 1)
 			return out;
 		out.kind = RoleOverride::LITERAL;
-		// A truecolor foreground: the RGB in bits 16..39, the flag set, no background bits.
-		out.color = ((uint64_t)rgb << 16) | FOREGROUND_TRUECOLOR;
+		out.color = TrueForeColor((uint32_t)rgb);
 		return out;
 	}
 
@@ -257,11 +262,11 @@ const PaletteOverrides &ReadOverrides()
 	return s_cached;
 }
 
-// The RGB default of a role as a truecolor real color: the spec RGB in the foreground bits, its
-// 256-color index in the low byte, so a terminal that ignores RGB shows the index.
+// The RGB default of a role as a truecolor real color, with the 16-color index in the low bits,
+// so a terminal that ignores RGB shows the index.
 uint64_t RgbRealColor(const RoleDefault &def)
 {
-	return ((uint64_t)def.rgb << 16) | FOREGROUND_TRUECOLOR | def.index256;
+	return TrueForeColor(def.rgb) | def.fallback16;
 }
 
 // The verdict of the contrast rule for one batch: all or none at 3.0.  All eight RGB defaults

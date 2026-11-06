@@ -73,6 +73,13 @@ CheckBack("heading", ReadCell(heading.X, heading.Y))
 // Headings take their own role colors, not the body foreground.
 var heading_cell = ReadCell(heading.X, heading.Y)
 CheckForeOther("heading", heading_cell, plain, "viewer")
+// ForeTC holds a color as 0xBBGGRR (COMPOSE_RGB), so #FFFF5F reads 0x5fffff. The channels are not
+// equal here on purpose: a swapped R and B draws h1 pale cyan, close to the body text. The low
+// nibble is the 16-color index that a terminal without RGB shows, F_YELLOW for h1.
+if (heading_cell.ForeTC != 0x5fffff || heading_cell.Fore != 14) {
+	Log("h1 foreTC " + heading_cell.ForeTC.toString(16) + " fore " + heading_cell.Fore)
+	Panic("h1 is not #FFFF5F with the F_YELLOW index")
+}
 CheckBack("blank viewer cell", ReadCell(60, heading.Y))
 // The strong span in the first paragraph takes its own color, distinct from heading and body.
 var strong_text = ExpectString("strong")
@@ -698,10 +705,10 @@ ExpectString("Do you want to quit FAR?")
 TypeEnter()
 ExpectAppExit(0);
 
-// heading1=foreground:#00FF00: the h1 cell must show the override, the other roles keep their
-// RGB defaults (strong stays white, not green).
+// heading1=foreground:#FF8000: the h1 cell must show the override, the other roles keep their
+// RGB defaults (strong stays white). The value has unequal R and B, so a swap fails the check.
 var config = profile + "/.config"
-SaveTextFile(config + "/settings/markdown-colors.ini", ["[markdown]", "heading1=foreground:#00FF00"])
+SaveTextFile(config + "/settings/markdown-colors.ini", ["[markdown]", "heading1=foreground:#FF8000"])
 StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
 if (Exists(profile + "/.config/history/viewer.pos"))
 	Remove(profile + "/.config/history/viewer.pos")
@@ -712,8 +719,8 @@ var ovr_heading = ExpectString("Heading One")
 var ovr_strong = ExpectString("strong")
 var ovr_heading_cell = ReadCell(ovr_heading.X, ovr_heading.Y)
 var ovr_strong_cell = ReadCell(ovr_strong.X, ovr_strong.Y)
-if (ovr_heading_cell.ForeTC != 0x00ff00) {
-	Log("h1 foreTC " + ovr_heading_cell.ForeTC)
+if (ovr_heading_cell.ForeTC != 0x0080ff) {
+	Log("h1 foreTC " + ovr_heading_cell.ForeTC.toString(16))
 	Panic("the heading1 override did not reach the h1 cell")
 }
 CheckForeOther("overridden h1", ovr_heading_cell, ovr_strong_cell, "strong")
@@ -793,7 +800,7 @@ ExpectAppExit(0);
 
 // A light viewer background: the white and yellow RGB defaults fail the 3:1 contrast rule, so
 // the all-or-none rule sends every role to today's look. The h1 and h2 cells must then differ
-// from their RGB defaults (ffff5f and ffaf5f): a per-role or missing verdict fails here.
+// from their RGB defaults (#FFFF5F and #FFAF5F, read as 5fffff and 5fafff): a per-role or missing verdict fails here.
 SaveTextFile(config + "/settings/farcolors.ini", [
 	"[farcolors]",
 	"Viewer.Text=background:#FFFFFF foreground:#000000, B_WHITE | F_BLACK",
@@ -806,14 +813,14 @@ TypeFKey(3)
 ExpectString("left/sample.md")
 var light_h1 = ExpectString("Heading One")
 var light_h1_cell = ReadCell(light_h1.X, light_h1.Y)
-if (light_h1_cell.ForeTC == 0xffff5f) {
+if (light_h1_cell.ForeTC == 0x5fffff) {
 	Log("light h1 foreTC " + light_h1_cell.ForeTC.toString(16))
 	Panic("light background: h1 kept its RGB default, the contrast rule did not fire")
 }
 TypeEnd()
 var light_h2 = ExpectString("Heading Two")
 var light_h2_cell = ReadCell(light_h2.X, light_h2.Y)
-if (light_h2_cell.ForeTC == 0xffaf5f) {
+if (light_h2_cell.ForeTC == 0x5fafff) {
 	Log("light h2 foreTC " + light_h2_cell.ForeTC.toString(16))
 	Panic("light background: h2 kept its RGB default, the contrast rule did not fire")
 }

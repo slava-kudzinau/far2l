@@ -13,21 +13,27 @@ Manual checks: `manual-checks.md`, two items, results pending from the owner.
 | T3 palette module and resolve | c8d162cc2 + 616bc7c82 + 131105939 | `MdPalette.hpp/.cpp`, draw-time resolve, ini overrides, contrast, mtime cache |
 | T4 smoke coverage | be44a2bcc + 48cb801c7 | 0007 assertions and fixtures, `--norgb`, override and hostile-ini cases |
 
-Verified role colors (ForeTC, RGB path):
+Verified role colors (RGB path). `ForeTC` holds a color as `0xBBGGRR`, so it reads in reverse byte order:
 
-| Role | ForeTC |
-|---|---|
-| body | ffff00 |
-| h1 | ffff5f |
-| h2 | ffaf5f |
-| h3-h6 | 87afff |
-| strong | ffffff |
-| labeled link | 87ff87 |
-| code | ff87ff |
-| quote | afafd7 |
-| rule/border | 8787af |
-| art | c0c0c0 |
+| Role | Drawn color | ForeTC |
+|---|---|---|
+| body | `#00FFFF` | ffff00 |
+| h1 | `#FFFF5F` | 5fffff |
+| h2 | `#FFAF5F` | 5fafff |
+| h3-h6 | `#87AFFF` | ffaf87 |
+| strong | `#FFFFFF` | ffffff |
+| labeled link | `#87FF87` | 87ff87 |
+| code | `#FF87FF` | ff87ff |
+| quote | `#AFAFD7` | d7afaf |
+| rule/border | `#8787AF` | af8787 |
+| art | `#C0C0C0` | c0c0c0 |
 Layout, text and row count are unchanged; the check includes the golden and ascii-driver runs.
+
+## Defect found by the owner after the build
+
+H1 showed as pale cyan, near the body color, H2 as blue and H3 as peach. `MdPalette.cpp` put `0xRRGGBB` values into attribute bits that hold `0xBBGGRR`. The first version of this table recorded the swapped values as correct, and the override test used `#00FF00`, which reads the same when swapped. The low attribute bits also held the 256-color index in place of the 16-color index, so a terminal without RGB saw a wrong color (cyan for h1).
+
+The fix: `TrueForeColor` swaps the bytes for the defaults and for `#rrggbb` user values, and the low bits hold `fallback16`. The "256 index" column of `spec.md` and `story.md` no longer has a use in the code. `TTYOutput` derives the 256-color index from the RGB value. The 0007 test now asserts h1 `ForeTC` and `Fore`, and an override with unequal red and blue. It failed before the fix.
 
 ## Decisions changed during the build
 
