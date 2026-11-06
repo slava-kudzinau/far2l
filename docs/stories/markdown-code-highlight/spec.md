@@ -103,7 +103,7 @@ A token run never parses again on a resize. `MarkdownDoc::Render` keeps a fence 
 
 ## Done
 
-`BUILD=../far2l.markdown-code-highlight.build` "The check" of `AGENTS.md`, with `TESTS="0007-view-file-markdown 0008-view-md-default 0009-view-md-setting-off 000c-view-md-highlight"`, plus `sh testing/markdown/ascii-golden.sh`, `sh testing/markdown/ascii-driver.sh` and `sh testing/markdown/highlight-driver.sh`, all exit 0. Every table row above is covered by a case in `testing/tests/000c-view-md-highlight/` or in `testing/markdown/highlight-driver.cpp`. The full build (`cmake --build ../far2l.markdown-code-highlight.build -j8`) builds the `colorer` target and installs the plugin module next to the binary, where the smoke run finds it. The new test reads cell attributes through `screen attr <row> <col>`, the command this story adds to the smoke protocol.
+`BUILD=../far2l.markdown-code-highlight.build` "The check" of `AGENTS.md`, with `TESTS="0007-view-file-markdown 0008-view-md-default 0009-view-md-setting-off 000c-view-md-highlight"`, plus `sh testing/markdown/ascii-golden.sh`, `sh testing/markdown/ascii-driver.sh` and `sh testing/markdown/highlight-driver.sh`, all exit 0. Every table row above is covered by a case in `testing/tests/000c-view-md-highlight/test.js` or in `testing/markdown/highlight-driver.cpp`. The full build (`cmake --build ../far2l.markdown-code-highlight.build -j8`) builds the `colorer` target and installs the plugin module next to the binary, where the smoke run finds it. The new test reads cells with `ReadCell(x, y)` of the smoke harness, the way `0007-view-file-markdown` does: `Fore` gives the 16-color index, and `IsForeTC` with `ForeTC` gives the 24-bit color.
 
 ## Out of scope
 

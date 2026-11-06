@@ -7,7 +7,7 @@ _For the owner, who reads this instead of the code. One page per section. The mo
 ### What it builds
 
 A code block in the F3 Markdown view gets the same syntax colors as the F4 editor.
-Both take their tokens from the Colorer plugin.
+Both take their tokens from Colorer, the syntax-coloring plugin that ships with far2l and that F4 already uses. Its `ParserFactory` reads the language scheme files and returns the token spans of a line.
 
 ### Parts it touches
 
@@ -42,7 +42,7 @@ flowchart LR
 | `dlopen` with `RTLD_NOLOAD` on the loaded plugin module, then `dlsym` | `CallPlugin` with a custom `OpenFrom` and a request struct; or a one-line change to `plclass.hpp` | One exported function, no change to `far2l/src/plug/`, and the plugin stays the owner of the parser factory. |
 | Four roles, all on `COL_HELPHIGHLIGHTTEXT` when the contrast fails | A palette entry per role | ADR-004 already gives code that entry, so a 16-color theme reads the fence as code with a little structure. |
 | A new smoke test that loads the colorer plugin, plus a C++ driver test with a fake source | Only the smoke test, or only the driver | The driver checks the role mapping and the limits with no plugin; the smoke test proves the real plugin path. |
-| Prove the 24-bit path in the driver test, plus one hand check in Ghostty | Force true color in the smoke harness | The smoke run reports a 256-color palette, so RGB needs a probe of the color resolver, not a screen read. |
+| Prove both color paths in the new smoke test, with `ReadCell` | A driver-only check plus a hand check in a terminal | The harness already reads a cell's 24-bit color and its 16-color index, and `0007-view-file-markdown` uses both, so the RGB path needs no new probe. |
 | Only fenced blocks, with a language name | Indented code and HTML blocks too | They carry no language name, so Colorer has nothing to pick. |
 
 ### How you'll see it working
