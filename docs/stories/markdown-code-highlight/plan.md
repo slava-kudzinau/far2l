@@ -122,3 +122,20 @@ New `testing/tests/000c-view-md-highlight/`, with a `test.js`, an `initdir` and 
 **Role:** implementer — review final
 
 New `docs/architecture/decisions/adr-008-colorer-plugin-export.md` — 008 is the next free number, and the slug is `colorer-plugin-export`, in the form of `adr-004-palette-roles.md`. Record the reasons (no new link to the Colorer library and to libxml2, one catalog copy, no hidden editor) and the rejected routes from `story.md` Notes (link to the core, hidden editor, helper process, HRC data with a new tokenizer), plus the fallback: no plugin gives the plain code role. Update `docs/architecture/features/markdown/markdown-viewer.spec.md` (fence colors), `markdown.data.md` (the four new roles, the token group, the four ini keys, the export as a data contract) and `markdown.invariants.md` (a token group is cached by the fence language and the hash of the fence text, so it survives a resize; the four limits with their values; a token group is in cells of the code run, so a horizontal scroll colors the right cells). `md4c` is the Markdown parser that the viewer already uses.
+
+## Rulings
+
+Main session, 2026-11-06, after the second fresh read. These refine the tasks; the plan text above stays.
+
+- R1 (T1): T1 creates `testing/markdown/highlight-driver.cpp`, `highlight-driver.sh`, and the one target line in `far2l/CMakeLists.txt`. The driver has one `main`, a table of `{name, fn}` cases, `--case <name>` to select one, and no `--case` to run all and return 1 on the first failure. It prints `ok <case>` and `FAILED <case>: <why>`. The fake token source lives in the driver. Copy the structure of `testing/markdown/ascii_driver.cpp` and `ascii-driver.sh`. T2, T3 and T4 add cases.
+- R2 (T1): the region handler emits every matching region in the order Colorer reports it. Nested regions stay nested. The printer paints in list order, so a later, inner span wins a shared cell. The emit needs no sorting.
+- R3 (T1): catch `colorer::Exception` and `std::exception`. Both return -3. Events emitted before the throw stay.
+- R4 (T1): the alias table starts with `c++` to `cpp`, `tsx` to `jsx`, and `zsh` to `sh`. The probe case also tests `js`, `python`, `bash` and `json`, and adds a table row for each name that `chooseFileType` cannot resolve by itself. The T1 report lists the rows it added.
+- R5 (T2): convert with WinPort `Wide2Str` and `Str2Wide`. The bridge takes the fence text as UTF-8 and returns spans in cell coordinates of the same string, so no unit conversion is needed.
+- R6 (T3): the FNV-1a hash runs over the cap-trimmed fence lines joined by `'\n'`, with no trailing newline. The language part of the key is the lower-cased, alias-mapped name.
+- R7 (T3): the render caches a fence that the export stopped at the deadline, with its partial tokens. The printer paints plain code past the last token. A later render reuses the cached group.
+- R8 (T3): the token cache has no eviction. `MarkdownDoc::Invalidate` clears `m_token_groups`, never the cache. A new document starts a new cache.
+- R9 (T3): a (language, FNV-1a) key collision reuses the cached group with no check, like the mermaid cache.
+- R10 (T3): the render trims a fence to 400 lines and 64 KB before it calls `Tokenize`. The export trims each line to 1000 wide characters.
+- R11 (T3): a mermaid fence is tokenized like any other fence. Its art rows are separate lines with the art role and carry no token group.
+- R12 (T5): the deeply nested block is a `json` fence of 64 lines of `{"a":` and then 64 closing lines of `}`.
