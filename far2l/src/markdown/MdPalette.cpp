@@ -277,18 +277,22 @@ bool RgbDefaultsPass()
 	return true;
 }
 
-// The contrast verdict, cached with the batch: the viewer background changes only with a theme
-// change, and an override or a re-render re-calls this path, so a stale verdict never survives
-// a redraw that matters.
+// The contrast verdict, cached against the viewer background it was computed for: the verdict
+// depends on COL_VIEWERTEXT, so it is recomputed when the background's real color differs from
+// the cached one — a theme change re-evaluates the rule instead of keeping a stale verdict.
 bool RgbDefaultsAllowed()
 {
 	static std::mutex s_mutex;
+	static uint64_t s_bg_real = 0;
 	static bool s_verdict = false;
 	static bool s_computed = false;
 
+	const uint64_t bg_real = FarColorToReal(COL_VIEWERTEXT);
+
 	std::lock_guard<std::mutex> lock(s_mutex);
-	if (!s_computed) {
+	if (!s_computed || s_bg_real != bg_real) {
 		s_verdict = RgbDefaultsPass();
+		s_bg_real = bg_real;
 		s_computed = true;
 	}
 	return s_verdict;
