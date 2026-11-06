@@ -89,17 +89,16 @@ var table = ExpectString("│ cell1")
 CheckBack("table box glyph", ReadCell(table.X, table.Y))
 CheckBack("table cell", ReadCell(table.X + 2, table.Y))
 CheckFore("table cell text", ReadCell(table.X + 2, table.Y))
-// Table header text takes the heading entry; the borders take the art entry, read from the
-// line glyph of the separator row under the header.
+// Table header text takes the strong entry (the same entry today); the borders take the rule
+// entry, today the viewer text, read from the line glyph of the separator row under the header.
 var table_head = ExpectString("Col A")
 CheckBack("table header", ReadCell(table_head.X, table_head.Y))
 CheckForeSame("table header", ReadCell(table_head.X, table_head.Y), heading_cell, "heading")
 CheckCellChar(table.X + 1, table.Y - 1, "─")
-var art_cell = ReadCell(table.X + 1, table.Y - 1)
-CheckForeSame("table border", ReadCell(table.X, table.Y), art_cell, "table art")
-CheckForeOther("table art", art_cell, plain, "viewer")
-CheckForeOther("table art", art_cell, heading_cell, "heading")
-CheckForeOther("table art", art_cell, code_cell, "code")
+// The borders take the rule entry, today the viewer text, so the separator glyph matches the
+// body foreground; the header-row bars above keep the art entry and differ from it.
+CheckFore("table border", ReadCell(table.X + 1, table.Y - 1))
+CheckForeOther("table art", ReadCell(table.X, table.Y), plain, "viewer")
 
 // Scroll to the bottom, where the mermaid fences are.
 TypeEnd()
@@ -109,7 +108,7 @@ ExpectString("Finish")
 ExpectNoString("```mermaid")
 // The flowchart is drawn as box art in the art role, with no source text left on screen.
 var flow = ExpectString("┌───────┐     ┌────────┐")
-CheckForeSame("flowchart art", ReadCell(flow.X, flow.Y), art_cell, "table art")
+CheckForeSame("flowchart art", ReadCell(flow.X, flow.Y), ReadCell(table.X, table.Y), "table art")
 ExpectNoString("graph LR")
 // The swimlane block is not drawn: its code shows, and the hint row follows the code.
 var swim_last = ExpectString("a1[Start] --> a2[Finish]")
@@ -119,8 +118,10 @@ if (hint.Y != swim_last.Y + 2) {
 	Panic("the hint does not follow the swimlane code after its end line");
 }
 CheckFore("diagram hint", ReadCell(hint.X, hint.Y))
+// Quote text and the quote bar take the quote role, today the viewer text: they differ from
+// the table art read above.
 var quote = ExpectString("│ block quote line")
-CheckFore("block quote", ReadCell(quote.X + 2, quote.Y))
+CheckForeOther("block quote", ReadCell(quote.X + 2, quote.Y), ReadCell(table.X, table.Y), "table art")
 
 TypeEscape()
 

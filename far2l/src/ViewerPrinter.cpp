@@ -118,9 +118,14 @@ uint64_t MarkdownRunColor(uint64_t role)
 	const uint64_t body = FarColorToReal(COL_VIEWERTEXT);
 	uint64_t entry = body;
 	switch (role) {
-		case MD_ROLE_HEADING: entry = FarColorToReal(COL_HELPTOPIC); break;
+		case MD_ROLE_H1:
+		case MD_ROLE_H2:
+		case MD_ROLE_H3:
+		case MD_ROLE_STRONG:
+		case MD_ROLE_LINK: entry = FarColorToReal(COL_HELPTOPIC); break;
 		case MD_ROLE_CODE: entry = FarColorToReal(COL_HELPHIGHLIGHTTEXT); break;
 		case MD_ROLE_ART: entry = FarColorToReal(COL_PANELHIGHLIGHTTEXT); break;
+		case MD_ROLE_RULE: entry = FarColorToReal(COL_VIEWERTEXT); break;
 		default: return body;
 	}
 	return (entry & ~kBackBits) | (body & kBackBits);

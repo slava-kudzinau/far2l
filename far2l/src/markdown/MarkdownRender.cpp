@@ -194,7 +194,7 @@ struct Builder {
     // --- line helpers ---------------------------------------------------
 
     // The lead of every row: the list indent (2 cells per list level), then the bar of each
-    // enclosing blockquote.
+    // enclosing blockquote.  Bars take the quote role; outside a quote the lead stays body.
     std::wstring row_lead() const
     {
         std::wstring lead(2 * list_stack.size(), L' ');
@@ -204,6 +204,8 @@ struct Builder {
         }
         return lead;
     }
+
+    uint64_t lead_role() const { return quote_depth > 0 ? (uint64_t)MD_ROLE_QUOTE : (uint64_t)MD_ROLE_BODY; }
 
     void begin_line()
     {
@@ -218,7 +220,7 @@ struct Builder {
             li_prefix_pending = false;
         }
         if (!lead.empty())
-            cur.push_back(MdRun{lead, MD_ROLE_BODY});
+            cur.push_back(MdRun{lead, lead_role()});
     }
 
     void set_line_pos(int64_t p)
@@ -227,14 +229,23 @@ struct Builder {
         cur_pos_set = true;
     }
 
-    // The palette role of source text read now: a code span, then heading, link and strong text.
+    // The palette role of source text read now: code, then link, strong and heading, the spec's
+    // precedence for inline runs.
     uint64_t text_role() const
     {
         if (span_code > 0)
             return MD_ROLE_CODE;
-        if (heading_level > 0 || span_link > 0 || span_strong > 0)
-            return MD_ROLE_HEADING;
-        return MD_ROLE_BODY;
+        if (span_link > 0)
+            return MD_ROLE_LINK;
+        if (span_strong > 0)
+            return MD_ROLE_STRONG;
+        if (heading_level == 1)
+            return MD_ROLE_H1;
+        if (heading_level == 2)
+            return MD_ROLE_H2;
+        if (heading_level > 0)
+            return MD_ROLE_H3;
+        return quote_depth > 0 ? MD_ROLE_QUOTE : MD_ROLE_BODY;
     }
 
     // `role` is the palette role of `text`; `off` is the file offset of `text` when it comes from the
@@ -303,7 +314,7 @@ struct Builder {
         blank.nFilePos = out.back().nFilePos;
         const std::wstring lead = row_lead();   // a blank inside a list or a quote keeps its lead
         if (!lead.empty())
-            blank.runs.push_back(MdRun{lead, MD_ROLE_BODY});
+            blank.runs.push_back(MdRun{lead, lead_role()});
         out.push_back(std::move(blank));
         spacer_row = out.size() - 1;
     }
@@ -409,7 +420,7 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             std::wstring hr;
             int n = std::max(1, b.width - (int)(2 * b.list_stack.size()));
             hr.append((size_t)n, BoxSymbols[BS_H1]);
-            b.append(hr, MD_ROLE_BODY);
+            b.append(hr, MD_ROLE_RULE);
             b.flush();
             b.close_block();
             break;
@@ -548,7 +559,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                             b.append(L" ", MD_ROLE_BODY);
                             if (c < row.size())
                                 for (const MdRun &r : row[c])
-                                    b.append(r.text, header ? MD_ROLE_HEADING : r.role);
+                                    b.append(r.text, header ? (r.role == MD_ROLE_BODY ? (uint64_t)MD_ROLE_STRONG : r.role) : r.role);
                             b.append(std::wstring(pad > 0 ? pad : 0, L' ') + L" ", MD_ROLE_BODY);
                             b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_ART);
                         }
@@ -556,10 +567,10 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                     };
                     auto render_sep = [&](wchar_t l, wchar_t mid, wchar_t r) {
                         b.begin_line();
-                        b.append(std::wstring(1, l), MD_ROLE_ART);
+                        b.append(std::wstring(1, l), MD_ROLE_RULE);
                         for (size_t c = 0; c < cols; ++c) {
-                            b.append(std::wstring((size_t)w[c] + 2, BoxSymbols[BS_H1]), MD_ROLE_ART);
-                            b.append(std::wstring(1, (c + 1 < cols) ? mid : r), MD_ROLE_ART);
+                            b.append(std::wstring((size_t)w[c] + 2, BoxSymbols[BS_H1]), MD_ROLE_RULE);
+                            b.append(std::wstring(1, (c + 1 < cols) ? mid : r), MD_ROLE_RULE);
                         }
                         b.flush();
                     };
