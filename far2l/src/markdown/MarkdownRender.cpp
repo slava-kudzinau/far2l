@@ -205,7 +205,10 @@ struct Builder {
         return lead;
     }
 
-    uint64_t lead_role() const { return quote_depth > 0 ? (uint64_t)MD_ROLE_QUOTE : (uint64_t)MD_ROLE_BODY; }
+    uint64_t lead_role() const
+    {
+        return static_cast<uint64_t>(quote_depth > 0 ? MD_ROLE_QUOTE : MD_ROLE_BODY);
+    }
 
     void begin_line()
     {
@@ -547,9 +550,16 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                         for (size_t c = 0; c < r.size(); ++c)
                             w[c] = std::max(w[c], (int)concat(r[c]).size());
                     // Rows take their own source offset; the rule under the header takes the line before it
-                    // (flush()).  The header row (the first) is drawn in the heading role; other cells keep
-                    // their roles.
+                    // (flush()).  Header text with no other span is drawn in the strong role; other cells
+                    // keep their roles.
                     auto render_row = [&](std::vector<std::vector<MdRun>> &row, int64_t pos, bool header) {
+                        // Header text keeps a code, link or strong span of its own; only plain header
+                        // text moves to the strong role.
+                        auto cell_role = [&](const MdRun &r) {
+                            if (!(header && r.role == MD_ROLE_BODY))
+                                return r.role;
+                            return static_cast<uint64_t>(MD_ROLE_STRONG);
+                        };
                         b.begin_line();
                         b.set_line_pos(pos);
                         b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_ART);
@@ -559,7 +569,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                             b.append(L" ", MD_ROLE_BODY);
                             if (c < row.size())
                                 for (const MdRun &r : row[c])
-                                    b.append(r.text, header ? (r.role == MD_ROLE_BODY ? (uint64_t)MD_ROLE_STRONG : r.role) : r.role);
+                                    b.append(r.text, cell_role(r));
                             b.append(std::wstring(pad > 0 ? pad : 0, L' ') + L" ", MD_ROLE_BODY);
                             b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_ART);
                         }
