@@ -1,6 +1,6 @@
 ---
 description: Give each Markdown element in the F3 view its own color, from a fork-owned table of defaults that the user can override by value or by palette entry name.
-status: in-progress
+status: in-review
 size: M
 risk: contract
 depends-on: markdown-compact-layout

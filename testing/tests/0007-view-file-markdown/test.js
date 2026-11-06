@@ -736,11 +736,14 @@ ExpectString("left/sample.md")
 TypePageDown()
 var ovr_link = ExpectString("labeled link")
 var ovr_link_cell = ReadCell(ovr_link.X, ovr_link.Y)
-Log("link override foreTC " + ovr_link_cell.ForeTC.toString(16) + " fore " + ovr_link_cell.Fore)
+Log("link override foreTC " + ovr_link_cell.ForeTC.toString(16) + " fore " + ovr_link_cell.Fore + " isTC " + ovr_link_cell.IsForeTC)
+var ovr_body = ReadCell(70, ovr_link.Y)
 // Compared with the default labeled link read in the first run: if the override is dropped,
 // the cell shows the default link color and this fails. The exact @Help.Topic color follows
 // the theme and is not pinned; it can equal the body fore, so that pair is not asserted.
 CheckForeOther("link override vs default link", ovr_link_cell, link_cell, "default link")
+// An ignored @Name would fall back to the body fore: this pair catches it.
+CheckForeOther("link override vs body", ovr_link_cell, ovr_body, "viewer")
 TypeEscape()
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
