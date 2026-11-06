@@ -4,6 +4,7 @@
 #include "interf.hpp"
 #include "colors.hpp"
 #include "farcolors.hpp"
+#include "markdown/MdPalette.hpp"
 
 static const wchar_t s_many_spaces[] = L"                                                                ";
 
@@ -110,25 +111,13 @@ namespace {
 // The part of a palette entry that sets the background: its index nibble, the flag and the 24-bit color.
 constexpr uint64_t kBackBits = 0xf0 | BACKGROUND_TRUECOLOR | (uint64_t(0xffffff) << 40);
 
-// The color of a markdown run, from its palette role.  Read when the row is drawn, so a theme change
-// shows on the next redraw.  The foreground comes from the role's entry; the background is always the
-// viewer text background.
+// The color of a markdown run, from its palette role.  A small dispatch: the palette module
+// resolves the role at draw time (so a theme change shows on the next redraw), this keeps the
+// background bits of the viewer text entry.
 uint64_t MarkdownRunColor(uint64_t role)
 {
 	const uint64_t body = FarColorToReal(COL_VIEWERTEXT);
-	uint64_t entry = body;
-	switch (role) {
-		case MD_ROLE_H1:
-		case MD_ROLE_H2:
-		case MD_ROLE_H3:
-		case MD_ROLE_STRONG:
-		case MD_ROLE_LINK: entry = FarColorToReal(COL_HELPTOPIC); break;
-		case MD_ROLE_CODE: entry = FarColorToReal(COL_HELPHIGHLIGHTTEXT); break;
-		case MD_ROLE_ART: entry = FarColorToReal(COL_PANELHIGHLIGHTTEXT); break;
-		case MD_ROLE_RULE: entry = FarColorToReal(COL_VIEWERTEXT); break;
-		default: return body;
-	}
-	return (entry & ~kBackBits) | (body & kBackBits);
+	return (MdRunColor(role) & ~kBackBits) | (body & kBackBits);
 }
 
 }

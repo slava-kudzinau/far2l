@@ -70,13 +70,20 @@ ExpectString("Code Fence Body")
 
 var heading = ExpectString("Heading One")
 CheckBack("heading", ReadCell(heading.X, heading.Y))
-// Headings take the heading palette entry, not the body foreground.
+// Headings take their own role colors, not the body foreground.
 var heading_cell = ReadCell(heading.X, heading.Y)
 CheckForeOther("heading", heading_cell, plain, "viewer")
 CheckBack("blank viewer cell", ReadCell(60, heading.Y))
-// A level-4 heading takes the heading entry too; the list comes on the row right under it.
+// The strong span in the first paragraph takes its own color, distinct from heading and body.
+var strong_text = ExpectString("strong")
+var strong_cell = ReadCell(strong_text.X, strong_text.Y)
+CheckForeOther("strong", strong_cell, plain, "viewer")
+CheckForeOther("strong", strong_cell, heading_cell, "heading")
+// A level-4 heading shares the h3 color (H3 to H6 are one role); the list comes on the row
+// right under it.
 var h4 = ExpectString("Heading Four")
-CheckForeSame("heading four", ReadCell(h4.X, h4.Y), heading_cell, "heading")
+var h3_cell = ReadCell(h4.X, h4.Y)
+CheckForeSame("heading four", ReadCell(h4.X, h4.Y), h3_cell, "h3")
 var bullet = ExpectString("bullet one")
 CheckRowOf("list right under the heading", bullet, h4.Y + 1)
 // Code takes its own palette entry, different from the heading and from the body.
@@ -89,16 +96,18 @@ var table = ExpectString("│ cell1")
 CheckBack("table box glyph", ReadCell(table.X, table.Y))
 CheckBack("table cell", ReadCell(table.X + 2, table.Y))
 CheckFore("table cell text", ReadCell(table.X + 2, table.Y))
-// Table header text takes the strong entry (the same entry today); the borders take the rule
-// entry, today the viewer text, read from the line glyph of the separator row under the header.
+// Table header text takes the strong color; the borders take the rule color, read from the line
+// glyph of the separator row under the header.
 var table_head = ExpectString("Col A")
 CheckBack("table header", ReadCell(table_head.X, table_head.Y))
-CheckForeSame("table header", ReadCell(table_head.X, table_head.Y), heading_cell, "heading")
+CheckForeSame("table header", ReadCell(table_head.X, table_head.Y), strong_cell, "strong")
 CheckCellChar(table.X + 1, table.Y - 1, "─")
-// The borders take the rule entry, today the viewer text, so the separator glyph matches the
-// body foreground; the header-row bars above keep the art entry and differ from it.
-CheckFore("table border", ReadCell(table.X + 1, table.Y - 1))
-CheckForeOther("table art", ReadCell(table.X, table.Y), plain, "viewer")
+// The borders take the rule color; the header-row bars above keep the art color and differ
+// from both the rule glyph and the body foreground.
+var border_cell = ReadCell(table.X + 1, table.Y - 1)
+CheckForeOther("table border", border_cell, strong_cell, "strong")
+CheckForeOther("table border", border_cell, plain, "viewer")
+CheckForeOther("table art", ReadCell(table.X, table.Y), border_cell, "table border")
 
 // Scroll to the bottom, where the mermaid fences are.
 TypeEnd()
