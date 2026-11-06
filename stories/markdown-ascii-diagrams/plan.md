@@ -53,3 +53,10 @@ Signature: `static bool Render(const std::string &src, std::vector<std::string> 
 **Done check:** `sh stories/markdown-ascii-diagrams/check.sh` exits 0 (golden test, driver test, far2l build in the build dir, smoke test 0007)
 **Role:** implementer — review task-reviewer
 In `MarkdownRender.cpp` replace the `MermaidEngine`/`SvgCanvas` block with `AsciiMermaid::Render`; build `MdLine` rows in role art from the returned lines (wide-character widths as the existing code does for code lines). On failure or unsupported type keep the fence text (code role) and add the hint line. Delete the old sources and the old driver, remove them from `far2l/CMakeLists.txt`, update the install rules so the bundle is installed and `mermaid.min.js` is not. Update test 0007: refresh `sample.md` expectations (flowchart shows box art; the `swimlane-beta` block shows the hint). Extend `check.sh` to build and run the smoke test (refresh `workdir` from `initdir` first; see `testing/far2l-smoke-run.sh`).
+
+## T4: Unspaced edge operators (added after the final review)
+
+**Depends on:** T3
+**Done check:** `sh testing/markdown/ascii-golden.sh` exits 0
+**Role:** implementer — review task-reviewer
+beautiful-mermaid 1.1.3 draws `A-->B` (no spaces) as one wrong box. In `far2l/bootstrap/mermaid-ascii/entry.js` add a conservative pre-pass, run only when the first word is `graph` or `flowchart`: add a space on each side of edge operators (`-->`, `---`, `-.->`, `-.-`, `==>`, `===`, and labelled forms such as `-- text -->`, `-->|label|`) when they sit between ids, only outside `[]`, `()`, `{}` and `""` label text; text already spaced stays unchanged. Rebuild the bundle with `build.sh`. Add goldens `flowchart-nospace.mmd` (`A-->B` chains, `A-.->B`, `A==>B`, `A-->|x|B`), `flowchart-spaced.mmd` (same graph spaced; its `.txt` must equal the no-space one) and `flowchart-label.mmd` (a label such as `A["x-->y"] --> B` stays unchanged). Generate the `.txt` files with `make-golden.mjs` from the package given the spaced form (not from the bundle), so the no-space case proves the pre-pass. Extend `ascii-golden.sh` samples if it lists them. Keep all existing goldens passing.

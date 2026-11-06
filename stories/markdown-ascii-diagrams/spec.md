@@ -9,7 +9,7 @@ The bundle defines one global function `renderAscii(src)`. It returns a string. 
 | `renderAscii("graph LR\n  A --> B")` | a string of box-drawing art with the labels `A` and `B`, no ANSI codes, no trailing spaces per line |
 | `renderAscii` on a sequence, class, state, ER and XY chart sample | a non-empty string for each |
 | `renderAscii("swimlane-beta\n  a")` | throws, message starts with `unsupported:` |
-| `renderAscii("graph LR\n  A -->")` | throws, message does not start with `unsupported:` |
+| `renderAscii("graph XX\n  A --> B")` | throws, message does not start with `unsupported:` (package 1.1.3 does not throw on a dangling edge such as `A -->`; ruled in the ledger) |
 | file size of `mermaid-ascii.js` | at most 300 KB |
 | the bundle contains `elkjs` | no |
 
@@ -21,7 +21,7 @@ The bundle defines one global function `renderAscii(src)`. It returns a string. 
 | `Render` on `swimlane-beta` text | false; `err` starts with `unsupported:` |
 | `Render` on broken flowchart text | false; `err` holds the parse message |
 | `Render` when `mermaid-ascii.js` is missing | false; `err` is `bundle missing` |
-| `Render` on an endless-loop source | returns false within 2 s (`err` is `timeout`); later calls work |
+| `Render` on an endless-loop source | returns false after the 2 s deadline (`err` is `timeout`); later calls work |
 | three `Render` calls on a flowchart | the 2nd and 3rd take less than 50 ms each |
 
 ## Viewer (Markdown mode)
