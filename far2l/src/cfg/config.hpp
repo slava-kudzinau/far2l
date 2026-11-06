@@ -256,6 +256,7 @@ struct ViewerOptions
 	int ShowTitleBar;
 	int SearchRegexp;
 	int ShowMenuBar;
+	int ViewerMarkdownMode;	// F3 markdown preview mode (persisted)
 };
 
 // "Полиция"

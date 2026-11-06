@@ -615,7 +615,9 @@ void QuickView::DynamicUpdateKeyBar()
 		KB->Change(KBL_SHIFT, L"", 8 - 1);
 		KB->Change(KBL_ALT, Msg::AltF8, 8 - 1);		//
 	} else {
-		if (QView->GetHexMode())
+		if (QView->GetMarkdownMode())
+			KB->Change(Msg::ViewF4Markdown, 4 - 1);
+		else if (QView->GetHexMode())
 			KB->Change(Msg::ViewF4Text, 4 - 1);
 		else
 			KB->Change(Msg::QViewF4, 4 - 1);

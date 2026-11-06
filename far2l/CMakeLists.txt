@@ -185,6 +185,15 @@ src/mix/WideCharToMultiByteBuffer.cpp
 src/shoco/shoco.c
 )
 
+# Markdown preview subsystem kept in its own shared library so the main
+# far2l binary stays small (macOS pty-spawn/Gatekeeper path assessment).
+set(MD_SOURCES
+src/markdown/md4c/md4c.c
+src/markdown/MarkdownRender.cpp
+src/markdown/MermaidEngine.cpp
+src/markdown/SvgCanvas.cpp
+)
+
 # Option to disable building macro subsystem completely
 option(FAR2MACRO "Use Far 2 macro engine" ON)
 
@@ -257,11 +266,43 @@ target_include_directories(far2l PRIVATE
     src/plug
     src/vt
     src/shoco
+    src/markdown
+    src/markdown/md4c
     ${CMAKE_CURRENT_BINARY_DIR}
     ${UCHARDET_INCLUDE_DIRS}
     ../WinPort)
 
 add_dependencies(far2l bootstrap WinPort)
+
+# Markdown preview shared library (md4c + render + mermaid + svg rasterizer)
+add_library(far2l_md STATIC ${MD_SOURCES})
+target_compile_definitions(far2l_md PRIVATE -DUNICODE)
+target_include_directories(far2l_md PRIVATE
+    .
+    far2sdk
+    src
+    src/base
+    src/mix
+    src/cfg
+    src/console
+    src/bookmarks
+    src/panels
+    src/filemask
+    src/hist
+    src/locale
+    src/macro
+    src/plug
+    src/vt
+    src/shoco
+    src/markdown
+    src/markdown/md4c
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ../WinPort)
+add_dependencies(far2l_md bootstrap WinPort)
+set_target_properties(far2l_md PROPERTIES
+    POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(far2l_md PUBLIC qjs)
+target_link_libraries(far2l_md PRIVATE z)
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     SET (WINPORT -Wl,-force_load WinPort wineguts utils)
@@ -271,7 +312,9 @@ endif()
 
 set_target_properties(far2l
     PROPERTIES
-    ENABLE_EXPORTS TRUE)
+    ENABLE_EXPORTS TRUE
+    CXX_VISIBILITY_PRESET default
+    C_VISIBILITY_PRESET default)
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD|NetBSD|OpenBSD")
     target_link_libraries(far2l
@@ -290,9 +333,14 @@ else()
         PRIVATE ${UCHARDET_LIBRARIES})
 endif()
 
+# markdown preview subsystem (drives embedded mermaid via quickjs-ng)
+target_link_libraries(far2l PRIVATE far2l_md)
+
 if(CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
     target_link_libraries(far2l PRIVATE execinfo)
 endif()
+
+set_target_properties(far2l PROPERTIES INSTALL_RPATH "@loader_path")
 
 add_custom_command(TARGET far2l POST_BUILD
     COMMAND ln -sf ${EXECUTABLE_NAME} ${INSTALL_DIR}/far2l_askpass
