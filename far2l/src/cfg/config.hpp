@@ -256,7 +256,8 @@ struct ViewerOptions
 	int ShowTitleBar;
 	int SearchRegexp;
 	int ShowMenuBar;
-	int ViewerMarkdownMode;	// F3 markdown preview mode (persisted)
+	int ViewerMarkdownMode;	// last Shift+F4 markdown mode; written only, the start mode is not read from it
+	int ViewerMarkdownAuto;	// open .md/.markdown files in Markdown mode unless the file has a saved choice
 };
 
 // "Полиция"

@@ -54,6 +54,10 @@ TypeEscape()
 TypeDown(2)
 TypeFKey(3)
 ExpectString("left/sample.md")
+// F3 on a .md file opens Markdown mode by default: switch sample.md to plain first.
+ToggleShift(true)
+TypeFKey(4)
+ToggleShift(false)
 var plain_line = ExpectString("# Heading One")
 var plain = ReadCell(60, plain_line.Y)
 
@@ -124,10 +128,6 @@ TypeEscape()
 TypeUp()
 TypeFKey(3)
 ExpectString("left/long.md")
-// The markdown mode is kept per file, so switch this new file to it (Shift+F4).
-ToggleShift(true)
-TypeFKey(4)
-ToggleShift(false)
 ExpectString("Long Start")
 ExpectNoString("# Long Start")
 ExpectString("  0%")
@@ -266,9 +266,6 @@ TypeEscape()
 TypeDown(2)
 TypeFKey(3)
 ExpectString("left/spacing.md")
-ToggleShift(true)
-TypeFKey(4)
-ToggleShift(false)
 
 var title = ExpectString("Spacing Title");
 CheckRowOf("title as the first row", title, 1);
