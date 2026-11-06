@@ -117,6 +117,7 @@ Before you open files, get a list of all docs: `grep -r '^description:' docs --i
 
 **Git and delivery**
 - Do story work with the `fde-delivery:deliver-story` skill. Story folders go in `docs/stories/{story}/`.
+- Commit a story on its own story branch, with the code that implements it. This covers its `story.md`, its row in `docs/stories/index.md` and its changes to other story files. Do not put story briefs on a `doc/` branch. If the story branch does not exist yet, do not commit the brief.
 - Name each new branch `{type}/{slug}`. The type is `feat`, `fix`, `refactor`, `test`, `doc` or `chore`. A story branch is `feat/{story}` or `fix/{story}`. The old `markdown-preview/*` branches keep their names.
 - When stories run in parallel, each story has a worktree in `.worktrees/{story}`. Pull requests go into `next/2.9.1-ovr.1`.
 - Always pass `--repo slava-kudzinau/far2l` to `gh`. Without it, `gh` uses `elfmz/far2l` in this checkout.

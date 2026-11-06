@@ -90,7 +90,7 @@ Work test first: change the tests and fixtures, run the check, and record the fa
 | Enter `MD_BLOCK_UL`, `MD_BLOCK_OL`, outermost (`list_stack.empty()`, as today; a list in a quote counts) | `drop_soft_gap()`, then `open_block()`. |
 | Enter or leave `MD_BLOCK_UL`, `MD_BLOCK_OL`, nested | No change. A soft gap before a nested list goes at the next `MD_BLOCK_LI`. |
 | Leave `MD_BLOCK_UL`, `MD_BLOCK_OL`, outermost | `drop_soft_gap()` in place of `close_block()`. |
-| Enter `MD_BLOCK_LI` | `drop_soft_gap()` in place of `gap_pending = false`. |
+| Enter `MD_BLOCK_LI` | `drop_soft_gap()`, then `open_block()`, in place of `gap_pending = false`. Corrected at close-out: without `open_block()`, tight item text cannot produce C10. |
 | Enter `MD_BLOCK_H` | If not `li_prefix_pending`, `force_gap()`. Then `open_block()`. |
 | Leave `MD_BLOCK_H` | `flush()`. Delete the rule row. Level 1: `close_block(GAP_HARD)`. Levels 2 to 6: set `tight_heading_row = out.size() - 1` when `out` is not empty, and do not call `close_block`. `heading_level = 0` for all levels. |
 | Enter `MD_BLOCK_CODE`, `MD_BLOCK_HTML` | If not `after_tight_heading()` and not `li_prefix_pending`, `force_gap()`. Then `open_block()`. |

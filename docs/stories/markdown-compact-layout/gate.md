@@ -60,13 +60,19 @@ The md4c parser sends events to MarkdownRender.cpp, which applies the spacing ru
 ## At merge
 
 ### What was built
-_Written at close-out._
+All of the plan. The F3 Markdown view has no rule row under headings and no blank row after H2 to H6. Lists have no blank rows around them, and tables have no top or bottom borders. The only source file that changed is `far2l/src/markdown/MarkdownRender.cpp`. Tests `0007`, `0008` and `0009` changed as the plan said. The owner checked the UI and accepted it.
 
 ### Decisions changed during the build
-_Written at close-out._
+| Plan | Build | Why |
+|---|---|---|
+| At list-item enter, only `drop_soft_gap()`. | `drop_soft_gap()`, then `open_block()`. | The plan's rule cannot produce C10, because tight item text never calls `open_block`. The plan row is corrected. |
+| No fix task. | Fix task T2 after the first review. | The review found two Important gaps. |
+| Implementer is the haiku role. | T1 started on a local model and a haiku implementer finished it. T2 ran on the local model. | The owner's order, to test the local model. |
 
 ### What the reviews caught
-_Written at close-out._
+- A heading or a code block after a list with an empty last item lost its blank row. T2 fixed this.
+- Some cases had no check: an HTML block, a code block as the first block of an item, and H1 and HTML at the end of an item. T2 added these checks.
+- The second review found 0 Critical, 0 Important and 3 Minor. `closeout.md` lists what stays open.
 
 ### Run it
-_Written at close-out._
+Run `sh docs/stories/markdown-compact-layout/check.sh` from the worktree root. It prints `check ok`. Then press F3 on `testing/tests/0007-view-file-markdown/initdir/left/spacing.md`, and look at the `Compact` blocks at the end.

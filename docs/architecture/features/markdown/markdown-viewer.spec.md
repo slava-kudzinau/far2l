@@ -95,7 +95,7 @@ Other viewer functions act on the source file:
 
 | Source | Rows |
 |---|---|
-| Heading | The text, then a rule row to the right edge: `═` for level 1, `─` for levels 2 to 6. |
+| Heading | The text. No rule row follows it. |
 | Paragraph | One row for each source line. A soft break or a hard break starts a new row. |
 | Bullet item | A lead of 2 cells for each list level, then `• `. |
 | Ordered item | The same lead, then `<n>. `. The first number comes from the source. |
@@ -103,7 +103,7 @@ Other viewer functions act on the source file:
 | Block quote | `│ ` for each quote level, after the list lead. |
 | Fenced or indented code | 4 cells of indent after the lead. Blank lines of the code stay. |
 | HTML block | Verbatim, as code. Nothing runs. |
-| Horizontal rule | A row of `─`. |
+| Horizontal rule | A row of `─`. This is the only full-width line. A `---` line under a paragraph makes a heading, not a rule. |
 | Emphasis, strikethrough, underline | The markers go and the text stays. No italic, bold or underline attribute shows. |
 | Link | The label shows. The target is dropped. |
 | Image | The alt text shows. The target is dropped. |
@@ -113,8 +113,14 @@ Other viewer functions act on the source file:
 - A block that ends queues one blank row. The next block emits it before its first row.
 - Thus repeated blanks collapse into one, and the document never starts with a blank row.
 - Source blank lines give no rows, except inside code.
-- A list has one blank row before it and after it. Items stay tight, and a nested list has no blank row.
-- A block inside a list item is spaced like a top-level block.
+- A heading has one blank row before it, except at the top of the document.
+- An H1 has one blank row after it. An H2 to H6 has no blank row after it. If another heading follows, the rule above gives one blank row.
+- A code block or an HTML block has one blank row before it and after it. It has no blank row before it directly after an H2 to H6.
+- An outermost list has no blank row before it or after it. A heading, a code block or an HTML block next to a list keeps its own blank row. An H1 before a list keeps its blank row.
+- Items stay tight, and a nested list has no blank row.
+- A paragraph, a quote, a table and a thematic break have one blank row between them.
+- A block inside a list item is spaced like a top-level block. A code block in an item keeps its blank row when another item follows.
+- A heading, a code block or an HTML block as the first block of an item has no blank row before it. It stays on the row of the bullet.
 - A blank row inside a list or a quote keeps its lead.
 
 ### Palette roles
@@ -124,7 +130,7 @@ A run holds an `MdRole`. `MarkdownRunColor` reads the palette when it draws, so 
 | Role | Elements | Foreground entry |
 |---|---|---|
 | body | Body text, lists, emphasis, quote bars, horizontal rules, body table cells, the hint row | `COL_VIEWERTEXT` |
-| heading | Heading text and rules, links, strong text, table header text | `COL_HELPTOPIC` |
+| heading | Heading text, links, strong text, table header text | `COL_HELPTOPIC` |
 | code | Code spans, code fences, HTML blocks | `COL_HELPHIGHLIGHTTEXT` |
 | art | Mermaid art, table borders | `COL_PANELHIGHLIGHTTEXT` |
 
@@ -133,7 +139,7 @@ A run holds an `MdRole`. `MarkdownRunColor` reads the palette when it draws, so 
 - The width of a column is the largest cell in that column, counted in `wchar_t` units.
 - Text is left-aligned in all columns. The alignment markers in the source have no effect.
 - The first row uses the heading role. Other cells keep their inline roles, so a link in a body cell uses the heading role.
-- A separator row follows the header. Body rows have no separators.
+- A separator row follows the header. Body rows have no separators, and the table has no top or bottom border.
 - A table never shrinks to the screen. A row that is too wide is cut at the right edge.
 
 ### Diagrams

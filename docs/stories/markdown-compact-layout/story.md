@@ -1,6 +1,6 @@
 ---
 description: Make the F3 Markdown view more compact - fewer blank rows, no heading rule rows and lighter table borders.
-status: in-progress
+status: done
 size: S
 risk: none
 ---
@@ -63,3 +63,5 @@ None.
 - Gate page: read later in the PR
 - Check: `sh docs/stories/markdown-compact-layout/check.sh` from the worktree root. It is the check in `AGENTS.md`, and it also deletes stale sockets before each test (open owner item 11 stops the harness in this long worktree path).
 - Owner-checked paths: as in `AGENTS.md`.
+- Budget raised by the owner on 2026-11-06 to $12, hard stop $14: "try a local model again with hints channel we discussed, raise budget, build far2l let me verify UI". The final spend passed the hard stop. The figure also counts the planning of later stories in the same session.
+- Owner's UI check and close order, 2026-11-06: "I checked compact layout UI -- looks good, close status & commit & merge PR".
