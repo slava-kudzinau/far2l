@@ -1,0 +1,32 @@
+---
+description: Rules that always hold for the Markdown feature - viewer, diagrams and browser view - each with where it was learned.
+refs:
+  - docs/architecture/invariants.md
+  - docs/architecture/features/markdown/markdown.overview.md
+---
+
+# Markdown invariants
+
+Rules that always hold for the Markdown feature. Format: `- **[area]**: rule (Learned from: source, date)`. To retire one, delete it and say why in the commit or an ADR. Whole-app rules are in [architecture invariants](../../invariants.md). The [overview](markdown.overview.md) is the entry point of this folder.
+
+## Markdown viewer
+
+- **[colors]**: A Markdown run holds an `MdRole`, never a color. `MarkdownRunColor` in `far2l/src/ViewerPrinter.cpp` resolves it at draw time from a far palette entry, and the background is always the viewer text background. See [ADR-004](../../decisions/adr-004-palette-roles.md). (Learned from: story markdown-preview-fixes, owner ruling, 2026-11-05; story markdown-preview-reading, 2026-11-05)
+- **[colors]**: Pass a 64-bit real color to `SetColor`. `SetFarColor` takes a palette index, and a real color cut to 16 bits gave black and red blocks. (Learned from: story markdown-preview-fixes, close-out ruling 1, 2026-11-05)
+- **[scroll]**: Markdown mode scrolls by `m_md_top`, an index into `MarkdownDoc::Lines()`. The `nFilePos` of the lines never decreases down the document, and a row that replaces a fence takes the fence offset. See [ADR-003](../../decisions/adr-003-line-index-scrolling.md). (Learned from: story markdown-preview-reading, 2026-11-05)
+- **[scroll]**: Markdown keys act only when `MarkdownView()` is true (Markdown on, hex off), so hex mode keeps its own keys. (Learned from: story markdown-preview-reading, task 1 review, 2026-11-05)
+- **[cache]**: The position cache `Param[3]` of a viewer stores only a deviation from the open rule. The rule is read once at open (`m_md_rule`) and both save sites use it. See [ADR-007](../../decisions/adr-007-markdown-default-on.md). (Learned from: story markdown-default-on, final review, 2026-11-06)
+
+## Diagrams
+
+- **[mermaid]**: Every `AsciiMermaid::Render` call runs under a wall-clock deadline (2 s, `FAR2L_MD_DEADLINE_MS` overrides), a 1 MB JS stack and a 128 MB memory limit. The limit is set once on the one shared runtime (`build_engine`), so the bundle and all fences share it until a timeout frees the runtime. The next call builds it again. (Learned from: story markdown-preview-fixes, final review, 2026-11-05; story markdown-ascii-diagrams, task 2 review, 2026-11-06)
+- **[mermaid]**: Diagram text is untrusted. It runs in a quickjs context with no `std` or `os` module and no DOM (the vendored quickjs builds the core only). (Learned from: story markdown-preview-fixes, hostile SVG review, 2026-11-05)
+- **[mermaid]**: A fence that cannot be drawn keeps its source as code rows and gets the hint row. It never stops the viewer. (Learned from: story markdown-preview-fixes, spec, 2026-11-05; story markdown-ascii-diagrams, 2026-11-06)
+- **[bundle]**: `far2l/bootstrap/mermaid-ascii.js` is built by `far2l/bootstrap/mermaid-ascii/build.sh` and committed. It is at most 300 KB and has no `elkjs`. Run `sh testing/markdown/ascii-golden.sh` after a rebuild. The far2l build never needs Node. (Learned from: story markdown-ascii-diagrams, gate, 2026-11-06)
+- **[bundle]**: Golden files come from the `beautiful-mermaid` package in Node, never from the bundle. (Learned from: story markdown-ascii-diagrams, T4 for `A-->B`, 2026-11-06)
+
+## Browser view
+
+- **[browser]**: `far2l/bootstrap/md-open.sh` treats the Markdown file as untrusted. The text goes into the page as escaped data (`\` first, then `</` and `<!--`) and raw HTML shows as text. Mermaid runs with `securityLevel:'strict'`. The page has a `Content-Security-Policy` that allows inline scripts, scripts from all of `https://cdn.jsdelivr.net`, and local images only. Only the page script pins the mermaid URL (`MERMAID_URL`) and its `integrity` hash (`MERMAID_SRI`). The text shows before the CDN script loads. (Learned from: story markdown-browser-view, first final review, 2026-11-06)
+- **[browser]**: The printed Alt-F3 command leaves `!.!` unquoted, because far2l escapes the file name. (Learned from: story markdown-browser-view, first final review, 2026-11-06)
+- **[browser]**: No script edits `config.ini`. far2l rewrites it on exit. The owner adds the File associations entry by hand. (Learned from: story markdown-browser-view, gate, 2026-11-06)
