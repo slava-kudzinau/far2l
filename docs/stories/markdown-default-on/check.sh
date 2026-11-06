@@ -5,17 +5,11 @@
 # Any failure exits non-zero.
 set -eu
 
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-BUILD=/Users/Viachaslau_Kudzinau/Projects/far2l.default-on.build
+ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
+BUILD=${BUILD:-$(cd "$ROOT/.." && pwd)/far2l.default-on.build}
 APP="$BUILD/install/far2l.app/Contents/MacOS/far2l"
 TESTS="0007-view-file-markdown 0008-view-md-default 0009-view-md-setting-off"
 JOBS=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)
-
-# The bootstrap step copies the vendored mermaid.min.js. It is git-ignored, so a fresh worktree
-# lacks it; take it from the main checkout.
-if [ ! -f "$ROOT/far2l/bootstrap/mermaid.min.js" ]; then
-	cp -f /Users/Viachaslau_Kudzinau/Projects/far2l/far2l/bootstrap/mermaid.min.js "$ROOT/far2l/bootstrap/mermaid.min.js"
-fi
 
 if [ ! -f "$BUILD/CMakeCache.txt" ]; then
 	cmake -S "$ROOT" -B "$BUILD" -Wno-dev -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTING=Yes \

@@ -18,7 +18,7 @@ Acceptance: situations.md is comfortable to read and scroll in Markdown mode.
 
 - Check: `cd /Users/Viachaslau_Kudzinau/Projects/far2l && cmake --build ../far2l.build --target far2l -j8 && cd testing && rm -rf tests/0007-view-file-markdown/workdir && mkdir tests/0007-view-file-markdown/workdir && cp -r tests/0007-view-file-markdown/initdir/* tests/0007-view-file-markdown/workdir/ && ./far2l-smoke -t 30 ../../far2l.build/install/far2l.app/Contents/MacOS/far2l tests/0007-view-file-markdown` (retry on `operation not permitted`)
 - Branch `markdown-preview/reading`, stacked on `markdown-preview/fixes` (unmerged). No worktree.
-- Owner-checked paths: stories/*/story.md.
+- Owner-checked paths: docs/stories/*/story.md.
 - Budget/hard stop: M $15/$20.
 - flow tier=standard docs=spec,plan design=no orchestrator=yes final=final-reviewer-light gate=read-later scan=no verifier=none
 - Story B (mermaid quality and speed) follows after this one; it is out of scope here.

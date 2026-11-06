@@ -11,7 +11,7 @@ Spec: `spec.md` (governs exact values).
 - Colors: no `F_*` or `B_*` constants as final colors. Read palette entries through the existing color functions (`FarColorToReal(COL_...)`) at render time so theme changes apply; the background always comes from `COL_VIEWERTEXT`.
 - Settled choices: scroll step, page step, stop rules, percent and resize follow the Scrolling table in `spec.md` exactly. Rendering and caching stay as they are: the whole file is rendered once per width into one vector of screen lines (re-rendered on width change or mode toggle). The top line index is kept across a re-render by finding the line with the same source offset. Blank-line rules are the Spacing table; an empty source line inside a code fence is kept as is. The three palette roles are heading, code, art; pick entries so that all three differ from `COL_VIEWERTEXT` and from each other. Wheel scrolling uses the viewer's existing wheel step if it has one, else 1 line.
 - Commit message: a short imperative summary line, a blank line, then the exact trailer `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`. One commit per task. Put the trailer in every dispatch.
-- Check: see `story.md` Notes. Owner-checked paths: `stories/*/story.md`.
+- Check: see `story.md` Notes. Owner-checked paths: `docs/stories/*/story.md`.
 - Test input: add a second markdown fixture `long.md` (at least 3 screens: headings, paragraphs, a list, code, table) to `testing/tests/0007-view-file-markdown/initdir/left/` for scroll tests. `git add -f` files under `testing/` (root `.gitignore` matches `Testing`).
 
 ## T1: Scrolling by line index

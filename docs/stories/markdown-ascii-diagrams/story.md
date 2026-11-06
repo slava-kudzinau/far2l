@@ -25,5 +25,5 @@ The terminal view draws mermaid diagrams with the real mermaid library and a pix
 - Branch `markdown-preview/ascii-diagrams`, worktree `.worktrees/markdown-ascii-diagrams`, based on `markdown-preview/reading` (unmerged). Runs in parallel with story B. B touches only `far2l/bootstrap/md-open.sh`, `marked.min.js` and `marked.LICENSE.md`, so the two do not share files.
 - Budget/hard stop: M $15/$20.
 - Owner rules: no PR, no push until the owner says so. Commit trailer: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
-- Owner-checked paths: stories/*/story.md.
+- Owner-checked paths: docs/stories/*/story.md.
 - started: 2026-11-06T00:00:00Z

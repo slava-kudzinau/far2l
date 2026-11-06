@@ -1,12 +1,12 @@
 #!/bin/sh
-# Story check for md-open.sh (stories/markdown-browser-view/plan.md, Spec and the
+# Story check for md-open.sh (docs/stories/markdown-browser-view/plan.md, Spec and the
 # Final-review rulings). Runs every row: the pages are written with --no-open,
 # and the pages are rendered in headless Chrome. Mermaid comes from the CDN, so
 # the check needs network. Exit 0 only when every row passes.
 # Env CHROME overrides the browser path.
 
 here=$(cd "$(dirname "$0")" && pwd) || exit 1
-repo=$(cd "$here/../.." && pwd) || exit 1
+repo=$(cd "$here/../../.." && pwd) || exit 1
 bin=$repo/far2l/bootstrap
 script=$bin/md-open.sh
 fix=$here/fixtures

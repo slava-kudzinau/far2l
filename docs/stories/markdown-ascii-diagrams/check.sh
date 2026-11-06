@@ -1,17 +1,17 @@
 #!/bin/sh
 # Check for the markdown-ascii-diagrams story: the bundle golden test, the AsciiMermaid driver,
 # the far2l build in its own build dir, and smoke test 0007 (the Markdown view of sample.md).
-# usage: sh stories/markdown-ascii-diagrams/check.sh
+# usage: sh docs/stories/markdown-ascii-diagrams/check.sh
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
-root=$(cd "$here/../.." && pwd)
+root=$(cd "$here/../../.." && pwd)
 # The main checkout (the git common dir's parent); the build dirs sit next to it.
 main=$root
 if common=$(cd "$root" && git rev-parse --git-common-dir 2> /dev/null); then
     main=$(cd "$root" && cd "$common/.." && pwd)
 fi
-build=$(cd "$main/.." && pwd)/far2l.ascii.build
+build=${BUILD:-$(cd "$main/.." && pwd)/far2l.ascii.build}
 
 sh "$root/testing/markdown/ascii-golden.sh"
 sh "$root/testing/markdown/ascii-driver.sh"

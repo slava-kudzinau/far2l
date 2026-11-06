@@ -1,6 +1,6 @@
 # Close-out draft: markdown-browser-view
 
-Commits: 92a76a055 (script, vendored marked, check), 74b543adf (final-review fixes); e08c5e117 (CDN decision in story.md, owner-checked path, shown to the owner). Check: `sh stories/markdown-browser-view/check.sh` exit 0 (54 pass).
+Commits: 92a76a055 (script, vendored marked, check), 74b543adf (final-review fixes); e08c5e117 (CDN decision in story.md, owner-checked path, shown to the owner). Check: `sh docs/stories/markdown-browser-view/check.sh` exit 0 (54 pass).
 
 ## Rulings
 

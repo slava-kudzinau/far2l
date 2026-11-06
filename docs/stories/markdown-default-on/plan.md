@@ -44,18 +44,18 @@ The check exits 0. It builds far2l in `../far2l.default-on.build` and runs smoke
     2. Test 0008 must prove the "inherit" regression is caught: open `sample.md` in its default Markdown mode, close it in Markdown mode, then F3 on `plain.txt` must show plain text. Fix the wrong comment at test.js:38-39. Add the setting-off path: seed `[Viewer]` `Markdown_Auto=0` (as the reviewer did with `SaveTextFile` before the first start, or by a second test folder 0009) and check `.md` opens plain; and a file changed by hand in each setting keeps the choice.
     3. Minor #5: update the stale comments and the option description for `ViewerMarkdownMode` (it is write-only now; say so). Park #6 (grep temp copy) and #7 in `closeout.md`.
   - Commit trailer: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` (put in the dispatch; verify).
-- Check: `sh stories/markdown-default-on/check.sh` (written in T1). Owner-checked paths: `stories/*/story.md`.
+- Check: `sh docs/stories/markdown-default-on/check.sh` (written in T1). Owner-checked paths: `docs/stories/*/story.md`.
 
 ## T1: Option, open rule, dialog, test
 
 **Depends on:** none
-**Done check:** `sh stories/markdown-default-on/check.sh` exits 0
+**Done check:** `sh docs/stories/markdown-default-on/check.sh` exits 0
 **Role:** implementer — review final
 Implement the option, the open rule at the three places named above, the dialog check box and string, test 0008, and `check.sh` (configure and build far2l in the build dir, run test 0008 and the existing 0007).
 
 ## T2: Final-review fixes
 
 **Depends on:** T1
-**Done check:** `sh stories/markdown-default-on/check.sh` exits 0
+**Done check:** `sh docs/stories/markdown-default-on/check.sh` exits 0
 **Role:** implementer — review task-reviewer (scoped)
 Apply the three "Final-review rulings" in Global Constraints (they are binding and override the earlier cache ruling): (1) the new cache scheme in `far2l/src/viewer.cpp` (save 0 when the mode equals the rule default, 1 or 2 only for a deviation; read 1 Markdown, 2 plain, else the rule); (2) fix test 0008 (inherit regression, wrong comment, setting-off path via a seeded `Markdown_Auto=0` or a test 0009, and a hand-changed file keeps its choice in each setting); (3) update the stale comments and the option description for `ViewerMarkdownMode` (write-only now); leave `poscache.hpp` alone. Add 0009 to `check.sh` if you create it. One commit.

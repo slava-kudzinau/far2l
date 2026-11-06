@@ -23,7 +23,7 @@ The check exits 0 and the page test shows an `<svg>` and the heading. The owner 
 - macOS first (`open`). The script is POSIX `sh`. Mermaid comes from the CDN, not from a local file: `https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.min.js`, with an `integrity="sha384-..."` hash that the implementer computes from the downloaded file (`openssl dgst -sha384 -binary | openssl base64 -A`). The local `mermaid.min.js` is not used. If the CDN is not reachable the page shows the Markdown text with each diagram as a code block (the script catches the load error). `marked` stays vendored and inline as one file `far2l/bootstrap/marked.min.js` (MIT, version 15.x or newer; keep its license text in `far2l/bootstrap/marked.LICENSE.md`). Use `git add -f` for files under `far2l/bootstrap` and `testing/` (the root `.gitignore` matches both).
 - The markdown text goes into the page inside `<script type="text/markdown" id="md">`, with `</` replaced by `<\/` so it cannot end the tag. The page script renders it with `marked.parse`, turns each fenced `mermaid` block into `<pre class="mermaid">`, then calls mermaid when it loaded (`securityLevel:'strict'`, theme from `prefers-color-scheme`). HTML in the markdown is escaped by `marked`'s renderer or sanitized (no raw script from the file may run).
 - Temp page path: `${TMPDIR:-/tmp}/far2l-md-<pid>.html`; the script leaves it in place (the browser needs it) and never deletes the user's file.
-- Files this story may touch: `far2l/bootstrap/md-open.sh` (new), `far2l/bootstrap/marked.min.js`, `far2l/bootstrap/marked.LICENSE.md`, `far2l/bootstrap/CMakeLists.txt` (install the script and `marked.min.js` and its license), `stories/markdown-browser-view/fixtures/`. Do not touch `far2l/src/`.
+- Files this story may touch: `far2l/bootstrap/md-open.sh` (new), `far2l/bootstrap/marked.min.js`, `far2l/bootstrap/marked.LICENSE.md`, `far2l/bootstrap/CMakeLists.txt` (install the script and `marked.min.js` and its license), `docs/stories/markdown-browser-view/fixtures/`. Do not touch `far2l/src/`.
 - Commit message: a short imperative summary line, a blank line, then the trailer `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`. One commit per task.
 - Rulings (settle the choices the plan left open):
   - Lookup: `marked.min.js` is read beside the script; env `MARKED_JS` overrides. If it is missing: print `md-open: cannot find marked.min.js` to stderr, exit 3, write no page. The script never reads `mermaid.min.js`.
@@ -51,12 +51,12 @@ The check exits 0 and the page test shows an `<svg>` and the heading. The owner 
     6. `story.md` no longer promises a shipped default association; it says the script prints the entry and the owner adds it once. (Main session edits this.)
     7. Minor findings (reviewer #7 to #15): fix #7 (show the mermaid error text in the block), #8 (a name starting with `-` after `--` works) and #14 (the stale gate text); park the rest in `closeout.md`.
   - Commit trailer: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` (put in the dispatch; verify).
-- Check: `sh stories/markdown-browser-view/check.sh` (written in T1; builds the fixtures, runs the Spec rows with `--no-open`, and runs Chrome headless on the page). Owner-checked paths: `stories/*/story.md`.
+- Check: `sh docs/stories/markdown-browser-view/check.sh` (written in T1; builds the fixtures, runs the Spec rows with `--no-open`, and runs Chrome headless on the page). Owner-checked paths: `docs/stories/*/story.md`.
 
 ## T1: The script, the vendored library, the page test
 
 **Depends on:** none
-**Done check:** `sh stories/markdown-browser-view/check.sh` exits 0
+**Done check:** `sh docs/stories/markdown-browser-view/check.sh` exits 0
 **Role:** implementer — review final
 Write `md-open.sh`, vendor `marked`, add `fixtures/plain.md` (a heading, a table, a list, a code fence), `fixtures/diagram.md` (a heading and the flowchart from `/Users/Viachaslau_Kudzinau/Projects/fde-kb/handbook/situations.md` block 4), `fixtures/hostile.md` (contains `</script><b id="x">`), and `check.sh`, which runs every Spec row (Chrome path `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`, override with env `CHROME`). Install the script, `marked.min.js` and its license in `far2l/bootstrap/CMakeLists.txt`.
 
@@ -70,6 +70,6 @@ Implement `--print-association`. Verify the install rule (configure into a temp 
 ## T3: Final-review fixes
 
 **Depends on:** T1
-**Done check:** `sh stories/markdown-browser-view/check.sh` exits 0
+**Done check:** `sh docs/stories/markdown-browser-view/check.sh` exits 0
 **Role:** implementer — review task-reviewer
 Fix the six Important findings (#1 to #6 of `.build/final-review.md`, except #6, which the main session already did in `story.md`) and Minor #7, #8, #14 and #15, exactly as the "Final-review rulings" 1 to 7 above say. Add checks to `check.sh` and fixtures for each ruling (name with a space and a quote; stalled CDN shows text; `<\/` and `<\!--` literal text survives; CSP present and the svg still draws; mermaid syntax error shows its text; leading-dash name). Update the gate text for ruling 5 (remote images do not load) and the stale `mermaid.min.js` line (#15). For #14 add a one-line note in `marked.LICENSE.md` or a grep in `check.sh`. Do not edit `story.md`.

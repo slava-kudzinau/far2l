@@ -1,6 +1,6 @@
 # Close-out draft: markdown-default-on
 
-Commits: 3a3b8e52d (T1: option, open rule, dialog, tests 0007 edit and 0008), 41cdcb98b (T2: deviation-only cache scheme, tests 0008 and 0009), cce0a2dfa (fix round: rule captured at open). Check: `sh stories/markdown-default-on/check.sh` exit 0 (tests 0007, 0008, 0009 pass; the final reviewer ran it once; the main session reruns it).
+Commits: 3a3b8e52d (T1: option, open rule, dialog, tests 0007 edit and 0008), 41cdcb98b (T2: deviation-only cache scheme, tests 0008 and 0009), cce0a2dfa (fix round: rule captured at open). Check: `sh docs/stories/markdown-default-on/check.sh` exit 0 (tests 0007, 0008, 0009 pass; the final reviewer ran it once; the main session reruns it).
 
 ## Rulings
 

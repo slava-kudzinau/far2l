@@ -114,7 +114,7 @@ All three run with no network. Do not regenerate `golden/*.txt` to make a failin
 
 ## Risks and open questions
 
-- The three story `check.sh` files (stories markdown-ascii-diagrams, markdown-default-on, markdown-browser-view) are broken since the move from `stories/`. They find the repo root with `../..` from their own folder. Now that is `docs/`, so they look for `docs/testing` and `docs/far2l`. We ran `markdown-ascii-diagrams/check.sh` (exit 127) and `markdown-browser-view/check.sh` (exit 1, 47 checks failed). We did not run `markdown-default-on/check.sh`, because it would copy files into the wrong folder. The fix is `../../..`.
+- The three story `check.sh` files (stories markdown-ascii-diagrams, markdown-default-on, markdown-browser-view) run from `docs/stories/`. Set `BUILD` to use an existing build folder for the first two. The ascii and default-on checks pass. The browser check fails one row, `far2l/src unchanged since the story base`. This is expected: that row is true only on the story branch, and later stories changed `far2l/src`.
 - The `md-open.sh` checks exist only in the `check.sh` of story markdown-browser-view, with its fixtures. Nothing in `testing/` covers it.
 - `0004-vt-shell` and `000b-find-file` fail on this Mac. We do not know if they also fail on `master`.
 - Branch `markdown-preview/fixes` exists only locally (no `origin` copy). The story markdown-preview-fixes has no `check.sh`.
