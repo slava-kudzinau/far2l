@@ -39,6 +39,8 @@ swimlane-beta
 
 ##### Heading Five
 
+###### Heading Six
+
 A <https://example.com> autolink and a [labeled link](https://example.org) here.
 
 A paragraph under a setext-style break

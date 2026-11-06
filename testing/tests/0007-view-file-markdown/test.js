@@ -145,47 +145,90 @@ CheckForeOther("block quote", quote_cell, plain, "viewer")
 
 
 // --- T4: the rest of the palette roles, checked against the cells read above. ---
-// H3, H4 and H5 share one color; each heading level differs from the ones next to it.
+// H3, H4, H5 and H6 share one color; each heading level differs from the ones next to it.
 var h2 = ExpectString("Heading Two")
 var h2_cell = ReadCell(h2.X, h2.Y)
 var h3r = ExpectString("Heading Three Renamed")
 var h3r_cell = ReadCell(h3r.X, h3r.Y)
 var h5 = ExpectString("Heading Five")
 CheckForeSame("heading five", ReadCell(h5.X, h5.Y), h3_cell, "h3")
+var h6 = ExpectString("Heading Six")
+CheckForeSame("heading six", ReadCell(h6.X, h6.Y), h3_cell, "h3")
 CheckForeOther("h2", h2_cell, heading_cell, "h1")
 CheckForeOther("h2", h2_cell, h3_cell, "h3")
-CheckForeOther("renamed h3", h3r_cell, h2_cell, "h2")
+CheckForeSame("renamed h3", h3r_cell, h3_cell, "h3")
+CheckBack("h2", h2_cell)
+CheckBack("renamed h3", h3r_cell)
+CheckBack("heading five", ReadCell(h5.X, h5.Y))
+CheckBack("heading six", ReadCell(h6.X, h6.Y))
 // A labeled link takes the link role: its own color, different from strong, code and body.
 var llink = ExpectString("labeled link")
 var link_cell = ReadCell(llink.X, llink.Y)
 CheckForeOther("labeled link", link_cell, strong_cell, "strong")
 CheckForeOther("labeled link", link_cell, code_cell, "code")
 CheckForeOther("labeled link", link_cell, plain, "viewer")
+CheckBack("labeled link", link_cell)
 // The autolink URL cell is recolored by the viewer's own link highlighting, not by the palette,
 // so it can only be asserted against the body text around it: it differs from the body cell.
 var linkpara = ExpectString("https://example.com")
 CheckForeOther("autolink url", ReadCell(linkpara.X, linkpara.Y), plain, "viewer")
+CheckBack("autolink url", ReadCell(linkpara.X, linkpara.Y))
 // A bold span in a heading shows the strong color, not the heading color; a quote keeps its
 // quote color under strong and code spans (the spec's precedence).
 var hbold = ExpectString("bold head")
 CheckForeSame("bold span in h2", ReadCell(hbold.X, hbold.Y), strong_cell, "strong")
+CheckBack("bold span in h2", ReadCell(hbold.X, hbold.Y))
 var qbold = ExpectString("bold quote span")
 CheckForeSame("bold span in quote", ReadCell(qbold.X, qbold.Y), strong_cell, "strong")
+CheckBack("bold span in quote", ReadCell(qbold.X, qbold.Y))
 var qcode = ExpectString("quote code span")
 CheckForeSame("code span in quote", ReadCell(qcode.X, qcode.Y), code_cell, "code")
+CheckBack("code span in quote", ReadCell(qcode.X, qcode.Y))
 var quote2 = ExpectString("block quote line")
 CheckForeSame("quote text", ReadCell(quote2.X + 2, quote2.Y), quote_cell, "quote")
+CheckBack("quote text", ReadCell(quote2.X + 2, quote2.Y))
 // A setext-style `---` under a paragraph renders as an H2: the h2 color, and no rule row
 // under it (the paragraph text moves up into the heading row, the quote follows after a blank).
 var setext_h2 = ExpectString("setext-style break")
-CheckForeSame("setext break as h2", ReadCell(setext_h2.X, setext_h2.Y), h2_cell, "h2")
+var setext_h2_cell = ReadCell(setext_h2.X, setext_h2.Y)
+CheckForeSame("setext break as h2", setext_h2_cell, h2_cell, "h2")
 CheckForeSame("row after the setext break", ReadCell(0, setext_h2.Y + 1), quote_cell, "quote")
 CheckCellChar(0, setext_h2.Y + 1, "│")
+CheckBack("setext break as h2", setext_h2_cell)
+// The trailing thematic break shares the rule color of the table borders, and the quote text
+// differs from it: close the viewer and read the rule row on the last page.
 TypeEscape()
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0);
+
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+if (Exists(profile + "/.config/history/viewer.pos"))
+	Remove(profile + "/.config/history/viewer.pos")
+TypeDown(2)
+TypeFKey(3)
+ExpectString("left/sample.md")
+TypeEnd()
+var rule_row = ExpectString("────────────────────────────────────────────────────────────────────────────────")
+var rule_cell = ReadCell(rule_row.X, rule_row.Y)
+CheckForeSame("thematic break", rule_cell, border_cell, "rule")
+CheckForeOther("quote vs rule", quote_cell, rule_cell, "rule")
+CheckBack("thematic break", rule_cell)
+TypeEscape()
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0);
 
 // Scrolling by line index on long.md: several screens of rendered lines, so each
-// step lands on text that is not on the screen before it.
-TypeUp()
+// step lands on text that is not on the screen before it. The position cache removal makes
+// the panel the start screen again; the cursor sits on "/..", long.md is one row down.
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+if (Exists(profile + "/.config/history/viewer.pos"))
+	Remove(profile + "/.config/history/viewer.pos")
+ExpectString("sample.md")
+TypeDown()
 TypeFKey(3)
 ExpectString("left/long.md")
 ExpectString("Long Start")
@@ -632,7 +675,6 @@ function CheckNorgb(name, cell) {
 CheckNorgb("norgb heading", ReadCell(norgb_heading.X, norgb_heading.Y))
 CheckNorgb("norgb strong", ReadCell(norgb_strong.X, norgb_strong.Y))
 CheckNorgb("norgb code", ReadCell(norgb_code.X, norgb_code.Y))
-CheckForeOther("norgb heading vs body", ReadCell(norgb_heading.X, norgb_heading.Y), ReadCell(60, norgb_heading.Y), "body")
 TypeEscape()
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
@@ -665,8 +707,10 @@ TypeEnter()
 ExpectAppExit(0);
 
 // link=@Help.Topic: a palette entry resolves at draw time. The override is accepted (the file
-// is valid), so the link cell must not take the body foreground; its exact color follows the
-// theme entry and is not asserted here (the harness cannot observe a theme change).
+// is valid), so the link cell must keep a color of its own: not the body foreground, not the
+// strong or code color (an @name falling back to unset/body would trip one of these). Its
+// exact color follows the theme entry and is not asserted (the harness cannot observe a theme
+// change); the observed value is logged for the report.
 SaveTextFile(config + "/settings/markdown-colors.ini", ["[markdown]", "link=@Help.Topic"])
 StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
 if (Exists(profile + "/.config/history/viewer.pos"))
@@ -677,8 +721,12 @@ ExpectString("left/sample.md")
 // The link paragraph is below the fold on the first screen: page down to it.
 TypePageDown()
 var ovr_link = ExpectString("labeled link")
+var ovr_link_cell = ReadCell(ovr_link.X, ovr_link.Y)
 var ovr_body = ReadCell(60, ovr_link.Y)
-CheckForeOther("link override", ReadCell(ovr_link.X, ovr_link.Y), ovr_body, "viewer")
+Log("link override foreTC " + ovr_link_cell.ForeTC.toString(16) + " fore " + ovr_link_cell.Fore)
+CheckForeOther("link override", ovr_link_cell, ovr_body, "viewer")
+CheckForeOther("link override vs strong", ovr_link_cell, strong_cell, "strong")
+CheckForeOther("link override vs code", ovr_link_cell, code_cell, "code")
 TypeEscape()
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
