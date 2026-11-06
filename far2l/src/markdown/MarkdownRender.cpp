@@ -459,6 +459,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_LI:
             b.flush();
             b.li_open = false;
+            b.li_prefix_pending = false;   // an empty item must not keep its prefix for the next block
             break;
         case MD_BLOCK_H:
             b.flush();

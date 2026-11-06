@@ -441,8 +441,9 @@ CheckRowOf("paragraph right after the thematic break and its blank row", c_break
 CheckBlankRow("blank row after the thematic break", c_break.Y - 1);
 CheckNoBorder();
 
-// Page 5, the last page: the table, its rules and the list item with a heading.
-TypeEnd();
+// Page 5: four lines down from page 4, the table, its rules and the list item with a heading.
+// The review blocks follow on pages 6 and 7.
+TypeDown(4);
 CheckNoBorder();
 var c_break_end = ExpectString("Compact para below break.");
 // R6 and R7: the table has a blank row before it and one rule under its header row.
@@ -461,6 +462,78 @@ CheckRowOf("paragraph after the table and its blank row", c_after_table, c_cell.
 var c_item_head = ExpectString("Compact Item Heading");
 CheckRowOf("list item right after the paragraph", c_item_head, c_after_table.Y + 1);
 CheckCellChar(c_item_head.X - 2, c_item_head.Y, "•");
+
+// Page 6: the first review blocks, right after the heading item.
+TypePageDown();
+CheckNoBorder();
+
+// C7: a heading after a list keeps its blank row. An empty item (`-` with no text) shows no
+// row of its own.
+var r_item1 = ExpectString("review item one");
+var r_head_empty = ExpectString("Review Head After Empty");
+CheckRowOf("heading after the list with an empty item", r_head_empty, r_item1.Y + 2);
+CheckBlankRow("blank row between the item and the heading", r_item1.Y + 1);
+
+// C6: a code block after a list keeps its blank row, also after an empty item.
+var r_item2 = ExpectString("review item two");
+var r_code_empty = ExpectString("review code after empty");
+CheckRowOf("code block after the list with an empty item", r_code_empty, r_item2.Y + 2);
+CheckBlankRow("blank row between the item and the code block", r_item2.Y + 1);
+
+// R5: an HTML block has one blank row before it and one after it.
+var r_para3 = ExpectString("Review para three.");
+var r_html1 = ExpectString("review html one");
+CheckRowOf("html block after the paragraph and its blank row", r_html1, r_para3.Y + 2);
+CheckBlankRow("blank row before the html block", r_para3.Y + 1);
+var r_para4 = ExpectString("Review para four.");
+CheckRowOf("paragraph after the html block and its blank row", r_para4, r_para3.Y + 4);
+CheckBlankRow("blank row after the html block", r_para3.Y + 3);
+
+// Page 7, the last page: the heading over an html block, the fence in an item, the heading
+// and the html block as the first block of a list item.
+TypePageDown();
+CheckNoBorder();
+
+// C2: an html block right under a heading of level 2. R5: it keeps its blank row after it.
+var r_head_html = ExpectString("Review Head Over Html");
+var r_html2 = ExpectString("review html two");
+CheckRowOf("html block right under a heading", r_html2, r_head_html.Y + 1);
+var r_para5 = ExpectString("Review para five.");
+CheckRowOf("paragraph after the html block and its blank row", r_para5, r_head_html.Y + 3);
+CheckBlankRow("blank row between the heading block and the paragraph", r_head_html.Y + 2);
+
+// C8 and C13: a list sits right after the paragraph, and a fence as the first block of an
+// item stays on the row of the bullet.
+var r_fence_first = ExpectString("review fence first");
+if (r_fence_first.Y != r_para5.Y + 1 && r_fence_first.Y != r_para5.Y + 2) {
+	Log("paragraph five on row " + r_para5.Y + ", fence on row " + r_fence_first.Y);
+	Panic("the fence item is not one or two rows under the paragraph");
+}
+if (BoundedLine(0, r_para5.Y + 1, 80, " \t") == "") {
+	Log("row " + (r_para5.Y + 1) + " is blank");
+	Panic("the list after the paragraph has a blank row before it");
+}
+
+// C13: a heading of level 1 as the first block of an item stays on the row of the bullet.
+// C3: it keeps one blank row after it.
+var r_top = ExpectString("Review Item Top");
+var r_item4 = ExpectString("review item four");
+CheckRowOf("item after the heading item and its blank row", r_item4, r_top.Y + 2);
+CheckBlankRow("blank row after the heading item", r_top.Y + 1);
+
+// C13 and R5: an html block as the first block of an item stays on the row of the bullet,
+// and keeps its blank row after it.
+var r_html3 = ExpectString("review html three");
+var r_item5 = ExpectString("review item five");
+CheckRowOf("item after the html block in the item", r_item5, r_html3.Y + 2);
+CheckBlankRow("blank row after the html block in the item", r_html3.Y + 1);
+
+// R4 and R5: a list has no blank row before it, and the html block after it keeps its
+// blank row.
+var r_item6 = ExpectString("review item six");
+var r_html4 = ExpectString("review html four");
+CheckRowOf("html block after the list and its blank row", r_html4, r_item6.Y + 2);
+CheckBlankRow("blank row between the list and the html block", r_item6.Y + 1);
 
 
 TypeEscape()
