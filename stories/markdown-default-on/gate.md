@@ -46,13 +46,19 @@ _Settled after the read (details in `plan.md` Rulings):_ the saved choice always
 ## At merge
 
 ### What was built
-_At close-out._
+F3 on a `.md` or `.markdown` file opens the rendered Markdown view when the new viewer setting `Markdown_Auto` (default on) is on. Other files open plain. Shift-F4 still switches, and far2l keeps the choice for that file. A check box in the viewer settings turns the default off. Tests 0008 and 0009 cover it; 0007 was adjusted.
 
 ### Decisions changed during the build
-_At close-out._
+- The position cache stores only a deviation from the rule (0 = follow the rule, 1 = Markdown by choice, 2 = plain by choice). Turning the check box off now takes effect for every file you did not change by hand.
+- A file's old plain entry on a `.md` file (value 0) now follows the rule, so it opens in Markdown. Shift-F4 once keeps plain. This replaces the gate row "Files viewed earlier keep their cached mode" for those files.
+- This is a small format change: a far2l build from before this story reads a saved 2 as Markdown.
+- `viewer.hpp` got one member (`m_md_rule`).
 
 ### What the reviews caught
-_At close-out._
+- Final review 1 (Important): the first cache scheme saved the default as a choice, so the check box did not work for any file you had read. Fixed by the deviation-only scheme.
+- Final review 1 (Important): test 0008 could not catch the "inherit the last file's mode" bug. Fixed and mutation-checked.
+- Task 2 review (Important): the rule was read at save time; a setting change in Quick View could freeze a default. Fixed by capturing the rule at open.
+- Final review 2: Ready for close-out, 0 Critical, 0 Important, 6 Minor (parked in `closeout.md`).
 
 ### Run it
-_At close-out._
+Build and run `sh stories/markdown-default-on/check.sh` (tests 0007, 0008, 0009). By hand: press F3 on a `.md` file (rendered), on a `.txt` file (plain), press Shift-F4 on a `.md` file, close and reopen (plain stays). Turn off "Markdown" in Options, Viewer settings: unchanged `.md` files open plain. A `.md` file you read in plain before this change now opens in Markdown; press Shift-F4 once to keep plain.
