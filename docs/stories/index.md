@@ -13,6 +13,7 @@ description: Index of the story records with their file status, the real merge s
 | [markdown-ascii-diagrams](markdown-ascii-diagrams/story.md) | in-review | yes, PR #2 | Six mermaid types as box art from a JS bundle in quickjs. The SVG path is removed. | markdown-preview-reading | `markdown-preview/ascii-diagrams` | `3b533938b` |
 | [markdown-default-on](markdown-default-on/story.md) | in-review | yes, PR #3 | F3 on `.md` and `.markdown` files opens Markdown mode. The `Markdown_Auto` setting and a deviation-only cache keep the choice. | markdown-preview-reading | `markdown-preview/default-on` | `141a329d3` |
 | [markdown-browser-view](markdown-browser-view/story.md) | in-review | yes, PR #4 | `md-open.sh` shows a Markdown file as a web page, with diagrams from a pinned CDN. Alt-F3 runs it. | markdown-preview-reading | `markdown-preview/browser-view` | `a2f720209` |
+| [markdown-compact-layout](markdown-compact-layout/story.md) | done | yes, PR #8 | Fewer blank rows, no heading rule rows, lighter table borders. | none | `feat/markdown-compact-layout` | see PR #8 |
 
 `markdown-preview-fixes` has no pull request. Its commits are in the history of `markdown-preview/reading`, so PR #1 merged them.
 
@@ -24,7 +25,6 @@ Build these stories in this order. Each one changes `MarkdownRender.cpp` and the
 
 | Story | Status | Size | Outcome | Depends on | Branch |
 |---|---|---|---|---|---|
-| [markdown-compact-layout](markdown-compact-layout/story.md) | planned | S | Fewer blank rows, no heading rule rows, lighter table borders. | none | `feat/markdown-compact-layout` |
 | [markdown-theme-colors](markdown-theme-colors/story.md) | planned | M | A color for each heading level and a tint on code blocks, derived from the theme. | markdown-compact-layout | `feat/markdown-theme-colors` |
 | [markdown-code-highlight](markdown-code-highlight/story.md) | planned | M | Syntax colors in fenced code for twelve languages, from an in-tree tokenizer. | markdown-theme-colors | `feat/markdown-code-highlight` |
 

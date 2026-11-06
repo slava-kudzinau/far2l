@@ -39,7 +39,7 @@ flowchart LR
 | Mermaid cache, `m_mermaid_cache` | Art rows, keyed by source hash and width. An empty entry is a failed fence. | `MarkdownDoc::Render` | One render pass |
 | JS runtime, `g_engine` | One quickjs-ng runtime and context | `build_engine` | The process, or until a timeout |
 
-**Offset rules.** Offsets never decrease down the doc. A row with no source text takes the offset of the row before it: rule rows, table borders, blank rows. All art rows of a fence take the fence offset. The hint row takes the offset of the last code row.
+**Offset rules.** Offsets never decrease down the doc. A row with no source text takes the offset of the row before it: the table separator, blank rows. All art rows of a fence take the fence offset. The hint row takes the offset of the last code row.
 
 ## Persisted
 

@@ -26,7 +26,7 @@ A run holds an `MdRole` (`MD_ROLE_BODY`, `MD_ROLE_HEADING`, `MD_ROLE_CODE`, `MD_
 ## Consequences
 
 - A theme change shows on the next redraw, because roles are resolved when the screen is drawn.
-- Layout also marks structure (heading rule lines, the `│ ` quote prefix, indented code), so a theme with equal entries still reads.
+- Layout also marks structure (the `│ ` quote prefix, indented code), so a theme with equal entries still reads.
 - The reading story close-out records two weak spots. In the black and white theme (`BlackColorsIndex16`), code and art equal the body foreground. In the default theme, art and code are the closest pair. Both are open owner items, and this ADR did not recheck them.
 - New elements take an existing role. A new role needs a new palette entry and an update of this ADR.
 
