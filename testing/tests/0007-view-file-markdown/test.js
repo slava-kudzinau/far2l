@@ -82,10 +82,13 @@ CheckForeOther("strong", strong_cell, heading_cell, "heading")
 // A level-4 heading shares the h3 color (H3 to H6 are one role); the list comes on the row
 // right under it.
 var h4 = ExpectString("Heading Four")
-var h3_cell = ReadCell(h4.X, h4.Y)
+CheckForeOther("heading four", ReadCell(h4.X, h4.Y), heading_cell, "h1")
+var h3 = ExpectString("Heading Three")
+var h3_cell = ReadCell(h3.X, h3.Y)
 CheckForeSame("heading four", ReadCell(h4.X, h4.Y), h3_cell, "h3")
+CheckForeOther("h3", h3_cell, heading_cell, "h1")
 var bullet = ExpectString("bullet one")
-CheckRowOf("list right under the heading", bullet, h4.Y + 1)
+CheckRowOf("list right under the h3 heading", bullet, h3.Y + 1)
 // Code takes its own palette entry, different from the heading and from the body.
 var code = ExpectString("Code Fence Body")
 CheckBack("code", ReadCell(code.X, code.Y))

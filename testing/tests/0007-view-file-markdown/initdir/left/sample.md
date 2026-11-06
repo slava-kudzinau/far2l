@@ -4,6 +4,8 @@ Some *emphasis* and **strong** text with a `code span`.
 
 #### Heading Four
 
+### Heading Three
+
 - bullet one
 - bullet two
 

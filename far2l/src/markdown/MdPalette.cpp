@@ -30,7 +30,8 @@ const char MD_COLORS_INI[] = "settings/markdown-colors.ini";
 const char MD_COLORS_SECTION[] = "markdown";
 
 // The part of a palette entry that sets the background: its index nibble, the flag and the
-// 24-bit color.  ViewerPrinter.cpp masks the returned color with the same pattern.
+// 24-bit color.  Kept in step with the kBackBits copy in ViewerPrinter.cpp: the module
+// pre-masks the resolved entry and the dispatch re-masks against the live viewer background.
 constexpr uint64_t kBackBits = 0xf0 | BACKGROUND_TRUECOLOR | (uint64_t(0xffffff) << 40);
 
 // The RGB defaults and 16-color fallbacks of the spec table (Roles), in MdRole order from
@@ -205,14 +206,16 @@ PaletteOverrides LoadOverrides()
 		return out;
 	}
 
+	// The mtime is recorded even when the load fails, so a corrupt or unreadable file does not
+	// make every draw-time call re-parse it.
+	out.mtime = st.st_mtime;
+
 	KeyFileReadHelper kfh(path, MD_COLORS_SECTION);
 	if (!kfh.IsLoaded()) {
 		// The file vanished between the stat and the read: no file, all defaults.
 		out.no_file = true;
 		return out;
 	}
-
-	out.mtime = st.st_mtime;
 
 	const KeyFileValues *section = kfh.GetSectionValues(MD_COLORS_SECTION);
 	if (!section)
@@ -258,15 +261,52 @@ uint64_t RgbRealColor(const RoleDefault &def)
 	return ((uint64_t)def.rgb << 16) | FOREGROUND_TRUECOLOR | def.index256;
 }
 
+// The verdict of the contrast rule for one batch: all or none at 3.0.  All eight RGB defaults
+// share the same viewer background, so the whole set either passes or drops to today's look;
+// a mid-luminance background must never show a mix of RGB defaults and today's look.
+bool RgbDefaultsPass()
+{
+	RGB bg, fg;
+	extractColor(FarColorToReal(COL_VIEWERTEXT), fg, bg);
+	for (const RoleDefault &def : kRoleDefaults) {
+		RGB def_fg, def_bg;
+		extractColor(RgbRealColor(def), def_fg, def_bg);
+		if (wcagComputeContrast(def_fg, bg) < 3.0)
+			return false;
+	}
+	return true;
+}
+
+// The contrast verdict, cached with the batch: the viewer background changes only with a theme
+// change, and an override or a re-render re-calls this path, so a stale verdict never survives
+// a redraw that matters.
+bool RgbDefaultsAllowed()
+{
+	static std::mutex s_mutex;
+	static bool s_verdict = false;
+	static bool s_computed = false;
+
+	std::lock_guard<std::mutex> lock(s_mutex);
+	if (!s_computed) {
+		s_verdict = RgbDefaultsPass();
+		s_computed = true;
+	}
+	return s_verdict;
+}
+
 } // namespace
 
 uint64_t MdRunColor(uint64_t role)
 {
 	const uint64_t body = FarColorToReal(COL_VIEWERTEXT);
 
+	// Out-of-range roles take the body look, not the body override.
+	if (role > MD_ROLE_ART)
+		return body;
+
 	// 1. The user file.  An override has no contrast check.
 	const PaletteOverrides &overrides = ReadOverrides();
-	const RoleOverride &ov = overrides.roles[role < MD_ROLE_ART + 1 ? role : MD_ROLE_BODY];
+	const RoleOverride &ov = overrides.roles[role];
 	if (ov.valid)
 		return (ov.color & ~kBackBits) | (body & kBackBits);
 
@@ -283,15 +323,9 @@ uint64_t MdRunColor(uint64_t role)
 	uint64_t entry = 0;
 
 	// 3. The RGB defaults, under the contrast rule: all or none at 3.0 against the real viewer
-	// background.  The check runs before any RGB color is used.
-	if (WINPORT(GetConsoleColorPalette)(NULL) >= 8) {
-		RGB bg, fg;
-		extractColor(body, fg, bg);
-		RGB def_fg, def_bg;
-		extractColor(RgbRealColor(def), def_fg, def_bg);
-		if (wcagComputeContrast(def_fg, bg) >= 3.0)
-			entry = RgbRealColor(def);
-	}
+	// background, one batch verdict for the whole table.
+	if (WINPORT(GetConsoleColorPalette)(NULL) >= 8 && RgbDefaultsAllowed())
+		entry = RgbRealColor(def);
 
 	// 2/4. Today's look when the RGB path did not run or failed the rule; the 16-color fallback
 	// when the terminal has no RGB at all.
