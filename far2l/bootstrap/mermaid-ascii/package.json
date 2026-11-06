@@ -1,0 +1,13 @@
+{
+  "name": "far2l-mermaid-ascii",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Builds far2l/bootstrap/mermaid-ascii.js, the ASCII renderer of beautiful-mermaid for far2l's Markdown view",
+  "license": "MIT",
+  "dependencies": {
+    "beautiful-mermaid": "1.1.3"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.8"
+  }
+}

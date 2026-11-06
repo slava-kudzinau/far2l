@@ -1,0 +1,5 @@
+graph LR
+  A[Start] --> B{Ready?}
+  B -->|yes| C[Run]
+  B -->|no| D[Wait]
+  D --> B

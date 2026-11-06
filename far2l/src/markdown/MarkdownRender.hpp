@@ -9,7 +9,7 @@
 #include "colors.hpp"
 
 // Palette role of a run.  The viewer maps it to a far palette entry when it draws, so a theme
-// change shows on the next redraw.  Plain integers, so SvgCanvas can build runs as (text, role).
+// change shows on the next redraw.  Plain integers, so the layout code can build runs as (text, role).
 enum MdRole : uint64_t {
     MD_ROLE_BODY = 0,      // body text, list text, quote bars (the viewer text entry)
     MD_ROLE_HEADING,       // headings, their rules, links, strong text, table header text
@@ -36,8 +36,8 @@ struct MdLine {
 
 // Renders a whole markdown document (markdown -> styled display lines) and
 // hands out lines block-by-block to the viewer.  A markdown fence tagged
-// "mermaid" is delegated to the MermaidEngine -> SvgCanvas pipeline (see
-// MermaidEngine.hpp / SvgCanvas.hpp) and cached.
+// "mermaid" is drawn by AsciiMermaid (see AsciiMermaid.hpp) and cached; a fence
+// it cannot draw keeps its code rows and gets a hint row under them.
 class MarkdownDoc {
 public:
     MarkdownDoc() = default;
@@ -52,7 +52,7 @@ public:
     // to the block containing that offset.  Returns false at document end.
     bool NextLines(std::vector<MdLine> &out, int64_t at_file_pos);
 
-    // Re-run the layout pass at a new width (drop mermaid cache: geometry depends on width).
+    // Re-run the layout pass at a new width (the mermaid cache is dropped with it).
     void Invalidate(int width);
 
     // File offset of the first block (document start).

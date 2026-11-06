@@ -20,6 +20,11 @@ Code Fence Body
 ```
 
 ```mermaid
+graph LR
+  A[Input] --> B[Output]
+```
+
+```mermaid
 swimlane-beta
   subgraph Alpha
     a1[Start] --> a2[Finish]

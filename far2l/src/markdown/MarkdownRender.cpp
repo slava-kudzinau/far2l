@@ -3,11 +3,11 @@
 #include "md4c.h"
 #include "headers.hpp"   // WinPort: MultiByteToWideChar/WideCharToMultiByte (CP_UTF8)
 #include "interf.hpp"   // BoxSymbols[]
-#include "MermaidEngine.hpp"
-#include "SvgCanvas.hpp"
+#include "AsciiMermaid.hpp"
 
 #include <algorithm>
 #include <cstring>
+#include <cwctype>
 #include <functional>
 
 // ---------------------------------------------------------------------------
@@ -26,6 +26,8 @@ namespace {
 // is also shown by layout: heading rule lines, the box-line quote prefix, indented code, bullets.
 constexpr int      CODE_INDENT   = 4;     // cells of indent before each code line
 constexpr wchar_t  BULLET        = L'\u2022';
+// The row after a mermaid fence that AsciiMermaid cannot draw; the fence's code rows stay above it.
+const wchar_t      MERMAID_HINT[] = L"(diagram not drawn here - Alt-F3 opens it in the browser)";
 
 std::wstring concat(const std::vector<MdRun> &runs);
 std::wstring utf8_to_wide(const char *data, size_t size);
@@ -74,6 +76,15 @@ std::string wide_to_utf8(const std::wstring &w)
 std::pair<size_t, int> mermaid_key(const std::wstring &src, int width)
 {
     return std::make_pair(std::hash<std::wstring>()(src), width);
+}
+
+// A fence is a mermaid diagram when its info word is "mermaid", in any case.
+bool is_mermaid_lang(const std::wstring &lang)
+{
+    std::wstring w = lang;
+    for (wchar_t &c : w)
+        c = (wchar_t)towlower(c);
+    return w == L"mermaid";
 }
 
 // Engine errors can carry multi-line JS stacks; each log line holds one failure.
@@ -169,13 +180,14 @@ struct Builder {
     int span_strong = 0;          // open strong spans
     int span_link = 0;            // open links
 
-    // mermaid fences: the placeholder line range (in `out`) plus the fence
-    // body, so Render() can splice engine-produced box art in place.
+    // mermaid fences: the placeholder line range (in `out`) plus the fence body and the lead of
+    // its rows, so Render() can splice the box art in place, or add the hint row under the code.
     struct Fence {
         int64_t file_pos;
         std::wstring src;
         size_t first_line = 0;   // index in out of the first placeholder line
         size_t count = 0;        // placeholder lines emitted for this fence
+        std::wstring lead;       // row_lead() of the fence (list indent, quote bars)
     };
     std::vector<Fence> fences;
 
@@ -449,7 +461,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_CODE:
         case MD_BLOCK_HTML: {
             b.in_code = false;
-            bool is_mermaid = (b.code_lang == L"mermaid");
+            bool is_mermaid = is_mermaid_lang(b.code_lang);
             std::wstring fence_src = b.code_text;
             b.code_text.clear();
             b.code_lang.clear();
@@ -457,8 +469,8 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             std::wstring text = fence_src;
             if (!text.empty() && text.back() == L'\n')
                 text.pop_back();
-            // The fence body is the placeholder; Render() replaces it with the
-            // engine's box art when available (Step 6 splice below).
+            // The fence body is the placeholder: Render() replaces it with the box art, or keeps
+            // it and adds the hint row when the fence is not drawn.
             size_t first_line = b.out.size();
             size_t count = 0, start = 0;
             // The art of a fence is placed at the fence's first source text.
@@ -479,7 +491,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                 start = nl + 1;
             }
             if (is_mermaid)
-                b.fences.push_back(Builder::Fence{fence_pos, fence_src, first_line, count});
+                b.fences.push_back(Builder::Fence{fence_pos, fence_src, first_line, count, b.row_lead()});
             b.close_block();
             break;
         }
@@ -692,45 +704,46 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width)
     m_lines = std::move(b.out);
     m_valid = true;
 
-    // Hand rendered mermaid fences to the engine (Step 4/5); placeholder lines
-    // from the fence body are replaced by box art when the engine is available.
-    // A failed fence stays raw; each failure logs one stderr line (the reason is in it).
+    // Draw each mermaid fence with AsciiMermaid, once per source and width.  An empty entry is a
+    // fence that could not be drawn; each failure logs one stderr line with the reason.
     for (auto &f : b.fences) {
         auto key = mermaid_key(f.src, width);
         if (m_mermaid_cache.count(key))
             continue;
-        std::string src = wide_to_utf8(f.src);
-        std::string svg, err;
-        std::vector<MdLine> cell;
-        if (!MermaidEngine::Available() ||
-            !MermaidEngine::Render(src, "mmd", width * 8, svg, err)) {
-            fprintf(stderr, "MermaidEngine: render failed: %s\n",
-                    one_line(err.empty() ? std::string("engine not available") : err).c_str());
-        } else {
-            SvgCanvas canvas;
-            if (!canvas.Parse(svg)) {
-                fprintf(stderr, "MarkdownRender: SvgCanvas parse failed\n");
-            } else {
-                canvas.ToCells(width, cell, MD_ROLE_ART);
-                if (cell.empty())
-                    fprintf(stderr, "MarkdownRender: mermaid art is empty\n");
+        std::vector<std::string> rows;
+        std::string err;
+        std::vector<MdLine> art;
+        if (AsciiMermaid::Render(wide_to_utf8(f.src), rows, err)) {
+            for (const std::string &row : rows) {
+                MdLine line;
+                line.runs.push_back(MdRun{utf8_to_wide(row.data(), row.size()), MD_ROLE_ART});
+                art.push_back(std::move(line));
             }
+        } else {
+            fprintf(stderr, "AsciiMermaid: render failed: %s\n", one_line(err).c_str());
         }
-        m_mermaid_cache[key] = std::move(cell);
+        m_mermaid_cache[key] = std::move(art);
     }
 
-    // Splice rendered fences in place (reverse order: earlier indices stay valid).
+    // Splice in reverse order: earlier indices stay valid.
     for (auto it = b.fences.rbegin(); it != b.fences.rend(); ++it) {
-        auto cell = m_mermaid_cache.find(mermaid_key(it->src, width));
-        if (cell == m_mermaid_cache.end() || cell->second.empty())
+        const std::vector<MdLine> &art = m_mermaid_cache[mermaid_key(it->src, width)];
+        const size_t code_end = it->first_line + it->count;
+        if (art.empty()) {
+            // The code rows stay, and the hint row follows them.  It takes the position of the last
+            // code row, so the offsets never decrease.
+            MdLine hint;
+            hint.runs.push_back(MdRun{it->lead + MERMAID_HINT, MD_ROLE_BODY});
+            hint.nFilePos = m_lines[code_end - 1].nFilePos;
+            m_lines.insert(m_lines.begin() + code_end, std::move(hint));
             continue;
-        std::vector<MdLine> &lines = cell->second;
+        }
         // Every art row carries the fence position: the viewer finds lines by nFilePos, so the
         // offsets must stay non-decreasing down the doc (a 0 in the middle would break that).
+        std::vector<MdLine> lines = art;
         for (MdLine &line : lines)
             line.nFilePos = it->file_pos;
-        m_lines.erase(m_lines.begin() + it->first_line,
-                      m_lines.begin() + it->first_line + it->count);
+        m_lines.erase(m_lines.begin() + it->first_line, m_lines.begin() + code_end);
         m_lines.insert(m_lines.begin() + it->first_line, lines.begin(), lines.end());
     }
 }
