@@ -74,20 +74,22 @@ Same as planned, with four changes:
 - The 0007 test reaches the RGB path through `COLORTERM=truecolor` in the smoke wrapper, as planned. The `--norgb` case covers the 16-color fallback.
 - One item is parked, not built. An autolink cell shows the viewer's own link highlight `#ff8833` instead of the link role, because `Viewer::UnderlineLinks` recolors it after the printer. The fix needs `viewer.cpp` or `LinkHighlighter.cpp`, outside this story's file list.
 
-Verified colors on the RGB path:
+Verified colors on the RGB path. A far attribute holds a 24-bit color as `0xBBGGRR`, so `ForeTC` reads in reverse byte order of the written color:
 
-| Role | ForeTC |
-|---|---|
-| body | `ffff00` |
-| h1 | `ffff5f` |
-| h2 | `ffaf5f` |
-| h3 to h6 | `87afff` |
-| strong | `ffffff` |
-| labeled link | `87ff87` |
-| code | `ff87ff` |
-| quote | `afafd7` |
-| rule and borders | `8787af` |
-| art | `c0c0c0` |
+| Role | Drawn color | ForeTC |
+|---|---|---|
+| body | `#00FFFF` | `ffff00` |
+| h1 | `#FFFF5F` | `5fffff` |
+| h2 | `#FFAF5F` | `5fafff` |
+| h3 to h6 | `#87AFFF` | `ffaf87` |
+| strong | `#FFFFFF` | `ffffff` |
+| labeled link | `#87FF87` | `87ff87` |
+| code | `#FF87FF` | `ff87ff` |
+| quote | `#AFAFD7` | `d7afaf` |
+| rule and borders | `#8787AF` | `af8787` |
+| art | `#C0C0C0` | `c0c0c0` |
+
+The first build wrote `0xRRGGBB` straight into the attribute, so H1 drew pale cyan near the body color. The owner found it in Ghostty; the fix is `TrueForeColor` in `MdPalette.cpp`, and the 0007 test now pins the BGR value and the fallback index.
 
 ### Decisions changed during the build
 
