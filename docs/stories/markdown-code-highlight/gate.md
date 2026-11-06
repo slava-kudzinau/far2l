@@ -30,6 +30,7 @@ flowchart LR
 - Four new palette roles: `token-keyword`, `token-string`, `token-comment`, `token-number`, each with an RGB default, a 256 index, a 16-color fallback, and a key in `settings/markdown-colors.ini`. The contrast rule and the user file work as they do for the other roles.
 - Limits, all per render: 1000 characters of each source line, 400 lines and 64 KB per fence, 40 ms of time for all fences together. A fence that hits a limit shows the plain code color where it stopped.
 - ADR-008 records the route: the core reaches Colorer through one optional plugin export, with the fallback that no plugin means the plain code color.
+- Words: md4c is the Markdown parser the viewer already uses; a palette entry is a named color slot of the far2l console, for example `COL_HELPHIGHLIGHTTEXT`; `dlopen` asks the operating system for a module that is already in the process.
 
 ### Decisions the model made
 
