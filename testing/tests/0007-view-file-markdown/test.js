@@ -105,13 +105,13 @@ var table_head = ExpectString("Col A")
 CheckBack("table header", ReadCell(table_head.X, table_head.Y))
 CheckForeSame("table header", ReadCell(table_head.X, table_head.Y), strong_cell, "strong")
 CheckCellChar(table.X + 1, table.Y - 1, "─")
-// The borders take the rule color; the header-row bars above keep the art color and differ
-// from both the rule glyph and the body foreground.
+// The borders take the rule color: the separator line, the bars of the header row and the
+// bars of the data rows all share it, and it differs from strong and from the body fore.
 var border_cell = ReadCell(table.X + 1, table.Y - 1)
 CheckForeOther("table border", border_cell, strong_cell, "strong")
 CheckForeOther("table border", border_cell, plain, "viewer")
-var table_art = ReadCell(table.X, table.Y)
-CheckForeOther("table art", table_art, border_cell, "table border")
+var table_bar = ReadCell(table.X, table.Y)
+CheckForeSame("table bar", table_bar, border_cell, "table border")
 // A code span in the table header keeps the code role: the header markup is strong for plain
 // text, but spans of their own win over it (the spec's precedence).
 var hcode = ExpectString("hcode")
@@ -126,7 +126,9 @@ ExpectString("Finish")
 ExpectNoString("```mermaid")
 // The flowchart is drawn as box art in the art role, with no source text left on screen.
 var flow = ExpectString("└───────┘     └────────┘")
-CheckForeSame("flowchart art", ReadCell(flow.X, flow.Y), table_art, "table art")
+var flow_art = ReadCell(flow.X, flow.Y)
+CheckForeOther("flowchart art", flow_art, border_cell, "table border")
+CheckForeOther("flowchart art", flow_art, plain, "viewer")
 ExpectNoString("graph LR")
 // The swimlane block is not drawn: its code shows, and the hint row follows the code.
 var swim_last = ExpectString("a1[Start] --> a2[Finish]")
@@ -140,7 +142,7 @@ CheckFore("diagram hint", ReadCell(hint.X, hint.Y))
 // the first quote and keeps the cell for the later pairs.
 var quote = ExpectString("│ block quote line")
 var quote_cell = ReadCell(quote.X + 2, quote.Y)
-CheckForeOther("block quote", quote_cell, table_art, "table art")
+CheckForeOther("block quote", quote_cell, border_cell, "table border")
 CheckForeOther("block quote", quote_cell, plain, "viewer")
 
 
@@ -658,23 +660,38 @@ TypeDown(2)
 TypeFKey(3)
 ExpectString("left/sample.md")
 var norgb_heading = ExpectString("Heading One")
+var norgb_h3 = ExpectString("Heading Three")
 var norgb_strong = ExpectString("strong")
 var norgb_code = ExpectString("Code Fence Body")
-function CheckNorgb(name, cell) {
+// The exact 4-bit index of each spec fallback: F_YELLOW 14, F_LIGHTRED 12, F_LIGHTGRAY 7,
+// F_WHITE 15, F_LIGHTGREEN 10, F_LIGHTMAGENTA 13, F_CYAN 3. A wrong index fails here.
+function CheckNorgb(name, cell, expected) {
 	if (cell.IsForeTC) {
 		Log(name + ": IsForeTC is true, foreTC " + cell.ForeTC)
 		Panic(name + " still shows a 24-bit color under --norgb")
 	}
-	if (cell.Fore == 0) {
-		Log(name + ": fore is 0 (black on black)")
-		Panic(name + " shows an unreadable fallback index")
+	if (cell.Fore != expected) {
+		Log(name + ": fore " + cell.Fore + ", expected " + expected)
+		Panic(name + " shows the wrong 16-color fallback")
 	}
 }
 // The palette-driven roles must show their readable 16-color fallback; the plain body text
 // keeps the viewer's own COL_VIEWERTEXT truecolor, which the palette module does not control.
-CheckNorgb("norgb heading", ReadCell(norgb_heading.X, norgb_heading.Y))
-CheckNorgb("norgb strong", ReadCell(norgb_strong.X, norgb_strong.Y))
-CheckNorgb("norgb code", ReadCell(norgb_code.X, norgb_code.Y))
+CheckNorgb("norgb h1", ReadCell(norgb_heading.X, norgb_heading.Y), 14)
+CheckNorgb("norgb h3", ReadCell(norgb_h3.X, norgb_h3.Y), 7)
+CheckNorgb("norgb strong", ReadCell(norgb_strong.X, norgb_strong.Y), 15)
+CheckNorgb("norgb code", ReadCell(norgb_code.X, norgb_code.Y), 13)
+// The H2, link and quote cells sit on the last page; the thematic break is the last row.
+TypeEnd()
+var norgb_h2 = ExpectString("Heading Two")
+CheckNorgb("norgb h2", ReadCell(norgb_h2.X, norgb_h2.Y), 12)
+var norgb_link = ExpectString("labeled link")
+CheckNorgb("norgb link", ReadCell(norgb_link.X, norgb_link.Y), 10)
+var norgb_quote = ExpectString("block quote line")
+CheckNorgb("norgb quote", ReadCell(norgb_quote.X + 2, norgb_quote.Y), 3)
+var norgb_rule = ExpectString("────────────────────────────────────────────────────────────────────────────────")
+// The rule takes the spec's 16-color fallback F_CYAN (3), the same index as quote.
+CheckNorgb("norgb rule", ReadCell(norgb_rule.X, norgb_rule.Y), 3)
 TypeEscape()
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
@@ -706,11 +723,8 @@ ExpectString("Do you want to quit FAR?")
 TypeEnter()
 ExpectAppExit(0);
 
-// link=@Help.Topic: a palette entry resolves at draw time. The override is accepted (the file
-// is valid), so the link cell must keep a color of its own: not the body foreground, not the
-// strong or code color (an @name falling back to unset/body would trip one of these). Its
-// exact color follows the theme entry and is not asserted (the harness cannot observe a theme
-// change); the observed value is logged for the report.
+// link=@Help.Topic: a palette entry resolves at draw time. If the override were dropped, the
+// cell would show the default link color, so it is compared with the first run's link cell.
 SaveTextFile(config + "/settings/markdown-colors.ini", ["[markdown]", "link=@Help.Topic"])
 StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
 if (Exists(profile + "/.config/history/viewer.pos"))
@@ -722,11 +736,11 @@ ExpectString("left/sample.md")
 TypePageDown()
 var ovr_link = ExpectString("labeled link")
 var ovr_link_cell = ReadCell(ovr_link.X, ovr_link.Y)
-var ovr_body = ReadCell(60, ovr_link.Y)
 Log("link override foreTC " + ovr_link_cell.ForeTC.toString(16) + " fore " + ovr_link_cell.Fore)
-CheckForeOther("link override", ovr_link_cell, ovr_body, "viewer")
-CheckForeOther("link override vs strong", ovr_link_cell, strong_cell, "strong")
-CheckForeOther("link override vs code", ovr_link_cell, code_cell, "code")
+// Compared with the default labeled link read in the first run: if the override is dropped,
+// the cell shows the default link color and this fails. The exact @Help.Topic color follows
+// the theme and is not pinned; it can equal the body fore, so that pair is not asserted.
+CheckForeOther("link override vs default link", ovr_link_cell, link_cell, "default link")
 TypeEscape()
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
@@ -768,6 +782,38 @@ TypeFKey(3)
 ExpectString("left/sample.md")
 var empty_heading = ExpectString("Heading One")
 CheckForeSame("empty ini h1", ReadCell(empty_heading.X, empty_heading.Y), heading_cell, "default h1")
+TypeEscape()
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0);
+
+// A light viewer background: the white and yellow RGB defaults fail the 3:1 contrast rule, so
+// the all-or-none rule sends every role to today's look. The h1 and h2 cells must then differ
+// from their RGB defaults (ffff5f and ffaf5f): a per-role or missing verdict fails here.
+SaveTextFile(config + "/settings/farcolors.ini", [
+	"[farcolors]",
+	"Viewer.Text=background:#FFFFFF foreground:#000000, B_WHITE | F_BLACK",
+])
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+if (Exists(profile + "/.config/history/viewer.pos"))
+	Remove(profile + "/.config/history/viewer.pos")
+TypeDown(2)
+TypeFKey(3)
+ExpectString("left/sample.md")
+var light_h1 = ExpectString("Heading One")
+var light_h1_cell = ReadCell(light_h1.X, light_h1.Y)
+if (light_h1_cell.ForeTC == 0xffff5f) {
+	Log("light h1 foreTC " + light_h1_cell.ForeTC.toString(16))
+	Panic("light background: h1 kept its RGB default, the contrast rule did not fire")
+}
+TypeEnd()
+var light_h2 = ExpectString("Heading Two")
+var light_h2_cell = ReadCell(light_h2.X, light_h2.Y)
+if (light_h2_cell.ForeTC == 0xffaf5f) {
+	Log("light h2 foreTC " + light_h2_cell.ForeTC.toString(16))
+	Panic("light background: h2 kept its RGB default, the contrast rule did not fire")
+}
 TypeEscape()
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")

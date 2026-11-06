@@ -92,16 +92,14 @@ unsigned int TodayLookEntry(uint64_t role)
 	}
 }
 
-// A run of one to six hex digits; expands `#rgb` the way the far expressions do, by doubling
-// each digit.  Returns the value or -1; `len` receives the digits consumed.
+// Exactly three or six hex digits; expands `#rgb` the way the far expressions do, by doubling
+// each digit.  Returns the value or -1; `consumed` receives the digits consumed.
 long long ParseHex(const char *s, size_t len, size_t &consumed)
 {
 	consumed = 0;
-	if (len == 0 || len > 6)
-		return -1;
 
 	unsigned long long value = 0;
-	while (consumed < len) {
+	while (consumed < len && consumed < 6) {
 		const char c = s[consumed];
 		unsigned int digit;
 		if (c >= '0' && c <= '9') digit = c - '0';
@@ -112,11 +110,11 @@ long long ParseHex(const char *s, size_t len, size_t &consumed)
 		++consumed;
 	}
 
-	// #rgb expands each digit; five digits match no accepted form.
-	if (consumed == 0 || consumed == 5)
+	// Only the two spec forms pass; `#f`, `#ff`, `#ffff` and five digits match none.
+	if (consumed != 3 && consumed != 6)
 		return -1;
 
-	if (consumed <= 3) {
+	if (consumed == 3) {
 		const unsigned long long expanded = value;
 		for (size_t k = 0; k < consumed; ++k)
 			value = (value << 4) | ((expanded >> (4 * (consumed - 1 - k))) & 0xf);
@@ -125,43 +123,56 @@ long long ParseHex(const char *s, size_t len, size_t &consumed)
 	return (long long)value;
 }
 
+// One user override, parsed once per file load.  `NAME` keeps the palette entry unresolved so
+// `MdRunColor` can call `FarColorToReal` on every draw: a theme change then shows on the next
+// redraw.  `NONE` means the key is unset or bad: the role keeps its default.
+struct RoleOverride
+{
+	enum Kind : uint8_t { NONE, LITERAL, NAME };
+
+	Kind kind = NONE;
+	uint64_t color = 0;      // LITERAL: the real color of the value
+	unsigned int entry = 0;  // NAME: the palette entry to resolve at draw time
+};
+
 // The override value grammar, checked exactly: `foreground:<value>` or `<value>`, where
 // `<value>` is `#rrggbb`, `#rgb`, an `F_*` color name, or `@Name` with the names above.  No
-// quoted values, no other forms.  Returns the real color and sets `valid`; a bad value leaves
-// it false, so the role keeps its default.
-uint64_t ParseOverrideValue(const std::string &value, bool &valid)
+// quoted values, no other forms.  A bad value returns NONE, so the role keeps its default.
+RoleOverride ParseOverrideValue(const std::string &value)
 {
-	valid = false;
+	RoleOverride out;
 
 	std::string body = value;
 	const size_t colon = body.find(':');
 	if (colon != std::string::npos) {
 		if (body.compare(0, colon, "foreground") != 0)
-			return 0;
+			return out;
 		body.erase(0, colon + 1);
 	}
 
 	if (body.empty() || body.size() > 32)
-		return 0;
+		return out;
 
 	if (body[0] == '@') {
 		for (const PaletteName &named : kPaletteNames) {
 			if (body.compare(1, std::string::npos, named.name) == 0) {
-				valid = true;
-				return FarColorToReal(named.entry);
+				out.kind = RoleOverride::NAME;
+				out.entry = named.entry;
+				return out;
 			}
 		}
-		return 0;
+		return out;
 	}
 
 	if (body[0] == '#') {
 		size_t consumed = 0;
 		const long long rgb = ParseHex(body.c_str() + 1, body.size() - 1, consumed);
 		if (rgb < 0 || consumed != body.size() - 1)
-			return 0;
-		valid = true;
+			return out;
+		out.kind = RoleOverride::LITERAL;
 		// A truecolor foreground: the RGB in bits 16..39, the flag set, no background bits.
-		return ((uint64_t)rgb << 16) | FOREGROUND_TRUECOLOR;
+		out.color = ((uint64_t)rgb << 16) | FOREGROUND_TRUECOLOR;
+		return out;
 	}
 
 	// An F_* color name: the 16 names the color expressions accept.
@@ -170,21 +181,14 @@ uint64_t ParseOverrideValue(const std::string &value, bool &valid)
 		"F_LIGHTGREEN", "F_LIGHTCYAN", "F_LIGHTRED", "F_LIGHTMAGENTA", "F_YELLOW", "F_WHITE"};
 	for (unsigned int i = 0; i < 16; ++i) {
 		if (body == kFNames[i]) {
-			valid = true;
-			return (uint64_t)i; // the 4-bit foreground layout of a palette entry
+			out.kind = RoleOverride::LITERAL;
+			out.color = (uint64_t)i; // the 4-bit foreground layout of a palette entry
+			return out;
 		}
 	}
 
-	return 0;
+	return out;
 }
-
-// One user override, parsed once per file load.  `valid` false means the key is unset or bad:
-// the role keeps its default.
-struct RoleOverride
-{
-	uint64_t color = 0;
-	bool valid = false;
-};
 
 // The parsed ini of one draw-time batch, cached against the file's mtime.
 struct PaletteOverrides
@@ -224,8 +228,7 @@ PaletteOverrides LoadOverrides()
 	for (size_t role = 0; role <= MD_ROLE_ART; ++role) {
 		if (!section->HasKey(kRoleKeys[role]))
 			continue;
-		const std::string value = section->GetString(kRoleKeys[role]);
-		out.roles[role].color = ParseOverrideValue(value, out.roles[role].valid);
+		out.roles[role] = ParseOverrideValue(section->GetString(kRoleKeys[role]));
 	}
 
 	return out;
@@ -308,13 +311,16 @@ uint64_t MdRunColor(uint64_t role)
 	if (role > MD_ROLE_ART)
 		return body;
 
-	// 1. The user file.  An override has no contrast check.
+	// 1. The user file.  An override has no contrast check.  An @Name resolves here, on every
+	// call, so a theme change shows on the next redraw.
 	const PaletteOverrides &overrides = ReadOverrides();
 	const RoleOverride &ov = overrides.roles[role];
-	if (ov.valid)
+	if (ov.kind == RoleOverride::LITERAL)
 		return (ov.color & ~kBackBits) | (body & kBackBits);
+	if (ov.kind == RoleOverride::NAME)
+		return (FarColorToReal(ov.entry) & ~kBackBits) | (body & kBackBits);
 
-	// body never takes an RGB value: it stays the viewer text entry in every step.
+	// body never takes an RGB value: outside a user override it stays the viewer text entry.
 	if (role == MD_ROLE_BODY)
 		return body;
 

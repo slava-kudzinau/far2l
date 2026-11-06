@@ -562,7 +562,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                         };
                         b.begin_line();
                         b.set_line_pos(pos);
-                        b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_ART);
+                        b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_RULE);
                         for (size_t c = 0; c < cols; ++c) {
                             const int cell_w = (c < row.size()) ? (int)concat(row[c]).size() : 0;
                             const int pad = w[c] - cell_w;
@@ -571,7 +571,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                                 for (const MdRun &r : row[c])
                                     b.append(r.text, cell_role(r));
                             b.append(std::wstring(pad > 0 ? pad : 0, L' ') + L" ", MD_ROLE_BODY);
-                            b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_ART);
+                            b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_RULE);
                         }
                         b.flush();
                     };
