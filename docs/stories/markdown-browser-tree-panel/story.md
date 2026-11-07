@@ -1,6 +1,6 @@
 ---
 description: The Alt-F3 browser page gets a docked file-tree panel on the left, and a click on a file in the tree or on a local link shows that Markdown file in the same page.
-status: in-progress
+status: in-review
 size: M
 risk: security
 depends-on: markdown-browser-github-look
@@ -75,4 +75,5 @@ M. One script, one page change, two test scripts with fixtures. Risk `security`:
 - Check: the AGENTS.md check with `BUILD=../far2l.markdown-browser-tree-panel.build` and `sh testing/markdown/browser-page.sh &&` added before `echo "check ok"`. Exact text in `plan.md`, Global Constraints.
 - Owner-checked paths: the AGENTS.md list. No task edits them. The close-out edits `markdown-browser-view.spec.md`, `markdown.data.md` and ADR-005.
 - G2-design waived by owner, 2026-11-07: "go in auto model with the tree panel story, the mock look great!". The seven gate rulings stand as recommended in gate.md: one page with every file inline; find, sort and cksum allowed; ini ceilings 12 and 2000, caps 1 MiB per file and 8 MiB per page, defaults 6 and 500; home or `/` as root falls back to the one-file page; toggle key `b`; the DOM test stays out of the AGENTS.md check; size stays M ($15/$20).
+- Owner stopped the build at the budget on 2026-11-07 and asked for a handover. The next session continued without a raise: T4 was finished, the final review ran, and the close-out is done. Spend $16.10 of the $15 budget.
 - Plan verifier, 2026-11-07: pass 1 FIX (5 Important), pass 2 FIX (1 Important), pass 3 FIX (2 Important). Each was corrected from its findings; the owner approved the extra rounds and then the build without a fourth pass: "#1 go," and "autnoumus mode". Remaining risk is left to the task reviews and the final review. Autonomous run: G3-spend and G4-merge still stop.
