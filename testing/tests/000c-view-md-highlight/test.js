@@ -119,6 +119,19 @@ TypePageDown()
 var long_kw = ExpectString("const t = \"z")
 CheckTok("long fence keyword", ReadCell(long_kw.X, long_kw.Y), 0xffaf87, 7) // const is the first token (R49)
 CheckTok("long fence tail", ReadCell(78, long_kw.Y), 0xff87ff, 13) // the code role (R49)
+// Horizontal scroll (spec.md, Core bridge): the row shows the slice at
+// LeftPos, and every cell of the slice keeps the color of its token.  F2
+// unwraps so Right moves LeftPos; four cells right the row starts at the
+// 't' of const, inside the keyword token; the tail keeps the plain code role.
+TypeFKey(2)
+ExpectString("const t = \"z")   // F2 re-laid the page: the row is where it is now
+TypeRight(4)
+var scrolled = ExpectString("t = \"zzzzzzzz")   // 'const' is cut to its last cell
+CheckTok("scrolled keyword", ReadCell(scrolled.X - 5, scrolled.Y), 0xffaf87, 7) // the 't' of const: cell 4, inside the keyword token
+CheckTok("scrolled code", ReadCell(scrolled.X - 1, scrolled.Y), 0xff87ff, 13) // the gap before the string keeps the code role
+CheckTok("scrolled string", ReadCell(scrolled.X + 4, scrolled.Y), 0x87ff87, 10) // the string token's opening quote: spec 256 index 120 (R52)
+CheckTok("scrolled tail", ReadCell(78, scrolled.Y), 0xff87ff, 13) // the code role, as above (R49)
+TypeFKey(2)
 TypePageUp()
 
 TypeEscape()

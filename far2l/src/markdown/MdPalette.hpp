@@ -12,8 +12,8 @@ uint64_t MdRunColor(uint64_t role);
 // The palette role of a Colorer token class (MdToken::cls, spec.md: 1 keyword,
 // 2 string, 3 comment, 4 number).  Any other class keeps the plain code role.
 // The 256-color look of a role: the RGB of the spec's 256 index, as the far attribute holds
-// it (0xBBGGRR in the truecolor bits). The 000c smoke test checks the token cells against it
-// under --norgb (R52).
+// it (0xBBGGRR in the truecolor bits).  The `print_norgb` driver case checks the token roles
+// against it; the 000c smoke run paints it under --norgb (R52).
 uint64_t MdRoleColor256(uint64_t role);
 inline MdRole MdRoleForTokenClass(uint8_t cls)
 {

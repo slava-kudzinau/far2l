@@ -13,7 +13,7 @@ extern "C" int ColorerTokenizeV1(const wchar_t *lang, const wchar_t *const *line
 | Call | Result |
 |---|---|
 | `ColorerTokenizeV1(L"js", lines, 3, emit, ctx, 40)` on `var s = "x"; // c` | Returns 0. Emits, in source order, one event per token, half-open `[start, end)` in wide characters: a keyword event, a string event, a comment event. |
-| Any call before the plugin created `editorSet` | Returns -1. Emits nothing. Does not create `editorSet`. |
+| Any call before the plugin created `editorSet` | The export creates `editorSet` on demand (R48). Returns 0 for a known language; -1 only when the plugin's parser factory is missing. |
 | `lang` = `L"nosuchlang9"` | Returns -2. Emits nothing. |
 | A Colorer `Exception` during setup or parse | Caught. Returns -3. Events emitted before the exception stay. |
 | The deadline passes during a call | Calls `breakParse()`. Emits the spans of the lines finished before the deadline. Returns 1. |
@@ -28,7 +28,7 @@ The token classes are fixed integers, stable across calls and processes:
 | comment | 3 | `def:Comment` |
 | number | 4 | `def:Number` |
 
-The export maps a region to a class with `Region::isAncestorOf(scheme, L"def", <name>)`, the pattern the plugin's own coloring uses. A region with none of them emits no event, so the text keeps the code role.
+The export maps a region to a class by the name of the scheme region it lands in: the class of a region is the base name of its region name (`ClassForName` of `Region::getName()`, the part after the last `.` and `:`), the pattern the plugin's own coloring uses. A region with none of them emits no event, so the text keeps the code role.
 
 ## Core bridge: `far2l/src/markdown/MdColorer`
 
@@ -66,12 +66,13 @@ to `py`, `bash` and `shell` to `sh`, `rust` to `rs`, `csharp` to `cs`,
 `handlebars` to `twig`, `brainfuck` to `lisp`, `graphviz` to `dot` and
 `terraform` to `hcl`. A slug absent from the table is sent as it is.
 The `slug_probe` driver case checks every row and every direct slug
-against the installed plugin (owner list 2026-11-07). The eleven
-slugs without a scheme in the bundle keep the code role: `matlab`,
-`clojure`, `scheme`, `prolog`, `applescript`, `nginx`, `http`,
-`liquid`, `ejs`, `stylus` and `mermaid`.
+against the installed plugin (owner list 2026-11-07). Ten of the eleven
+slugs without a scheme in the bundle keep the code role: `clojure`,
+`scheme`, `prolog`, `applescript`, `nginx`, `http`, `liquid`, `ejs`,
+`stylus` and `mermaid`; `matlab` names a catalog type, so the type-name
+lookup resolves it and the fence shows colors (R4).
 
-The file type `default` means no colors: the fence keeps the code role. These twelve names reach all four classes in the fixture test: `js`, `ts`, `python`, `bash`, `c`, `cpp`, `go`, `rust`, `java`, `sql`. `json` and `yaml` reach the classes their HRC scheme defines, at least string and number, and are accepted with fewer classes.
+These twelve names reach the token classes in the fixture test: `js`, `c`, `cpp`, `rust` and `java` reach all four; `ts`, `python`, `bash`, `go` and `sql` reach three of them (keyword, string, number). `json` and `yaml` reach the classes their HRC scheme defines, at least string and number, and are accepted with fewer classes.
 
 ## Token roles and colors
 
@@ -88,7 +89,7 @@ Four new roles join the table in `far2l/src/markdown/MdPalette.cpp`. They follow
 |---|---|
 | 24-bit console, dark viewer background | Each role shows its RGB value. |
 | 24-bit console, light viewer background (contrast under 3:1) | All four roles show `COL_HELPHIGHLIGHTTEXT`, the code entry. The contrast verdict is cached on the viewer background, as for the other roles. |
-| `--norgb` | Each role shows the 16-color fallback of the table. No RGB bits are in the cell attribute. |
+| `--norgb` | Each role shows the 256-color look of the table: the cell attribute carries the RGB of its 256 index in the truecolor bits, with the 16-color fallback of the table in the low bits (R52). The `000c` smoke test asserts it. |
 | A token on a cell past the end of the source text, on a wide screen | The cell keeps the code role and the plain background. |
 
 ## Input limits

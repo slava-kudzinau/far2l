@@ -128,11 +128,12 @@ M. One new plugin file, about five lines in `pcolorer.cpp` and one line in the p
   export first matches the file name `x.<slug>` against the scheme masks;
   when no mask matches, it asks Colorer for the type by name (the
   owner's "colorer slug" case). The alias table in the export and the
-  bridge has 28 rows. The `slug_probe` driver case checks every row and
+  bridge has 38 rows. The `slug_probe` driver case checks every row and
   every direct slug against the installed plugin and fails on a dead
-  row. Eleven slugs have no scheme in the bundle and keep the code
-  role: `matlab`, `clojure`, `scheme`, `prolog`, `applescript`,
-  `nginx`, `http`, `liquid`, `ejs`, `stylus` and `mermaid`.
+  row. Ten slugs have no scheme in the bundle and keep the code role:
+  `clojure`, `scheme`, `prolog`, `applescript`, `nginx`, `http`,
+  `liquid`, `ejs`, `stylus` and `mermaid`; `matlab` names a catalog
+  type, so the type-name lookup resolves it and it shows colors (R4).
 - `plugins/colorer` had 14 commits since the move on 2026-08-26, and none since 2026-09-27. A new file there merges easily.
 - Tier from `flow-for.mjs`: `flow tier=full docs=spec,plan design=no orchestrator=yes final=final-reviewer gate=stop scan=yes verifier=none`. The owner reads the gate before the build, because of the storage choice and the input limits.
 - Branch `feat/markdown-code-highlight`. Base `next/2.9.1-ovr.1`, after `markdown-palette` merges. Budget and hard stop M $15/$20.

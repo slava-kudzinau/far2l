@@ -814,19 +814,20 @@ int print_contrast_fail()
 // the spec table's last column, as printed cells.
 int print_norgb()
 {
-	struct Want { uint64_t role; uint64_t fg; };
-	struct Want256 { uint64_t role; uint32_t rgb; uint64_t fg; };
-	const Want256 wants[] = {   // the spec table: the 256-index color and the 16-color index
-		{MD_ROLE_TOKEN_KEYWORD, 0x87afff, 7},   // 256 index 111
-		{MD_ROLE_TOKEN_STRING, 0x87ff87, 10},   // 256 index 120
-		{MD_ROLE_TOKEN_COMMENT, 0x8787af, 3},   // 256 index 103
-		{MD_ROLE_TOKEN_NUMBER, 0xffaf5f, 12},   // 256 index 215
+	struct Want256 { uint64_t role; uint64_t fg; };
+	const Want256 wants[] = {   // the spec table's 16-color column; the RGB is the palette's
+		{MD_ROLE_TOKEN_KEYWORD, 7},   // 256 index 111
+		{MD_ROLE_TOKEN_STRING, 10},   // 256 index 120
+		{MD_ROLE_TOKEN_COMMENT, 3},   // 256 index 103
+		{MD_ROLE_TOKEN_NUMBER, 12},   // 256 index 215
 	};
 	for (const Want256 &w : wants) {
 		const uint64_t color = MdRunColor(w.role);
-		const uint64_t bgr = ((uint64_t(w.rgb) & 0xff) << 16) | (uint64_t(w.rgb) & 0xff00) | ((uint64_t(w.rgb) >> 16) & 0xff);   // the attribute holds 0xBBGGRR (R52)
-		const uint64_t want = (bgr << 16) | 0x100 | w.fg;   // the spec RGB in the truecolor bits, the index in the low bits
-		if (color != want) {
+		// The palette's 256-color look, as the attribute holds it: the RGB of
+		// the 256 index in the truecolor bits, the 16-color index in the low
+		// bits (R52).  --norgb paints exactly this.
+		const uint64_t want = MdRoleColor256(w.role);
+		if (color != want || (color & 0xf) != w.fg) {
 			printf("FAILED print_norgb: role %llu color 0x%llx, want 0x%llx\n",
 				(unsigned long long)w.role, (unsigned long long)color, (unsigned long long)want);
 			return 1;
@@ -843,7 +844,8 @@ struct Case
 };
 
 // Checks the alias table of ColorerExport.cpp and the pass-through names:
-// every slug must reach a Colorer file type (rc 0), a dead row fails.
+// every slug must reach the return code it is given: rc 0 a Colorer file
+// type, rc -2 no type (the fence keeps the code role), a dead row fails.
 int slug_probe()
 {
 	std::string why;
@@ -852,36 +854,51 @@ int slug_probe()
 		return 1;
 	}
 	// The common fence slugs and the alias targets of ColorerExport.cpp:
-	// every name here must reach a Colorer file type.
-	static const char* s_slugs[] = {
-		"javascript", "js", "typescript", "ts", "jsx", "tsx", "html", "css",
-		"scss", "sass", "python", "py", "java", "csharp", "cs", "cpp", "c++",
-		"c", "go", "golang", "rust", "rs", "php", "ruby", "rb", "kotlin", "kt",
-		"swift", "json", "yaml", "yml", "xml", "ini", "toml", "bash", "sh",
-		"shell", "zsh", "powershell", "ps1", "dockerfile", "docker", "sql",
-		"markdown", "md", "diff", "tex", "latex", "text", "plaintext",
-		"graphql", "r", "perl", "pl", "lua", "dart", "elixir", "ex",
-		"erlang", "erl", "haskell", "hs", "scala", "julia", "jl", "groovy",
-		"objectivec", "objc", "obj-c", "fsharp", "fs", "vbnet", "vb",
-		"assembly", "asm", "zig", "pascal", "pas", "fortran", "f", "lisp",
-		"actionscript", "as", "apache", "apacheconf", "conf", "makefile",
-		"make", "cmake", "properties", "vue", "svelte", "twig", "blade",
-		"less", "dot", "graphviz", "hcl", "terraform", "proto",
-		"gitignore", "handlebars", "brainfuck", "lisp", "pro", "twig", nullptr};
+	// every name here must reach the code it is given.
+	struct Slug { const char* slug; int want; };
+	static const Slug s_slugs[] = {
+		{"javascript", 0}, {"js", 0}, {"typescript", 0}, {"ts", 0}, {"jsx", 0},
+		{"tsx", 0}, {"html", 0}, {"css", 0}, {"scss", 0}, {"sass", 0},
+		{"python", 0}, {"py", 0}, {"java", 0}, {"csharp", 0}, {"cs", 0},
+		{"cpp", 0}, {"c++", 0}, {"c", 0}, {"go", 0}, {"golang", 0},
+		{"rust", 0}, {"rs", 0}, {"php", 0}, {"ruby", 0}, {"rb", 0},
+		{"kotlin", 0}, {"kt", 0}, {"swift", 0}, {"json", 0}, {"yaml", 0},
+		{"yml", 0}, {"xml", 0}, {"ini", 0}, {"toml", 0}, {"bash", 0},
+		{"sh", 0}, {"shell", 0}, {"zsh", 0}, {"powershell", 0}, {"ps1", 0},
+		{"dockerfile", 0}, {"docker", 0}, {"sql", 0}, {"markdown", 0}, {"md", 0},
+		{"diff", 0}, {"tex", 0}, {"latex", 0}, {"text", 0}, {"plaintext", 0},
+		{"graphql", 0}, {"r", 0}, {"perl", 0}, {"pl", 0}, {"lua", 0},
+		{"dart", 0}, {"elixir", 0}, {"ex", 0}, {"erlang", 0}, {"erl", 0},
+		{"haskell", 0}, {"hs", 0}, {"scala", 0}, {"julia", 0}, {"jl", 0},
+		{"groovy", 0}, {"objectivec", 0}, {"objc", 0}, {"obj-c", 0}, {"fsharp", 0},
+		{"fs", 0}, {"vbnet", 0}, {"vb", 0}, {"assembly", 0}, {"asm", 0},
+		{"zig", 0}, {"pascal", 0}, {"pas", 0}, {"fortran", 0}, {"f", 0},
+		{"lisp", 0}, {"actionscript", 0}, {"as", 0}, {"apache", 0}, {"apacheconf", 0},
+		{"conf", 0}, {"makefile", 0}, {"make", 0}, {"cmake", 0}, {"properties", 0},
+		{"vue", 0}, {"svelte", 0}, {"twig", 0}, {"blade", 0}, {"less", 0},
+		{"dot", 0}, {"graphviz", 0}, {"hcl", 0}, {"terraform", 0}, {"proto", 0},
+		{"gitignore", 0}, {"handlebars", 0}, {"brainfuck", 0}, {"pro", 0},
+		// The slugs of the spec table with no scheme file in the bundle: the
+		// fence keeps the code role.  'matlab' names a catalog type, so the
+		// type-name lookup resolves it (R4).
+		{"matlab", 0}, {"clojure", -2}, {"scheme", -2}, {"prolog", -2},
+		{"applescript", -2}, {"nginx", -2}, {"http", -2}, {"liquid", -2},
+		{"ejs", -2}, {"stylus", -2}, {"mermaid", -2},
+	};
 	const wchar_t* line = L"int a = \"s\"; // c\n";
 	const wchar_t* lines[1] = {line};
 	int rc = 0;
-	for (int i = 0; s_slugs[i] != nullptr; ++i) {
+	for (const Slug& s : s_slugs) {
 		wchar_t w[64];
 		int n = 0;
-		for (; s_slugs[i][n] != '\0' && n < 62; ++n) {
-			w[n] = static_cast<wchar_t>(static_cast<unsigned char>(s_slugs[i][n]));
+		for (; s.slug[n] != '\0' && n < 62; ++n) {
+			w[n] = static_cast<wchar_t>(static_cast<unsigned char>(s.slug[n]));
 		}
 		w[n] = 0;
 		std::vector<Span> spans;
 		const int rc_one = g_tokenize(w, lines, 1, Collect, &spans, 2000);
-		printf("SLUG %s %d\n", s_slugs[i], rc_one);
-		if (rc_one != 0) {
+		printf("SLUG %s %d\n", s.slug, rc_one);
+		if (rc_one != s.want) {
 			rc = 1;
 		}
 	}
@@ -906,7 +923,6 @@ const Case s_cases[] = {
 	{"layout_unchanged", layout_unchanged},
 	{"print_keyword", print_keyword},
 	{"slug_probe", slug_probe},
-	{"print_keyword", print_keyword},
 	{"print_string", print_string},
 	{"print_comment", print_comment},
 	{"print_number", print_number},

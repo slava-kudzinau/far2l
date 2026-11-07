@@ -23,8 +23,6 @@
 
 extern FarEditorSet* editorSet;
 
-int g_x_events = 0;
-
 namespace
 {
 // At most this many wide characters of one source line go to the parser
@@ -233,10 +231,7 @@ SHAREDSYMBOL int ColorerTokenizeV1(const wchar_t* lang, const wchar_t* const* li
 	if (editorSet == nullptr) {
 		editorSet = new FarEditorSet();
 	}
-	editorSet->viewerEvent(0, nullptr);
-	if (editorSet == nullptr) {
-		return -1;
-	}
+	editorSet->viewerEvent(0, nullptr); // prime viewer
 	ParserFactory* factory = editorSet->GetParserFactory();
 	if (factory == nullptr) {
 		return -1; // a disabled plugin: ReloadBase returned early
@@ -269,9 +264,8 @@ SHAREDSYMBOL int ColorerTokenizeV1(const wchar_t* lang, const wchar_t* const* li
 			return -2; // the type 'default' means no colors
 		}
 
-		// R48: one export call per fence line; the shared document cache of
-		// the factory carries the scheme state (an open block comment) from
-		// one line to the next.
+		// One export call per fence (R48): the handler collects the tokens of
+		// the whole fence in one parse.
 		EmitHandler handler(emit, ctx, std::chrono::steady_clock::now()
 			+ std::chrono::milliseconds(deadline_ms));
 		const std::unique_ptr<TextParser> parser = factory->createTextParser();

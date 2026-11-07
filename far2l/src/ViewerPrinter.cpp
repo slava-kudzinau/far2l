@@ -244,7 +244,7 @@ void MarkdownPrinter::Cells(const wchar_t *&p, int &pos, int &print_len, int64_t
 // Print one code run, coloring the token slices of `group` (plan T4).  Cells
 // past the last token keep the code role; the row padding keeps the text role.
 void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstring &text,
-	int &pos, int skip_len, int print_len)
+	int &pos, int skip_len, int &print_len)
 {
 	const wchar_t *p = text.c_str();
 	bool joining = false;

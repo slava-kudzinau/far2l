@@ -62,10 +62,10 @@ private:
 	void Cells(const wchar_t *&p, int &pos, int &print_len, int64_t cell_stop);
 	// Print one code run, coloring the token slices of `group`.
 	void PrintCodeRuns(const MdTokenGroup &group, const std::wstring &text,
-		int &pos, int skip_len, int print_len);
+		int &pos, int skip_len, int &print_len);
 
 	uint64_t _sel_color;
 	const std::vector<MdLine> *_lines;
 	const std::vector<MdTokenGroup> *_groups;
 	size_t _row = 0;
- };
+};
