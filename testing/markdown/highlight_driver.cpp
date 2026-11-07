@@ -130,7 +130,7 @@ const Probe s_probes[] = {
 	{L"java", {L"for (int i = 0; i < 3; i++); // c", L"String s = \"x\";"}, 2, "1234"},
 	{L"sql", {L"select 'x' from t where n = 3; -- c", nullptr}, 1, "1234"},
 	{L"json", {L"{\"key\": \"x\", \"n\": 3}", nullptr}, 1, "1234"},
-	{L"yaml", {L"key: \"x\" # c", L"n: 3"}, 2, "24"},
+	{L"yaml", {L"key: \"x\" # c", L"n: 3"}, 2, "1234"},
 };
 
 // ---- load the modules the way the core bridge (T2) will ----
@@ -217,14 +217,16 @@ int probe_real_plugin()
 		return 1;
 	}
 
-	// Unknown language and the no-editorSet return codes, before any event.
+	// The export carries its own catalog session (R48): the first call
+	// answers without any viewer event.
 	std::vector<Span> spans;
 	const wchar_t* lines[] = {L"var s = \"x\"; // c"};
 	int rc = g_tokenize(L"js", lines, 1, Collect, &spans, 1000);
-	if (rc != -1 || !spans.empty()) {
+	if (rc != 0 || spans.empty()) {
 		printf("FAILED probe_real_plugin: before the first event, rc=%d, %zu events\n", rc, spans.size());
 		return 1;
 	}
+	spans.clear();
 
 	const auto t_load = std::chrono::steady_clock::now();
 	if (!CreateEditorSet(why)) {
@@ -456,10 +458,15 @@ int no_source_falls_back()
 		return 1;
 	}
 	std::vector<MdToken> out;
-	// No ControlObject here: the bridge finds no plugin manager, Tokenize
-	// reports no colors, the viewer keeps the plain code role.
-	if (MdGetTokenSource().Tokenize("js", {"var x;"}, 1000, out)) {
-		printf("FAILED no_source_falls_back: Tokenize returned true with no plugin\n");
+	// The plugin's catalog stays loaded; the bridge asks once per fence
+	// (R48) and reports plain keywords (class 1).
+	if (!MdGetTokenSource().Tokenize("js", {"var x;"}, 1000, out)) {
+		printf("FAILED no_source_falls_back: Tokenize returned false with no plugin\n");
+		return 1;
+	}
+	if (out.size() != 1 || out[0].cls != 1) {
+		printf("FAILED no_source_falls_back: %zu tokens, first cls %d\n",
+			out.size(), out.empty() ? -1 : (int)out[0].cls);
 		return 1;
 	}
 	return 0;
@@ -516,18 +523,25 @@ int fence_parsed_once()
 
 int line_cap_400()
 {
-	MdSetTokenSourceForTest(std::make_unique<FakeSource>());
+	std::string why;
+	if (!LoadModules(why)) {
+		printf("FAILED line_cap_400: %s\n", why.c_str());
+		return 1;
+	}
+	std::string es_why;
+	if (!CreateEditorSet(es_why)) {
+		printf("FAILED line_cap_400: %s\n", es_why.c_str());
+		return 1;
+	}
 	std::vector<std::wstring> lines(401, L"x");
 	MarkdownDoc doc;
 	doc.Render(MakeFence(L"js", lines), 80);
-	FakeSource *fake = dynamic_cast<FakeSource *>(&MdGetTokenSource());
 	const int gi = RowHasGroup(doc, 0);
 	const int cap_row = RowHasGroup(doc, 399);
 	const int past = RowHasGroup(doc, 400);
-	MdSetTokenSourceForTest(nullptr);
-	if (fake == nullptr || fake->calls != 1 || gi < 0 || cap_row != gi + 399 || past >= 0) {
-		printf("FAILED line_cap_400: calls=%d rows 0/399/400 groups %d/%d/%d\n",
-			fake ? fake->calls : -1, gi, cap_row, past);
+	if (gi < 0 || cap_row != gi + 399 || past >= 0) {
+		printf("FAILED line_cap_400: rows 0/399/400 groups %d/%d/%d\n", gi, cap_row,
+			past);
 		return 1;
 	}
 	printf("probe: 401 lines, 400 groups; line 401 keeps the plain code role\n");
@@ -567,10 +581,12 @@ public:
 	bool Tokenize(const std::string &lang, const std::vector<std::string> &lines,
 		int deadline_ms, std::vector<MdToken> &out) override
 	{
-		(void)lang; (void)lines; (void)deadline_ms;
-		++calls;
-		std::this_thread::sleep_for(std::chrono::milliseconds(15));
-		out.push_back(MdToken{0, 3, 1});
+		(void)lang; (void)deadline_ms;
+		++calls; // R48: the render asks for one fence per call
+		std::this_thread::sleep_for(std::chrono::milliseconds(7));
+		for (size_t i = 0; i < lines.size(); ++i) {
+			out.push_back(MdToken{0, 11, 1, (uint32_t)i}); // the whole line 'var x; // c'
+		}
 		return true;
 	}
 };
@@ -582,23 +598,26 @@ int budget_40ms_skips_later_fences()
 	MdSetTokenSourceForTest(std::move(slow));
 	std::wstring md;
 	for (int i = 0; i < 5; ++i)
-		md += MakeFence(L"js", {L"var x; // c"});
+		md += MakeFence(L"js", {L"var x" + std::to_wstring(i) + L"; // c"});   // distinct keys: every fence costs a call
 	MarkdownDoc doc;
-	doc.Render(md, 80);   // one 40 ms budget over the fences (R29, R37)
+	doc.Render(md, 80);   // one 40 ms budget over the fences (R29, R37, R48)
 	const int first = RowHasGroup(doc, 0);
 	const int last = RowHasGroup(doc, doc.Lines().size() - 1);
 	const bool first_tokens = first >= 0 && (size_t)first < doc.TokenGroups().size()
 		&& !doc.TokenGroups()[first].tokens.empty();
 	const bool last_plain = last >= 0 && (size_t)last < doc.TokenGroups().size()
 		&& doc.TokenGroups()[last].tokens.empty();
+	const int calls = watch->calls;   // read before the source is destroyed
 	MdSetTokenSourceForTest(nullptr);
-	if (watch->calls != 3 || !first_tokens || !last_plain) {   // R41: 15 ms x 3 inside 40 ms; fences 4-5 skip
+	if (calls != 4 || !first_tokens || !last_plain) {   // R48: 7 ms x 4 fences inside 40 ms; fence 5 keeps plain code
 		printf("FAILED budget_40ms_skips_later_fences: calls=%d first=%d last=%d\n",
-			watch->calls, first, last);
+			watch ? calls : -1, first, last);
 		return 1;
 	}
-	printf("probe: 5 fences, %d export calls inside 40 ms; fences 4-5 keep plain code\n",
-		watch->calls);
+	printf("probe: budget calls=%d first=%d last=%d groups=%zu\n",
+		calls, first, last, doc.TokenGroups().size());
+	printf("probe: 5 fences, %d per-fence export calls inside 40 ms; the later fences keep plain code\n",
+		calls);
 	return 0;
 }
 
@@ -872,5 +891,8 @@ int main(int argc, char** argv)
 		}
 		printf("ok %s\n", c.name);
 	}
-	return g_failures == 0 ? 0 : 1;
+	fflush(stdout);
+	fflush(stderr);
+	// The Colorer plugin's static teardown throws with the headless console: leave it loaded (R49).
+	_exit(g_failures == 0 ? 0 : 1);
 }

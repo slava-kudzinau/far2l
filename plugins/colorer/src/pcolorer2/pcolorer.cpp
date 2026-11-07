@@ -146,10 +146,12 @@ SHAREDSYMBOL int WINAPI ProcessViewerEventW(int Event, void* Param)
   }
 
   inEventProcess = true;
-  if (!editorSet) {
-    editorSet = new FarEditorSet();
-  }
-  int result = editorSet->viewerEvent(Event, Param);
+	if (!editorSet) {
+		fprintf(stderr, "[ve] create editorSet\n");
+		editorSet = new FarEditorSet();
+	}
+	int result = editorSet->viewerEvent(Event, Param);
+	fprintf(stderr, "[ve] event %u result %d\n", Event, result);
   inEventProcess = false;
   return result;
 }

@@ -23,6 +23,8 @@
 
 extern FarEditorSet* editorSet;
 
+int g_x_events = 0;
+
 namespace
 {
 // At most this many wide characters of one source line go to the parser
@@ -191,11 +193,19 @@ SHAREDSYMBOL int ColorerTokenizeV1(const wchar_t* lang, const wchar_t* const* li
 	void (*emit)(void* ctx, int line, int start, int end, int token_class),
 	void* ctx, int deadline_ms)
 {
+	// The plugin's viewer session lives on: it keeps the parser factory
+	// (the loaded catalog) alive between calls (R48).
 	if (editorSet == nullptr) {
+		editorSet = new FarEditorSet();
+	}
+	editorSet->viewerEvent(0, nullptr);
+	if (editorSet == nullptr) {
+		fprintf(stderr, "[x] editorSet null\n");
 		return -1;
 	}
 	ParserFactory* factory = editorSet->GetParserFactory();
 	if (factory == nullptr) {
+		fprintf(stderr, "[x] factory null\n");
 		return -1; // a disabled plugin: ReloadBase returned early
 	}
 	if (deadline_ms <= 0) {
@@ -221,17 +231,25 @@ SHAREDSYMBOL int ColorerTokenizeV1(const wchar_t* lang, const wchar_t* const* li
 			return -2; // the type 'default' means no colors
 		}
 
-		VectorSource source(lines, count);
+		// R48: one export call per fence line; the shared document cache of
+		// the factory carries the scheme state (an open block comment) from
+		// one line to the next.
 		EmitHandler handler(emit, ctx, std::chrono::steady_clock::now()
 			+ std::chrono::milliseconds(deadline_ms));
-
 		const std::unique_ptr<TextParser> parser = factory->createTextParser();
 		handler.Attach(parser.get());
 		parser->setFileType(file_type);
-		parser->setLineSource(&source);
 		parser->setRegionHandler(&handler);
+		// One export call per fence line (R48): one parse over the fence,
+		// the parser cache tree carries the scheme state (an open block
+		// comment) from one line to the next.
+		const VectorSource source(lines, count);
+		parser->setLineSource(const_cast<VectorSource *>(&source));
 		parser->parse(0, count, TextParser::TextParseMode::TPM_CACHE_UPDATE);
-		return handler.Stopped() ? 1 : 0;
+		if (handler.Stopped()) {
+			return 1; // the budget spent; the lines after it keep plain code
+		}
+		return 0;
 	} catch (const Exception&) {
 		return -3;
 	} catch (const std::exception&) {
