@@ -130,13 +130,14 @@ if (Exists(profile + "/.config/history/viewer.pos"))
 TypeDown(1)
 TypeFKey(3)
 ExpectString("left/fixture.md")
-// --norgb gates the tint (spec, Contrast): the fence's code row keeps the
-// plain code look - the scheme's code foreground (console.hrd's Code on the
-// 4-bit index 7) on the viewer's own blue background, and so is the row past
-// the end of the text (the fill's area without the blend).
+// --norgb gates the tint (spec, Contrast): the fence keeps the scheme look on
+// the 4-bit path.  A plain code cell (past the last token's text) carries
+// console.hrd's Code - #d7d7af on 4-bit index 13 - on the viewer's own blue
+// background.  A cell under a token carries that region's
+// own 4-bit color (the V2 path, story markdown-code-tint).
 var n_code = ExpectString("const z")
-var ncell = ReadCell(n_code.X, n_code.Y)
-if (ncell.ForeTC != 0xffaf87 || ncell.Fore != 7) {
+var ncell = ReadCell(n_code.X + 12, n_code.Y)
+if (ncell.Fore != 13 || ncell.ForeTC != 0xafd7d7) {
 	Log("norgb fore " + ncell.Fore + " ftc " + ncell.ForeTC.toString(16))
 	Panic("--norgb code cell lost the scheme's code foreground")
 }
