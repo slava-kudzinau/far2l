@@ -26,9 +26,9 @@ flowchart LR
 
 ### Contracts, data and runtime
 
-- New plugin export `ColorerTokenizeV2(abi, language, lines, nLines, budget_us, cells, capacity,
+- New plugin export `ColorerTokenizeV2(abi, language, lines, nLines, budget_ms, cells, capacity,
   generation)`: the same input and limits as V1 (32 lines, 256 cells, a deadline in
-  microseconds), and codes -1..-3 as V1. Each cell takes 8 words: start, end, the region's
+  milliseconds), and codes -1..-3 as V1. Each cell takes 8 words: start, end, the region's
   foreground `0xRRGGBB`, the scheme's 4-bit foreground, the Colorer style word (bit 4 =
   underline), three zeros. `*generation` carries the scheme generation. The export does not
   create `FarEditorSet`. V1 stays for the old callers.
@@ -49,7 +49,7 @@ flowchart LR
 | V2 returns colors and the style word; the core stores them. | V2 returns region names, and the core resolves them. | The plugin owns the scheme; the core keeps no HRC logic. |
 | The cache key gains the scheme generation. | Refetch on every render. | A scheme change repaints; a resize does not re-tokenize. |
 | One view-wide 3:1 verdict, keyed (background, generation). | A per-fence verdict. | One answer for prose and fences; one cache. |
-| V1 stays in the export table. | Retiring V1 now. | The old callers (the highlight driver, smoke 000c) keep working; the story counts them. |
+| V1 stays, beside V2 in `ColorerExport.cpp`. | Retiring V1 now. | The old callers (the highlight driver, smoke 000c) keep working; the story counts them. |
 | The 4-bit path uses the scheme's 4-bit foreground. | Mapping 24-bit colors to the nearest 16. | F4 shows the scheme's 4-bit fg; F3 matches it. |
 
 ### How you'll see it working

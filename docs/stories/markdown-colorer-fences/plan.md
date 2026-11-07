@@ -7,8 +7,9 @@ Tasks for the build. The gate page holds the deal; spec.md holds the contract.
 - Code style: `CODESTYLE.md`; the Markdown rules in `docs/architecture/features/markdown/markdown.invariants.md`.
 - Keep the fork's changes to upstream files small; new code in `far2l/src/markdown/`.
 - Treat Markdown and mermaid text as untrusted: a render has a time limit and a stack limit.
-- Cell caps stay: 32 lines, 256 cells, the deadline in microseconds (100 ms in the viewer).
-- V1 keeps its stride and its codes; V2 is additive: 8 words per cell, codes -1..-3, `abi` 1.
+- Cell caps stay: 32 lines, 256 cells, the deadline in milliseconds (100 ms in the viewer).
+- V1 keeps its 4-word emits and its codes; V2 is additive: 8 words per cell, codes -1..-3,
+  `abi` 1.
 - The export never creates `FarEditorSet`: the same three-call shape as the look export.
 - Commit per task: message = what changed, and why.
 - Check: the gate's Run-it command, plus the story's Done list.
@@ -18,15 +19,15 @@ Tasks for the build. The gate page holds the deal; spec.md holds the contract.
 **Depends on:** none
 **Role:** implementer-risky — review task-reviewer
 
-Files: `plugins/colorer/src/pcolorer2/MdExport.cpp`, `plugins/colorer/src/pcolorer2/MdExport.h`,
-`testing/markdown/look_driver.cpp`.
+Files: `plugins/colorer/src/pcolorer2/ColorerExport.cpp`, `testing/markdown/look_driver.cpp`.
 
-Add `ColorerTokenizeV2` beside V1 in the export table. Take the same input path as V1: catalog,
-language, load scheme, tokenize, deadline. For each token, resolve the real region's foreground
-and style through `HrcLibrary::getRegionDefine(const Region*)` for the active scheme. An unset
-color takes the F4 chain: the region, its parents, then `def:Text`. Write 8-word cells: start,
-end, `0xRRGGBB` foreground, the scheme's 4-bit foreground, the Colorer style word, three zeros.
-`*generation` carries the scheme generation, 0 on codes -1..-3. `abi == 1`.
+Add `ColorerTokenizeV2` beside `ColorerTokenizeV1` in `ColorerExport.cpp`, as a `SHAREDSYMBOL`
+export. Take the same input path as V1: catalog, language, load scheme, tokenize, deadline.
+For each token, resolve the real region's foreground and style through
+`HrcLibrary::getRegionDefine(const Region*)` for the active scheme. An unset color takes the F4
+chain: the region, its parents, then `def:Text`. Write 8-word cells: start, end, `0xRRGGBB`
+foreground, the scheme's 4-bit foreground, the Colorer style word, three zeros. `*generation`
+carries the scheme generation, 0 on codes -1..-3. `abi == 1`.
 
 Driver: `tokens_v2`: a javascript fence through the real plugin. Assert a keyword, a function, a
 string, a number, a constant, an operator, and the tail. The 24-bit values come from
@@ -42,8 +43,8 @@ before, with its own stride.
 **Depends on:** T1
 **Role:** implementer-risky — review task-reviewer
 
-Files: `far2l/src/markdown/MdColorer.{hpp,cpp}`, `far2l/src/markdown/MarkdownDoc.{hpp,cpp}`,
-`far2l/src/markdown/MarkdownRender.cpp`, `testing/markdown/look_driver.cpp`.
+Files: `far2l/src/markdown/MdColorer.{hpp,cpp}`, `far2l/src/markdown/MarkdownRender.{hpp,cpp}`
+(the class `MarkdownDoc`), `testing/markdown/look_driver.cpp`.
 
 Bind `ColorerTokenizeV2` once, beside the V1 binding. A missing symbol falls back to V1's
 classes through the alias table. A cached range carries `{start, end, fg, fg4, underline}`, not
@@ -85,7 +86,8 @@ fence rows stay unchanged until T4.
 **Role:** implementer-fix-late — review task-reviewer
 
 Files: `testing/tests/000d-view-md-look/test.js`,
-`testing/tests/000d-view-md-look/workdir/left/fixture.md` (if the fence needs a function word),
+`testing/tests/000d-view-md-look/initdir/left/fixture.md` (extend it with a `javascript` fence:
+a function call, a constant, an operator, a string, a number, a keyword),
 `testing/markdown/look_driver.cpp`.
 
 `000d` asserts the javascript fence: a keyword cell, a function cell, a string cell, and the
@@ -93,7 +95,7 @@ tail. The colors are the console.hrd rows, and the underline rides where the sch
 Run the sweep first; read the cells from the run, not by guess.
 
 `tokens_v2_cost`: a 20k-line fence renders inside the budget. Print the mean and the worst. The
-hostile fixture (`fixture.py`, 1 MB) stays inside the budget.
+hostile fixture (`fixture.py`, 1 MB, authored by this task) stays inside the budget.
 
 Finish: the gate's full Run-it command; `0004-vt-shell` and `000b-find-file` are the known Mac
 failures.

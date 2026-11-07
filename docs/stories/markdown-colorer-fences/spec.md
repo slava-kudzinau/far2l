@@ -24,16 +24,17 @@ style per token. The core's token group carries a color and an underline bit, no
 
 ### Plugin export `ColorerTokenizeV2`
 
-`plugins/colorer/src/pcolorer2/MdExport.cpp`, beside V1, in the same `GetPluginInfo` table.
+`plugins/colorer/src/pcolorer2/ColorerExport.cpp`, beside `ColorerTokenizeV1`, as a
+`SHAREDSYMBOL` export. The core binds it with `dlsym`, as V1.
 
 ```cpp
 int ColorerTokenizeV2(int abi, const wchar_t *language, const wchar_t *const *lines,
-                      int nLines, long long budget_us,
+                      int nLines, long long budget_ms,
                       unsigned int *cells, int capacity, unsigned int *generation);
 ```
 
 - Same input and limits as V1: a line cap of 32 lines, a cell cap of 256 cells. The deadline is
-  in microseconds, 100 ms in the viewer.
+  in milliseconds, 100 ms in the viewer.
 - Cell stride: 8 words. `[0]` start column, `[1]` end column (1-based, inclusive). `[2]` the
   region's foreground as `0xRRGGBB`, `[3]` the scheme's 4-bit foreground (0..15). `[4]` the
   Colorer style word (bit 4 = underline). `[5]..[7]` zero.
@@ -57,7 +58,7 @@ int ColorerTokenizeV2(int abi, const wchar_t *language, const wchar_t *const *li
 
 ### The token group and the cache
 
-`far2l/src/markdown/MarkdownDoc.{hpp,cpp}`, `MarkdownRender.cpp`.
+`far2l/src/markdown/MarkdownRender.{hpp,cpp}` (the class `MarkdownDoc`).
 
 - A cached range: `{start, end, fg (0xRRGGBB), fg4 (0..15), underline (bool)}`, not a class. The
   class survives only as the fallback path's alias color.
@@ -106,14 +107,14 @@ contract for the render path.
 
 - `sh testing/markdown/look-driver.sh --case tokens_v2`: a `javascript` fence through the real
   plugin: keyword, function, string, number, constant, operator, tail. The per-word values equal
-  F4. On `far2l.hrd`: keyword `0x00ff00`, string `0x5fd7d7`, comment `0xb2b2b2`, number
-  `0x00d7ff`, constant `0x00ffff`, operator `0xc0c0c0`. On `console.hrd`: the scheme's 4-bit
-  rows. An unset color takes the F4 chain to `def:Text`.
+  F4. On `far2l.hrd`: keyword `0xffffff`, function `0x6060f0`, string `0x88ee88`, number
+  `0x00e000`, constant (`def:BooleanConstant`) `0xa030ff`, operator (`def:Symbol`) `0xe0e0c0`.
+  On `console.hrd`: the scheme's 4-bit rows. An unset color takes the F4 chain to `def:Text`.
 - `tokens_v2_limits`: 32 lines, 256 cells, the deadline, as V1's `look_codes`.
 - `tokens_v2_cost`: a 20k-line fence renders inside the budget; the report prints the mean and
   the worst.
-- `tokens_v2_v1_callers`: V1 answers the javascript fence as before (the four classes, 6-word
-  stride), so the old callers keep working.
+- `tokens_v2_v1_callers`: V1 answers the javascript fence as before (the four classes, the
+  4-word emit callback), so the old callers keep working.
 - `look_fence_contrast`: a fake scheme whose foregrounds fail 3:1: fences take the plain code
   role, prose the fork table, one verdict.
 - `look_fence_generation`: two generations: the second render refetches the ranges.
