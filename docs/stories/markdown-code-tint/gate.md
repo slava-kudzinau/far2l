@@ -24,7 +24,7 @@ flowchart LR
 ### Contracts, data and runtime
 
 - `MdLine` gains one field: a row-level background tint, drawn to the full row width.
-- The tint is a blend of the viewer background and the code color, with `BlendRgb` in
+- The tint mixes one eighth of the code color into the viewer background, with `BlendRgb` in
   `far2l/src/filediff.cpp` as the pattern. A true-color check gates it, as in
   `CanUseTrueColorFallback`.
 - Contrast: `utils/include/Colorspace.h`. A tint under 3:1 against the code foreground is not
@@ -95,7 +95,7 @@ cmake -S . -B "$BUILD" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTING=Yes -DUSEWX=N
 cmake --build "$BUILD" -j8
 sh testing/markdown/ascii-golden.sh && sh testing/markdown/ascii-driver.sh
 HIGH_BUILD="$BUILD" sh testing/markdown/highlight-driver.sh
-sh testing/markdown/look-driver.sh
+LOOK_BUILD="$BUILD" sh testing/markdown/look-driver.sh
 (cd testing && pkill -9 -f -- '--test=/tmp/far2l'; sleep 1
  find tests -maxdepth 1 -type s -delete
  for s in tests/*; do [ -S "$s" ] && rm -f "$s"; done
@@ -122,7 +122,9 @@ story's Done list.
 - The smoke reads the background of code cells, and of one cell past the end of the text.
 - `--norgb`: no tint, the text readable (the smoke run with `--norgb` reads the plain codes).
 - A contrast-failure case: a low-contrast pair draws no tint.
-- Check: the command above exits 0, all PASS, the two known Mac failures allowed.
+- A theme change recolors the block at the next redraw (the driver changes the background).
+- Check: every test prints `PASS` under the command above (the two known Mac failures allowed),
+  and every driver exits 0.
 - Docs: ADR-004's exception row, the viewer spec, `markdown.data.md`, and the invariants, updated
   in this branch.
 

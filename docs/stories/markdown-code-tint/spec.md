@@ -20,7 +20,7 @@ the full row width.
 
 ### Row tint on `MdLine`
 
-`far2l/src/markdown/MarkdownDoc.hpp`, `MarkdownRender.cpp`.
+`far2l/src/markdown/MarkdownRender.hpp`, `MarkdownRender.cpp`.
 
 - `MdLine` gains `int64_t tint = -1`: a packed `0xBBGGRR` background, or -1 for none. The fence
   builder sets it on the fence's rows (the code rows and the hint row); art rows keep their own
@@ -31,8 +31,8 @@ the full row width.
 
 `far2l/src/markdown/MdPalette.{hpp,cpp}`.
 
-- `MdCodeTint(viewer_bg)`: the blend of the viewer background and the code role's resolved
-  foreground, at a fixed ratio (the pattern is `BlendRgb` in `far2l/src/filediff.cpp`).
+- `MdCodeTint(viewer_bg)`: one eighth of the code role's resolved foreground mixed into the
+  viewer background (the pattern is `BlendRgb` in `far2l/src/filediff.cpp`).
 - The tint is drawn only when `CanUseTrueColorFallback`-style true color is on, and the pair
   (code foreground, tint) reaches 3:1 via `wcagComputeContrast` in
   `utils/include/Colorspace.h`. One verdict, cached on the pair (viewer background, code color).
