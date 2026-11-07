@@ -13,7 +13,9 @@
 #
 # Writes one page (the Markdown text and marked inline; mermaid from a pinned
 # CDN script with an SRI hash) and opens it with the system opener. The page
-# goes to ${TMPDIR:-/tmp}/far2l-md-<pid>.html unless --out names another file.
+# goes to ${XDG_CACHE_HOME:-$HOME/.cache}/far2l/md/<base>-<crc>.html unless --out
+# names another file, and is used again while no input changed. If that folder
+# cannot be used, the page goes to ${TMPDIR:-/tmp}/far2l-md-<pid>.html.
 # marked.min.js is read from this script's folder, or from MARKED_JS. The GitHub
 # CSS and the highlight.js files are read from this script's folder too.
 #
@@ -352,12 +354,55 @@ if [ ! -f "$file" ] || [ ! -r "$file" ]; then
     usage
 fi
 
+# The page path. --out names it. Else it is <base>-<crc>.html in the cache
+# folder: <base> is the file name with each character outside A-Za-z0-9._- made
+# "_" and cut to 40 characters, <crc> is the cksum of the real path of the file.
+# A cache folder that cannot be made or used, or a page path that is a link or
+# not a plain file, gives one stderr line and the old temporary page.
+cached=0
 if [ -n "$out" ]; then
     page=$out
 else
-    tmp_dir=${TMPDIR:-/tmp}
-    tmp_dir=${tmp_dir%/}
-    page=$tmp_dir/far2l-md-$$.html
+    page=
+    umask 077
+    cache_home=${XDG_CACHE_HOME:-}
+    case $cache_home in
+        /*) ;;
+        *) cache_home=${HOME:-}/.cache ;;
+    esac
+    cache_dir=${cache_home%/}/far2l/md
+    if (umask 077; mkdir -p "$cache_dir") 2>/dev/null && [ -d "$cache_dir" ] && [ ! -L "$cache_dir" ] \
+        && chmod 700 "$cache_dir" 2>/dev/null && [ -w "$cache_dir" ]; then
+        file_dir=$(dirname -- "$file")
+        case $file_dir in
+            /*) ;;
+            *) file_dir=./$file_dir ;;
+        esac
+        real_dir=$(cd "$file_dir" && pwd -P) || exit 2
+        file_name=$(basename -- "$file")
+        real=${real_dir%/}/$file_name
+        crc=$(printf '%s' "$real" | cksum | sed 's/ .*//')
+        base=$(printf '%s\n' "$file_name" | sed 's/[^A-Za-z0-9._-]/_/g' | cut -c1-40 | sed 1q)
+        case $crc in
+            ''|*[!0-9]*)
+                echo 'md-open: cannot name the cache page; using a temporary page' >&2 ;;
+            *)
+                page=$cache_dir/$base-$crc.html
+                if [ -L "$page" ] || { [ -e "$page" ] && [ ! -f "$page" ]; }; then
+                    echo "md-open: $page is not a plain file; using a temporary page" >&2
+                    page=
+                else
+                    cached=1
+                fi ;;
+        esac
+    else
+        echo "md-open: cannot use the cache folder $cache_dir; using a temporary page" >&2
+    fi
+    if [ -z "$page" ]; then
+        tmp_dir=${TMPDIR:-/tmp}
+        tmp_dir=${tmp_dir%/}
+        page=$tmp_dir/far2l-md-$$.html
+    fi
 fi
 if [ -d "$page" ] || [ ! -d "$(dirname -- "$page")" ]; then
     echo "md-open: cannot write the page $page (its folder must exist)" >&2
@@ -377,6 +422,55 @@ for f in github-markdown-light.css github-markdown-dark.css hljs-github.min.css 
         exit 3
     fi
 done
+
+# The page key and the state of md-view.ini go in the page head. The state is
+# the size and the modification time that ls shows, or "none".
+key_line="<meta name=\"far2l-md-key\" content=\"w=$width;t=$theme;f=$forced\">"
+ini_state=none
+if [ -f "$ini" ]; then
+    ini_state=$(ls -lnLd -- "$ini" 2>/dev/null \
+        | sed -n 's/^[^ ]*  *[^ ]*  *[^ ]*  *[^ ]*  *\([0-9][0-9]*\)  *\([^ ]*\)  *\([^ ]*\)  *\([^ ]*\) .*$/\1 \2 \3 \4/p' \
+        | sed -e 's/[^A-Za-z0-9 :.]/_/g' -e 1q)
+    [ -n "$ini_state" ] || ini_state=unknown
+fi
+ini_line="<!-- far2l-md-ini: $ini_state -->"
+
+# page_fresh: true if the cache page can be used as it is. No input is newer than
+# the page, and the head of the page has the key and the ini state of this run.
+page_fresh() {
+    [ -f "$page" ] && [ ! -L "$page" ] || return 1
+    abs_marked=$marked_js
+    case $abs_marked in
+        /*) ;;
+        *) abs_marked=$(pwd)/$abs_marked ;;
+    esac
+    set -- "$real" "$self_dir/$(basename -- "$0")" "$abs_marked"
+    for f in github-markdown-light.css github-markdown-dark.css hljs-github.min.css \
+             hljs-github-dark.min.css highlight.min.js; do
+        set -- "$@" "$self_dir/$f"
+    done
+    [ -f "$ini" ] && set -- "$@" "$ini"
+    newer=$(find -H "$@" -prune -newer "$page" -print 2>/dev/null) || return 1
+    [ -z "$newer" ] || return 1
+    sed -n '1,/^<\/head>$/p' "$page" | grep -qxF -- "$key_line" || return 1
+    sed -n '1,/^<\/head>$/p' "$page" | grep -qxF -- "$ini_line" || return 1
+}
+
+if [ "$cached" = 1 ] && [ "$no_cache" = 0 ] && page_fresh; then
+    if [ "$do_open" = 1 ]; then
+        open_page "$page"
+    fi
+    exit 0
+fi
+
+# The page is written to a temporary file in its folder, then moved over the
+# page, so a reader never sees a half page. The file goes on error or a signal.
+# noclobber: the shell does not write through a file or link made at that path.
+tmpf=$page.tmp.$$
+trap 'rm -f "$tmpf"' EXIT
+trap 'exit 1' INT TERM HUP
+rm -f "$tmpf"
+set -C
 
 # Folder of the Markdown file as a file:// URL for <base href>.
 dir=$(cd "$(dirname -- "$file")" && pwd) || exit 2
@@ -398,7 +492,7 @@ bom=$(printf '\357\273\277')
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline'; img-src data: file:">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 HTML
-    printf '<meta name="far2l-md-key" content="w=%s;t=%s;f=%s">\n' "$width" "$theme" "$forced"
+    printf '%s\n%s\n' "$key_line" "$ini_line"
     printf '<base href="%s">\n' "$base_url"
     printf '<title>%s</title>\n' "$title"
     # The vendored files go in as they are. Each pair is switched by its media
@@ -806,7 +900,10 @@ HTML
 })();
 JS
     printf '</script>\n</body>\n</html>\n'
-} > "$page" || { echo "md-open: cannot write $page" >&2; exit 1; }
+} > "$tmpf" || { echo "md-open: cannot write $page" >&2; exit 1; }
+set +C
+mv -f "$tmpf" "$page" || { echo "md-open: cannot write $page" >&2; exit 1; }
+trap - EXIT
 
 if [ "$do_open" = 1 ]; then
     open_page "$page"

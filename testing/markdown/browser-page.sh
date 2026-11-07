@@ -1,7 +1,8 @@
 #!/bin/sh
 # Test of far2l/bootstrap/md-open.sh (story markdown-browser-github-look).
 # Checks the flags, the defaults file md-view.ini, the browser launch, hostile
-# file names and config values, the vendored files and the page template. It needs only sh and
+# file names and config values, the vendored files, the page template and the
+# stable cache page and its reuse. It needs only sh and
 # common tools (openssl for the sha384 case). It does not need the far2l binary.
 #
 # usage: sh testing/markdown/browser-page.sh
@@ -879,6 +880,412 @@ case_vendor_sha384() {
     exit 0
 }
 
+# --- the stable page path and reuse -----------------------------------------
+
+# cache_page FILE: sets cpage to the cache page of FILE, as the spec names it.
+cache_page() {
+    cdir=$(cd "$(dirname -- "$1")" && pwd -P) || bad "cd for cache_page"
+    creal=$cdir/$(basename -- "$1")
+    ccrc=$(printf '%s' "$creal" | cksum | sed 's/ .*//')
+    cbase=$(basename -- "$1" | sed 's/[^A-Za-z0-9._-]/_/g' | cut -c1-40)
+    cpage=${XDG_CACHE_HOME:-$HOME/.cache}/far2l/md/$cbase-$ccrc.html
+}
+
+# old FILE... and future FILE...: set the modification time far back or far ahead.
+old() {
+    touch -t 200001010000 "$@" || bad "touch old $*"
+}
+future() {
+    touch -t 203501010000 "$@" || bad "touch future $*"
+}
+
+# mark: adds a line to the cache page that only an old page has. A page that is
+# built again loses it. The Markdown text cannot hold it, as "<!--" is escaped.
+mark() {
+    printf '<!-- test-marker -->\n' >> "$cpage" || bad "mark"
+}
+marked() {
+    grep -qxF '<!-- test-marker -->' "$cpage"
+}
+
+# cache_files: the number of entries in the cache folder.
+cache_files() {
+    ls -A "$XDG_CACHE_HOME/far2l/md" | wc -l | tr -d ' '
+}
+
+# no_tmp: no temporary page is left in the cache folder or in TMPDIR.
+no_tmp() {
+    left=$(find "$d" -name '*.tmp.*' 2>/dev/null)
+    [ -z "$left" ] || bad "a temporary file is left: $left"
+}
+
+# scratch: a copy of the script and every vendored file in $d/s; md then runs it.
+scratch() {
+    mkdir -p "$d/s" || bad "mkdir scratch"
+    cp "$md_open" "$d/s/md-open.sh" || bad "cp script"
+    for g in $vendored; do
+        cp "$vendor/$g" "$d/s/" || bad "cp $g"
+    done
+    md_open=$d/s/md-open.sh
+}
+
+case_cache_path_stable() {
+    fresh
+    cp "$sample" s.md || bad "cp"
+    old s.md
+    cache_page s.md
+    md s.md
+    [ "$rc" = 0 ] || bad "exit $rc: $(cat "$d/err")"
+    [ ! -s "$d/err" ] || bad "stderr: $(cat "$d/err")"
+    [ -f "$cpage" ] || bad "no page at $cpage"
+    expect_open "$cpage"
+    [ "$(cache_files)" = 1 ] || bad "want one file in the cache folder, got $(ls -A "$XDG_CACHE_HOME/far2l/md")"
+    [ -z "$(ls -A "$TMPDIR")" ] || bad "a page was made in TMPDIR: $(ls -A "$TMPDIR")"
+    grep -qxF '<meta name="far2l-md-key" content="w=70;t=auto;f=0">' "$cpage" || bad "no page key"
+    # The same file by an absolute path, by another relative path and through a
+    # linked folder gives the same page.
+    md --no-cache --no-open "$d/work/s.md"
+    [ "$rc" = 0 ] || bad "exit $rc for the absolute path"
+    mkdir "$d/other" || bad "mkdir"
+    ln -s "$d/work" "$d/link" || bad "ln"
+    cd "$d/other" || bad "cd"
+    md --no-cache --no-open ../work/s.md
+    [ "$rc" = 0 ] || bad "exit $rc for ../work/s.md"
+    md --no-cache "$d/link/s.md"
+    [ "$rc" = 0 ] || bad "exit $rc for the linked folder"
+    expect_open "$cpage"
+    [ "$(cache_files)" = 1 ] || bad "one file gave more pages: $(ls -A "$XDG_CACHE_HOME/far2l/md")"
+    # With no XDG_CACHE_HOME, the folder is under HOME.
+    unset XDG_CACHE_HOME
+    cd "$d/work" || bad "cd"
+    cache_page s.md
+    case $cpage in
+        "$HOME/.cache/far2l/md/s.md-"*.html) ;;
+        *) bad "page without XDG_CACHE_HOME is $cpage" ;;
+    esac
+    md --no-open s.md
+    [ "$rc" = 0 ] || bad "exit $rc without XDG_CACHE_HOME"
+    [ -f "$cpage" ] || bad "no page at $cpage"
+    no_tmp
+    exit 0
+}
+
+case_cache_two_files() {
+    fresh
+    mkdir a b || bad "mkdir"
+    printf '# alpha-text\n' > a/note.md || bad "write"
+    printf '# beta-text\n' > b/note.md || bad "write"
+    md --no-open a/note.md
+    [ "$rc" = 0 ] || bad "exit $rc for a/note.md"
+    md --no-open b/note.md
+    [ "$rc" = 0 ] || bad "exit $rc for b/note.md"
+    cache_page a/note.md; pa=$cpage
+    cache_page b/note.md; pb=$cpage
+    [ "$pa" != "$pb" ] || bad "two files have one page name $pa"
+    [ "$(cache_files)" = 2 ] || bad "want two pages, got $(ls -A "$XDG_CACHE_HOME/far2l/md")"
+    grep -qF 'alpha-text' "$pa" || bad "the page of a/note.md does not hold its text"
+    grep -qF 'beta-text' "$pb" || bad "the page of b/note.md does not hold its text"
+    if grep -qF 'beta-text' "$pa"; then bad "the page of a/note.md holds the text of b/note.md"; fi
+    exit 0
+}
+
+case_cache_reuse() {
+    fresh
+    cp "$sample" s.md || bad "cp"
+    old s.md
+    cache_page s.md
+    md --no-open s.md
+    [ "$rc" = 0 ] || bad "exit $rc"
+    mark
+    cp "$cpage" "$d/before" || bad "cp"
+    # The folder cannot take a new file now, so a write fails the run.
+    chmod 500 "$XDG_CACHE_HOME/far2l/md" || bad "chmod"
+    md s.md
+    st=$rc
+    chmod 700 "$XDG_CACHE_HOME/far2l/md" || bad "chmod back"
+    [ "$st" = 0 ] || bad "exit $st for a reuse: $(cat "$d/err")"
+    [ ! -s "$d/err" ] || bad "stderr for a reuse: $(cat "$d/err")"
+    expect_open "$cpage"
+    cmp -s "$cpage" "$d/before" || bad "the page changed on a reuse"
+    marked || bad "the page was built again"
+    md --no-open s.md
+    [ "$rc" = 0 ] || bad "exit $rc for a reuse with --no-open"
+    marked || bad "the page was built again with --no-open"
+    [ "$(cache_files)" = 1 ] || bad "want one page, got $(ls -A "$XDG_CACHE_HOME/far2l/md")"
+    no_tmp
+    exit 0
+}
+
+case_cache_rebuild_on_edit() {
+    fresh
+    scratch
+    cp "$sample" s.md || bad "cp"
+    cache_page s.md
+    for f in s.md "$d/s/md-open.sh" $vendored; do
+        case $f in
+            /*|s.md) ;;
+            *) f=$d/s/$f ;;
+        esac
+        old s.md "$d/s/md-open.sh"
+        for g in $vendored; do old "$d/s/$g"; done
+        md --no-open s.md
+        [ "$rc" = 0 ] || bad "exit $rc before an edit of $f"
+        mark
+        md --no-open s.md
+        marked || bad "no reuse before an edit of $f"
+        future "$f"
+        md --no-open s.md
+        [ "$rc" = 0 ] || bad "exit $rc after an edit of $f"
+        if marked; then bad "the page was not built again after an edit of $f"; fi
+    done
+    # A real edit of the text reaches the page.
+    old s.md
+    md --no-open s.md
+    mark
+    printf '\nedited-text-zq\n' >> s.md || bad "edit"
+    future s.md
+    md --no-open s.md
+    [ "$rc" = 0 ] || bad "exit $rc after a text edit"
+    grep -qF 'edited-text-zq' "$cpage" || bad "the edited text is not in the page"
+    no_tmp
+    exit 0
+}
+
+case_cache_rebuild_on_flag() {
+    fresh
+    cp "$sample" s.md || bad "cp"
+    old s.md
+    cache_page s.md
+    md --no-open s.md
+    mark
+    md --width 80 --no-open s.md
+    [ "$rc" = 0 ] || bad "exit $rc for --width 80"
+    if marked; then bad "the page was not built again for --width 80"; fi
+    grep -qxF '<meta name="far2l-md-key" content="w=80;t=auto;f=1">' "$cpage" || bad "no key for --width 80"
+    expect_tag_at "$cpage" 80 auto 1
+    mark
+    md --width 80 --no-open s.md
+    marked || bad "no reuse for the same flag"
+    md --theme dark --width 80 --no-open s.md
+    if marked; then bad "the page was not built again for --theme dark"; fi
+    mark
+    # A run with no flag is not forced, so the forced page is not used.
+    md --width 80 --no-open s.md
+    if marked; then bad "the page was not built again for --width 80 after --theme dark"; fi
+    mark
+    md --no-open s.md
+    if marked; then bad "the page was not built again for no flag after a forced run"; fi
+    grep -qxF '<meta name="far2l-md-key" content="w=70;t=auto;f=0">' "$cpage" || bad "no key for no flag"
+    exit 0
+}
+
+# expect_tag_at PAGE W T F: as expect_tag, for another page.
+expect_tag_at() {
+    page=$1
+    shift
+    expect_tag "$@"
+}
+
+case_cache_rebuild_on_ini() {
+    fresh
+    cp "$sample" s.md || bad "cp"
+    old s.md
+    cache_page s.md
+    md --no-open s.md
+    mark
+    # An old ini that gives the same key: the page records that there was none.
+    write_ini '[View]' 'browser=auto'
+    old "$ini"
+    md --no-open s.md
+    [ "$rc" = 0 ] || bad "exit $rc with a new ini"
+    if marked; then bad "the page was not built again when md-view.ini was added"; fi
+    mark
+    md --no-open s.md
+    marked || bad "no reuse with the same ini"
+    # The same time, another size.
+    write_ini '[View]' 'browser=safari'
+    old "$ini"
+    md --no-open s.md
+    if marked; then bad "the page was not built again when md-view.ini changed size"; fi
+    mark
+    # A newer ini.
+    future "$ini"
+    md --no-open s.md
+    if marked; then bad "the page was not built again for a newer md-view.ini"; fi
+    old "$ini"
+    md --no-open s.md
+    mark
+    md --no-open s.md
+    marked || bad "no reuse with the same ini"
+    # A deleted ini.
+    rm -f "$ini"
+    md --no-open s.md
+    [ "$rc" = 0 ] || bad "exit $rc after the ini was deleted"
+    if marked; then bad "the page was not built again when md-view.ini was deleted"; fi
+    mark
+    md --no-open s.md
+    marked || bad "no reuse with no ini"
+    # A changed value changes the key.
+    write_ini '[View]' 'width=60'
+    old "$ini"
+    md --no-open s.md
+    grep -qxF '<meta name="far2l-md-key" content="w=60;t=auto;f=0">' "$cpage" || bad "no key from the new ini"
+    exit 0
+}
+
+case_cache_no_cache_flag() {
+    fresh
+    cp "$sample" s.md || bad "cp"
+    old s.md
+    cache_page s.md
+    md --no-open s.md
+    mark
+    md --no-cache --no-open s.md
+    [ "$rc" = 0 ] || bad "exit $rc for --no-cache"
+    [ -f "$cpage" ] || bad "no page at the cache path after --no-cache"
+    if marked; then bad "--no-cache did not build the page again"; fi
+    [ "$(cache_files)" = 1 ] || bad "want one page, got $(ls -A "$XDG_CACHE_HOME/far2l/md")"
+    mark
+    # --out builds its own page and leaves the cache page.
+    md --no-open --out "$page" s.md
+    [ "$rc" = 0 ] || bad "exit $rc for --out"
+    [ -s "$page" ] || bad "no --out page"
+    marked || bad "--out changed the cache page"
+    if grep -qxF '<!-- test-marker -->' "$page"; then bad "--out reused the cache page"; fi
+    printf '<!-- test-marker -->\n' >> "$page" || bad "mark --out page"
+    md --no-open --out "$page" s.md
+    if grep -qxF '<!-- test-marker -->' "$page"; then bad "--out reused its old page"; fi
+    no_tmp
+    exit 0
+}
+
+case_cache_dir_mode() {
+    fresh
+    umask 022
+    cp "$sample" s.md || bad "cp"
+    cache_page s.md
+    md --no-open s.md
+    [ "$rc" = 0 ] || bad "exit $rc"
+    case $(ls -ld "$XDG_CACHE_HOME/far2l/md") in
+        drwx------*) ;;
+        *) bad "folder mode: $(ls -ld "$XDG_CACHE_HOME/far2l/md")" ;;
+    esac
+    case $(ls -l "$cpage") in
+        -rw-------*) ;;
+        *) bad "page mode: $(ls -l "$cpage")" ;;
+    esac
+    # An old folder with a wider mode gets 700.
+    rm -rf "$XDG_CACHE_HOME/far2l"
+    mkdir -p "$XDG_CACHE_HOME/far2l/md" || bad "mkdir"
+    chmod 755 "$XDG_CACHE_HOME/far2l/md" || bad "chmod"
+    md --no-open s.md
+    [ "$rc" = 0 ] || bad "exit $rc with an old folder"
+    case $(ls -ld "$XDG_CACHE_HOME/far2l/md") in
+        drwx------*) ;;
+        *) bad "old folder mode: $(ls -ld "$XDG_CACHE_HOME/far2l/md")" ;;
+    esac
+    case $(ls -l "$cpage") in
+        -rw-------*) ;;
+        *) bad "page mode in an old folder: $(ls -l "$cpage")" ;;
+    esac
+    exit 0
+}
+
+# expect_tmp_page: the run used the old temporary page and opened it.
+expect_tmp_page() {
+    [ "$rc" = 0 ] || bad "exit $rc for [$1]: $(cat "$d/err")"
+    [ "$(stderr_lines)" = 1 ] || bad "want one stderr line for [$1], got: $(cat "$d/err")"
+    [ -f "$OPEN_LOG" ] || bad "no opener ran for [$1]"
+    got=$(sed -n 2p "$OPEN_LOG")
+    [ "$(sed -n 1p "$OPEN_LOG")" = 1 ] || bad "opener got [$(cat "$OPEN_LOG")] for [$1]"
+    case $got in
+        "$TMPDIR/far2l-md-"*.html) ;;
+        *) bad "opened [$got] for [$1], want a page in TMPDIR" ;;
+    esac
+    [ -s "$got" ] || bad "no page at $got for [$1]"
+    rm -f "$OPEN_LOG" "$got"
+}
+
+case_cache_dir_fallback() {
+    fresh
+    cp "$sample" s.md || bad "cp"
+    # The cache home is a file, so the folder cannot be made.
+    : > "$d/afile"
+    XDG_CACHE_HOME=$d/afile
+    md s.md
+    expect_tmp_page "cache home is a file"
+    # The folder is a link to another folder: nothing is written there.
+    XDG_CACHE_HOME=$d/cache
+    mkdir -p "$d/elsewhere" "$XDG_CACHE_HOME/far2l" || bad "mkdir"
+    ln -s "$d/elsewhere" "$XDG_CACHE_HOME/far2l/md" || bad "ln"
+    md s.md
+    expect_tmp_page "folder is a link"
+    [ -z "$(ls -A "$d/elsewhere")" ] || bad "a file was written through the folder link"
+    [ -L "$XDG_CACHE_HOME/far2l/md" ] || bad "the folder link was replaced"
+    rm -f "$XDG_CACHE_HOME/far2l/md"
+    # The page path is a link: it is not written through or replaced.
+    mkdir "$XDG_CACHE_HOME/far2l/md" || bad "mkdir"
+    cache_page s.md
+    printf 'victim\n' > "$d/victim" || bad "write"
+    ln -s "$d/victim" "$cpage" || bad "ln"
+    md s.md
+    expect_tmp_page "page is a link"
+    [ "$(cat "$d/victim")" = victim ] || bad "the page link target was written"
+    [ -L "$cpage" ] || bad "the page link was replaced"
+    # A dangling link is not followed either.
+    rm -f "$cpage" "$d/victim"
+    ln -s "$d/victim" "$cpage" || bad "ln"
+    md --no-cache s.md
+    expect_tmp_page "page is a dangling link"
+    [ ! -e "$d/victim" ] || bad "the dangling link target was made"
+    no_tmp
+    exit 0
+}
+
+case_cache_name_safe() {
+    fresh
+    long=$(printf 'n%.0s' 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 \
+        31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60)
+    uni=$(printf 'caf\303\251 \342\200\224 x.md')
+    mkdir "$d/w \"q\" \$(touch PWNED)" || bad "mkdir"
+    for n in 'q"<script>.md' "it's a b.md" '$(touch PWNED).md' '`touch PWNED`;x&y.md' \
+             '-dash.md' "$long.md" "$uni" '..md'; do
+        f="$d/w \"q\" \$(touch PWNED)/$n"
+        cp "$sample" "$f" || bad "cp [$n]"
+        md --no-open -- "$f"
+        [ "$rc" = 0 ] || bad "exit $rc for [$n]: $(cat "$d/err")"
+        [ ! -s "$d/err" ] || bad "stderr for [$n]: $(cat "$d/err")"
+        cache_page "$f"
+        [ -f "$cpage" ] || bad "no page $cpage for [$n]"
+        name=${cpage##*/}
+        case $name in
+            *[!A-Za-z0-9._-]*) bad "page name [$name] has an unsafe character for [$n]" ;;
+        esac
+        b=${name%-*.html}
+        [ "${#b}" -le 40 ] || bad "page base [$b] is longer than 40 for [$n]"
+        rest=${name#"$b"-}
+        case ${rest%.html} in
+            ''|*[!0-9]*) bad "page crc in [$name] is not a number for [$n]" ;;
+        esac
+    done
+    cache_page "$d/w \"q\" \$(touch PWNED)/$long.md"
+    case ${cpage##*/} in
+        nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn-*.html) ;;
+        *) bad "long name not cut to 40: ${cpage##*/}" ;;
+    esac
+    cache_page "$d/w \"q\" \$(touch PWNED)/q\"<script>.md"
+    case ${cpage##*/} in
+        q__script_.md-*.html) ;;
+        *) bad "name not changed to _: ${cpage##*/}" ;;
+    esac
+    # Every page is in the cache folder, and nothing else was made.
+    n=$(find "$XDG_CACHE_HOME" -type f | wc -l | tr -d ' ')
+    [ "$n" = 8 ] || bad "want 8 pages in the cache, got $n: $(find "$XDG_CACHE_HOME" -type f)"
+    no_pwned
+    no_tmp
+    exit 0
+}
+
 for c in flags_ok flag_width_bad flag_theme_bad flag_width_missing \
          ini_valid ini_hostile ini_missing ini_browser_bad ini_browser_app_dir \
          init_config_writes init_config_keeps print_association_ok \
@@ -886,7 +1293,9 @@ for c in flags_ok flag_width_bad flag_theme_bad flag_width_missing \
          page_has_github_css page_width_rules page_start_values page_policy_unchanged \
          page_narrow_rule page_hljs_after_marked page_mermaid_theme_hook \
          page_gear_markup page_print_hidden page_storage_try_catch page_keys_guard page_paste_line \
-         vendor_no_close_tag vendor_sha384; do
+         vendor_no_close_tag vendor_sha384 \
+         cache_path_stable cache_two_files cache_reuse cache_rebuild_on_edit cache_rebuild_on_flag \
+         cache_rebuild_on_ini cache_no_cache_flag cache_dir_mode cache_dir_fallback cache_name_safe; do
     run "$c"
 done
 
