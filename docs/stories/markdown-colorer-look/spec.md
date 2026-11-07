@@ -182,7 +182,9 @@ no list of which role is underlined: the scheme decides it through the style wor
 
 ```sh
 BUILD=../far2l.markdown-colorer-look.build APP=$PWD/../far2l.markdown-colorer-look.build/install/far2l.app/Contents/MacOS/far2l
-cmake --build ../far2l.markdown-colorer-look.build -j8        # the plugin too
+cmake --build ../far2l.markdown-colorer-look.build -j8        # the full build: the plugin loads,
+                                                               # the first render answers generation
+                                                               # 0, later renders answer the scheme
 sh testing/markdown/ascii-golden.sh
 sh testing/markdown/ascii-driver.sh
 sh testing/markdown/highlight-driver.sh
@@ -194,28 +196,37 @@ sh testing/markdown/look-driver.sh
   ./far2l-smoke-run.sh "$APP" 000d-view-md-look)
 ```
 
-`sh testing/markdown/look-driver.sh` runs the new driver (same harness shape as the
+`sh testing/markdown/look-driver.sh` runs the driver (same harness shape as the
 highlight driver: a case table, `--case <name>` picks one, `ok <case>` /
-`FAILED <case>: <why>` lines, `DONE` at the end). Its cases cover every table row above:
+`FAILED <case>: <why>` lines, `DONE` at the end; an unknown case name exits 1).
+It runs with a truecolor backend, so the plugin reads `far2l.hrd`; the cases that
+care about the 16-color path switch the backend themselves. Its cases cover every
+table row above:
 
 | Case | Proves |
 |---|---|
-| `look_bridge` | A fake source fills the ten names; the bridge copies into plain structs. |
-| `look_codes` | Codes 1, 2, 3, 4 each give the fork table, and no wait, no message. |
-| `look_roles` | Each prose role takes its foreground from the look; a style-4 role returns `COMMON_LVB_UNDERSCORE`. |
-| `look_contrast` | One scheme color below 3:1 sends all roles to the fork table. |
-| `look_ini` | `markdown-colors.ini` wins over the look, key by key, with no contrast check. |
-| `look_generation` | A new generation refetches; the same generation does not. |
+| `look_first_call` | The first viewer call answers generation 0 and starts the scheme load; later calls answer the scheme generation. |
 | `look_real_hrd` | The real plugin with `far2l.hrd` gives the ten values of the Region map table. |
 | `look_cost` | The cost of one ten-name fetch, printed. Above 1 ms means the bridge cache is on. |
+| `look_bridge` | A fake source fills the ten names; the bridge copies into plain structs. |
+| `look_codes` | Codes 1, 2, 3, 4 each give the fork table, and no wait, no message. |
+| `look_bridge_real` | The real plugin answers the ten names through the core bridge, with its generation. |
+| `look_roles` | The resolver order: the user file over the scheme over the fork default; an absent row (`fore` 0) takes the fork default; a style-4 row returns `COMMON_LVB_UNDERSCORE`. |
+| `look_contrast` | All rows at 3:1 keep the scheme; one below 3:1 sends every role to the fork table; a new scheme generation and a new viewer background both recompute the verdict. |
+| `look_ini` | `markdown-colors.ini` wins over the look, key by key, with no contrast check. |
+| `look_generation` | A new generation refetches and replaces the cached rows; the same generation does not. |
+| `look_new_roles` | `emphasis` and `listmark` resolve on the fork path: the 256-color look, the 16-color path, the RGB default and today's look. |
 
-The smoke test `testing/tests/000d-view-md-look` covers the real plugin in the viewer, with
-`ReadCellRaw(x,y).Attributes & 0x8000` for the underline, and `ReadCell(x,y).ForeTC` for the
-foreground: heading and link `0xff8888` with the underline, strong `0x00a040`, code
-`0x77e9ff`, emphasis `0xa020ff`, quote `0xff9966`, body `0xeeee99`. The tests that pin the
-fork colors — `0007-view-file-markdown`, `000c-view-md-highlight` and
-`testing/markdown/highlight-driver.sh` — run with the fork table, because the check builds
-the far2l target only and no plugin loads. Each of them says so in a comment.
+The smoke test `testing/tests/000d-view-md-look` covers the real plugin in the viewer,
+with `ReadCellRaw(x,y).Attributes & 0x8000` for the underline, and `ReadCell(x,y).ForeTC`
+for the foreground. The harness runs a 16-color terminal, so the plugin serves
+`console.hrd` and the test asserts its rows: heading `0x5fffff`, link `0x87ff87`, strong
+`0xffffff`, emphasis, listmark and body `0xffff00`, code `0xff87ff`, quote `0xd7afaf`,
+rule `0xaf8787`, every one of them underlined. The truecolor `far2l.hrd` rows are
+asserted by the driver's `look_real_hrd`. The tests that pin the fork colors —
+`0007-view-file-markdown`, `000c-view-md-highlight` and
+`testing/markdown/highlight-driver.sh` — run with the fork table, because the check
+builds the far2l target only and no plugin loads. Each of them says so in a comment.
 
 ## Out of scope
 

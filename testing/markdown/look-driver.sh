@@ -28,10 +28,10 @@ build="$app_dir"
 export FAR2L_APP="$build/install/far2l.app/Contents/MacOS/far2l"
 
 # A truecolor backend for the plugin's ReloadBase (the headless default is
-# the 16-color path, which reads console.hrd, not far2l.hrd).
-rgb=""
+# the 16-color path, which reads console.hrd, not far2l.hrd).  The cases that
+# care about the 16-color path switch the backend themselves.
+rgb="--rgb"
 if [ "${1:-}" = "--rgb" ]; then
-  rgb="--rgb"
   shift
 fi
 
