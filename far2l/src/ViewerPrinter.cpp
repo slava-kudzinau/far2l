@@ -119,7 +119,6 @@ uint64_t MarkdownRunColor(uint64_t role)
 	const uint64_t body = FarColorToReal(COL_VIEWERTEXT);
 	return (MdRunColor(role) & ~kBackBits) | (body & kBackBits);
 }
-
 }
 
 MarkdownPrinter::MarkdownPrinter(uint64_t sel_color, const std::vector<MdLine> *lines,
@@ -164,15 +163,31 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 	if (!_selection)
 		_spans.clear();
 
+	// The row fill of a code block (story markdown-code-tint): the runs print first,
+	// riding the block's tint as their background, and the row's blank tail is padded
+	// with the same tint - one write pass, exactly the row width (one console row per
+	// Print, the plain printer's contract).  The palette resolves the tint for the live
+	// viewer background - a theme change shows on the next redraw - and true color
+	// gates it (spec, States).  The selection overlay rides its own plain background.
+	int64_t tint = (line && line->tint >= 0 && !_selection)
+		? MdCodeTint(FarColorToReal(COL_VIEWERTEXT)) : -1;
 	int pos = 0;   // cell coordinate in the row, counted over all runs
 	if (line) {
 		for (const MdRun &run : line->runs) {
 			const bool tokenized = line->tokens >= 0 && _groups != nullptr &&
 				(size_t)line->tokens < _groups->size() && run.role == MD_ROLE_CODE;
-			const uint64_t run_color = _selection ? _sel_color : MarkdownRunColor(run.role);
+			// The runs ride the tint: a run keeps its foreground (and the underline
+			// bit), the background is the row's tint, not the plain viewer background -
+			// the run color must not punch plain-background holes through the fill
+			// (story markdown-code-tint, review).  The selection overlay wins over
+			// the tint: on a selection row the tint is already off.
+			uint64_t run_color = _selection ? _sel_color : MarkdownRunColor(run.role);
+			if (tint >= 0) {
+				SET_RGB_BACK(run_color, (uint64_t)tint);
+			}
 			SetColor(run_color);
 			if (tokenized) {
-				PrintCodeRuns((*_groups)[line->tokens], run.text, pos, skip_len, print_len);
+				PrintCodeRuns((*_groups)[line->tokens], run.text, pos, skip_len, print_len, tint);
 				continue;
 			}
 
@@ -215,12 +230,18 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 
 	// Blank cells (past the line end, or an empty line) take the viewer text
 	// color, not whatever color the last run or the arrows left behind.  A row
-	// with a token group pads with the code role (spec.md, Token roles).
+	// with a token group pads with the code role (spec.md, Token roles); a tinted
+	// row rides the block's tint as its background (story markdown-code-tint), so
+	// the padded cells complete the fill to the screen width in one write pass.
 	if (print_len > 0) {
 		const bool tokenized_row = line && line->tokens >= 0 && _groups != nullptr &&
 			(size_t)line->tokens < _groups->size();
-		SetColor(_selection ? _sel_color :
-			(tokenized_row ? MarkdownRunColor(MD_ROLE_CODE) : FarColorToReal(COL_VIEWERTEXT)));
+		uint64_t pad_color = _selection ? _sel_color :
+			(tokenized_row ? MarkdownRunColor(MD_ROLE_CODE) : FarColorToReal(COL_VIEWERTEXT));
+		if (tint >= 0) {
+			SET_RGB_BACK(pad_color, (uint64_t)tint);
+		}
+		SetColor(pad_color);
 		PrintSpaces(print_len);
 	}
 }
@@ -252,7 +273,7 @@ void MarkdownPrinter::Cells(const wchar_t *&p, int &pos, int &print_len, int64_t
 // Print one code run, coloring the token slices of `group` (plan T4).  Cells
 // past the last token keep the code role; the row padding keeps the text role.
 void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstring &text,
-	int &pos, int skip_len, int &print_len)
+	int &pos, int skip_len, int &print_len, int64_t tint)
 {
 	const wchar_t *p = text.c_str();
 	bool joining = false;
@@ -268,16 +289,35 @@ void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstrin
 		++p;
 	}
 
-	size_t ti = 0;   // index over the group's tokens, ascending
+	size_t ti = 0;   // index over the group's ranges, ascending
 	while (print_len > 0 && *p) {
-		if (ti < group.tokens.size() && (int64_t)pos >= (int64_t)group.tokens[ti].start) {
-			SetColor(_selection ? _sel_color : MarkdownRunColor(MdRoleForTokenClass(group.tokens[ti].cls)));
-			Cells(p, pos, print_len, (int64_t)group.tokens[ti].end);
-			SetColor(_selection ? _sel_color : MarkdownRunColor(MD_ROLE_CODE));
+		if (ti < group.ranges.size() && (int64_t)pos >= (uint64_t)group.ranges[ti].start) {
+			// The scheme's 24-bit foreground under the view's contrast verdict,
+			// the scheme's 4-bit row on the 16-color path (spec, PrintCodeRuns
+			// and Contrast); the range's underline bit rides the far attribute
+			// and joins the row's spans, the way the runs' underline does.
+			// Every color of this row rides the tint, the token slice and the
+			// plain code cells between ranges alike (story markdown-code-tint).
+			uint64_t range_color = _selection ? _sel_color
+				: MdRangeColor(group.ranges[ti].fg, group.ranges[ti].fg4,
+					group.ranges[ti].underline);
+			if (tint >= 0) {
+				SET_RGB_BACK(range_color, (uint64_t)tint);
+			}
+			SetColor(range_color);
+			const int run_start = pos;
+			Cells(p, pos, print_len, (int64_t)group.ranges[ti].end);
+			if (range_color & COMMON_LVB_UNDERSCORE)
+				_spans.emplace_back(run_start, pos);
+			uint64_t code_color = _selection ? _sel_color : MarkdownRunColor(MD_ROLE_CODE);
+			if (tint >= 0) {
+				SET_RGB_BACK(code_color, (uint64_t)tint);
+			}
+			SetColor(code_color);
 			++ti;
 			continue;
 		}
-		const int64_t stop = ti < group.tokens.size() ? (int64_t)group.tokens[ti].start : INT64_MAX;
+		const int64_t stop = ti < group.ranges.size() ? (int64_t)group.ranges[ti].start : INT64_MAX;
 		Cells(p, pos, print_len, stop);
 	}
 }

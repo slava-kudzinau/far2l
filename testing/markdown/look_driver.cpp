@@ -23,6 +23,9 @@
 #include "mix/pathmix.hpp"
 #include "farcolors.hpp"
 #include "markdown/MdPalette.hpp"
+#include "ViewerPrinter.hpp"
+#include "interf.hpp"
+#include "scrbuf.hpp"
 
 #include <utils.h>
 
@@ -939,6 +942,245 @@ int look_new_roles()
 	return 0;
 }
 
+// ---- T1 case (story markdown-code-tint): the field, the blend, the verdict ----
+
+// The 24-bit background of a far attribute: the truecolor bits when set, else the
+// palette's background slot (the base of MdCodeTint, the IndexedBackgroundRgb of
+// far2l/src/filediff.cpp).
+uint32_t AttrBack(uint64_t attr)
+{
+	if (attr & BACKGROUND_TRUECOLOR)
+		return (uint32_t)((attr >> 40) & 0xffffff);
+	return Palette::FARPalette[(attr & B_MASK) >> 4] & 0x00ffffff;
+}
+
+// The 24-bit foreground of a far attribute: the truecolor bits, else the palette's
+// foreground slot (extractColor reads a 4-bit index from slot 16).
+uint32_t AttrFore(uint64_t attr)
+{
+	if (attr & FOREGROUND_TRUECOLOR)
+		return (uint32_t)((attr >> 16) & 0xffffff);
+	return Palette::FARPalette[16 + (attr & 0x0f)] & 0x00ffffff;
+}
+
+// The palette's blend, the driver's copy: one eighth of `mix` into `base`, both
+// 0xBBGGRR (the BlendRgb pattern of far2l/src/filediff.cpp, alpha 32/256).
+uint32_t BlendEighth(uint32_t base, uint32_t mix)
+{
+	constexpr int alpha = 32;
+	constexpr int inv = 256 - alpha;
+	const uint32_t r = (uint32_t)(((base & 0xff) * inv + (mix & 0xff) * alpha) >> 8);
+	const uint32_t g = (uint32_t)((((base >> 8) & 0xff) * inv + ((mix >> 8) & 0xff) * alpha) >> 8);
+	const uint32_t b = (uint32_t)((((base >> 16) & 0xff) * inv + ((mix >> 16) & 0xff) * alpha) >> 8);
+	return r | (g << 8) | (b << 16);
+}
+
+// The code block tint (story markdown-code-tint, plan T1): a fence's rows (the code
+// rows and the hint row) carry the tint field, rows outside the block are plain; the
+// row's background is the blend of one eighth of the resolved code foreground into the
+// viewer background; a low-contrast pair (code foreground, tint) draws no tint; a
+// viewer background change is a new pair and answers a new blend (the cache key of
+// MdCodeTint - no time cache).
+int tint()
+{
+	EnsureTrueColor();
+	if (WriteOverrides("[markdown]\n", 81) != 0) {
+		return 1;
+	}
+	// All ten rows bright against a dark background: the Colorer look wins (story
+	// markdown-colorer-look, spec, Cache), so the code role is the scheme's
+	// markdown:Code fore, a color the driver owns.
+	static const unsigned int kFore[10] = {0xd0d0d0, 0xd8d8d8, 0xe0e0e0, 0xe8e8e8, 0xf0f0f0,
+		0xf8f8f8, 0xd0d0ff, 0xffd0d0, 0xd0ffd0, 0xffffd0};
+	static const unsigned int kStyle[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	const uint64_t saved = SaveBackground();
+	FakeScheme(61, kFore, kStyle);
+	SetBackground(0x101010);
+
+	// 1. The field: the fence's rows carry the tint, rows outside the block are plain.
+	MarkdownDoc doc;
+	doc.Render(L"para\n\n```cpp\nint x;\n```\n\nafter\n", 80);
+	{
+		const std::vector<MdLine> &lines = doc.Lines();
+		int code_rows = 0, plain = 0;
+		for (const MdLine &l : lines) {
+			bool is_code = false;
+			for (const MdRun &r : l.runs) {
+				if (r.role == MD_ROLE_CODE)
+					is_code = true;
+			}
+			if (is_code && l.tint < 0) {
+				printf("FAILED tint: a fence row has no tint\n");
+				return 1;
+			}
+			if (!is_code && l.tint >= 0) {
+				printf("FAILED tint: a row outside the block carries a tint\n");
+				return 1;
+			}
+			is_code ? ++code_rows : ++plain;
+		}
+		if (code_rows == 0 || plain == 0) {
+			printf("FAILED tint: the fixture has no fence row or no plain row\n");
+			return 1;
+		}
+		printf("ok tint: %d fence rows carry the tint, %d rows outside are plain\n",
+			code_rows, plain);
+	}
+
+	// The hint row under undrawn mermaid art carries the tint too (spec, Row tint).
+	MarkdownDoc mer;
+	mer.Render(L"```mermaid\ngraph XX\nA\n```\n", 80);
+	{
+		const std::vector<MdLine> &lines = mer.Lines();
+		if (lines.size() != 3) {
+			printf("FAILED tint: the mermaid fixture made %zu rows, want two code rows and the hint\n",
+				lines.size());
+			return 1;
+		}
+		for (size_t i = 0; i < lines.size(); ++i) {
+			if (lines[i].tint < 0) {
+				printf("FAILED tint: the undrawn fence row %zu lost the tint\n", i);
+				return 1;
+			}
+		}
+		printf("ok tint: the hint row under undrawn art carries the tint\n");
+	}
+
+	// 2. The blend: the row background equals the blend of the same inputs - the live
+	// viewer background and the resolved code color, mixed by the driver's copy of the
+	// palette's BlendRgb.
+	const uint64_t bg_attr = FarColorToReal(COL_VIEWERTEXT);
+	const uint64_t code_attr = MdRunColor(MD_ROLE_CODE);
+	const uint32_t want = BlendEighth(AttrBack(bg_attr), AttrFore(code_attr));
+	const int64_t got = MdCodeTint(bg_attr);
+	if (got != (int64_t)want) {
+		printf("FAILED tint: the code row draws 0x%06llx, want 0x%06x (code 0x%06x on bg 0x%06x)\n",
+			(unsigned long long)got, want, (unsigned)AttrFore(code_attr), (unsigned)AttrBack(bg_attr));
+		return 1;
+	}
+	printf("tint: code 0x%06x on bg 0x%06x draws 0x%06x\n", (unsigned)AttrFore(code_attr),
+		(unsigned)AttrBack(bg_attr), want);
+	if (MdCodeTint(bg_attr) != got) {   // the same pair answers the same verdict
+		printf("FAILED tint: the same pair answered a second value\n");
+		return 1;
+	}
+
+	// 3. A low-contrast pair draws no tint: the code foreground equals the viewer
+	// background, so the blend is the background and the pair sits at 1:1.
+	if (WriteOverrides("[markdown]\ncode = #808080\n", 82) != 0) {
+		SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+		return 1;
+	}
+	SetBackground(0x808080);
+	if (MdCodeTint(FarColorToReal(COL_VIEWERTEXT)) != -1) {
+		printf("FAILED tint: a low-contrast pair drew a tint\n");
+		return 1;
+	}
+	printf("ok tint: 0x808080 code on a 0x808080 background draws no tint\n");
+
+	// 4. A viewer background change: the same code color, a new pair, a new blend.
+	SetBackground(0x202020);
+	const uint64_t bg2 = FarColorToReal(COL_VIEWERTEXT);
+	const uint32_t want2 = BlendEighth(AttrBack(bg2), AttrFore(MdRunColor(MD_ROLE_CODE)));
+	const int64_t got2 = MdCodeTint(bg2);
+	if (got2 != (int64_t)want2) {
+		printf("FAILED tint: the new background draws 0x%06llx, want 0x%06x\n",
+			(unsigned long long)got2, want2);
+		return 1;
+	}
+	printf("ok tint: a background change redraws 0x%06x on the new pair\n", want2);
+
+	// 5. The runs ride the tint (review): a printed code row is one uniform tint
+	// background.  The cells the runs paint - a cell under a token, and the cells
+	// past the end of the text - carry the same 24-bit background: the driver's own
+	// BlendEighth of the code foreground into the viewer background, not the
+	// product's output.  The token slice keeps its foreground.
+	if (WriteOverrides("[markdown]\n", 83) != 0) {
+		return 1;
+	}
+	SetBackground(0x101010);
+	const uint64_t bg3 = FarColorToReal(COL_VIEWERTEXT);
+	const uint32_t want3 = BlendEighth(AttrBack(bg3), AttrFore(MdRunColor(MD_ROLE_CODE)));
+	// The virtual screen behind Text/GetText exists only after far2l's console
+	// init; the headless driver allocates the standard 80x25 here (idempotent)
+	// and sets the screen extents the console calls clip against.
+	ScrBuf.AllocBuf(80, 25);
+	COORD con_size{};
+	GetVideoMode(con_size);
+	{
+		size_t row = 0;
+		while (row < doc.Lines().size() && doc.Lines()[row].tint < 0)
+			++row;
+		if (row >= doc.Lines().size()) {
+			printf("FAILED tint: the fixture has no code row to print\n");
+			return 1;
+		}
+		const MdLine &code_line = doc.Lines()[row];
+		int text_end = 0;   // one past the last text cell (the runs' total width)
+		for (const MdRun &run : code_line.runs)
+			text_end += (int)run.text.size();
+		// A cell under a token: the group's first range on the tokenized path, the
+		// first cell of the code text (the 4-cell indent counted) on the plain one.
+		// V2 ranges carry the scheme's own color, so the expected foreground is
+		// the range's resolved color, not a role alias (ADR-010).
+		int token_col = 4;
+		uint64_t want_fore = MdRunColor(MD_ROLE_CODE) & ~kBack;
+		if (code_line.tokens >= 0
+			&& (size_t)code_line.tokens < doc.TokenGroups().size()
+			&& !doc.TokenGroups()[code_line.tokens].ranges.empty()) {
+			const MdTokenRange &rng = doc.TokenGroups()[code_line.tokens].ranges[0];
+			token_col = (int)rng.start;
+			want_fore = MdRangeColor(rng.fg, rng.fg4, rng.underline) & ~kBack;
+		}
+		MarkdownPrinter printer(FarColorToReal(COL_VIEWERSELECTEDTEXT),
+			&doc.Lines(), &doc.TokenGroups());
+		for (size_t i = 0; i <= row; ++i) {
+			GotoXY(0, 3 + (int)i);
+			printer.Print(0, 80, L"");
+		}
+		// The runs land in the virtual screen (ScrBuf), the fill straight on the
+		// console buffer; the flush merges them, the way ShowScreen does.
+		ScrBuf.Flush();
+		std::vector<CHAR_INFO> cells(80);
+		GetText(0, 3 + (int)row, 79, 3 + (int)row, cells.data(),
+			80 * (int)sizeof(CHAR_INFO));
+		static const int s_cols[] = {token_col, text_end, 79};
+		for (int col : s_cols) {
+			const CHAR_INFO &c = cells[col];
+			if (!(c.Attributes & BACKGROUND_TRUECOLOR)
+				|| (uint32_t)((c.Attributes >> 40) & 0xffffff) != want3) {
+				printf("FAILED tint: the cell at column %d draws back 0x%06llx (tc=%d), want 0x%06x\n",
+					col, (unsigned long long)((c.Attributes >> 40) & 0xffffff),
+					(c.Attributes & BACKGROUND_TRUECOLOR) ? 1 : 0, want3);
+				SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+				return 1;
+			}
+		}
+		// The slice under a token keeps its role's true-color foreground; the tint
+		// rides under it as the row background, one does not erase the other: the
+		// slice's color side must equal the role color the driver's own palette copy
+		// computes (want_fore, kBack's background side dropped), and the background
+		// loop above pins the slice, the cells past the text and the far corner to
+		// the tint.
+		if ((cells[token_col].Attributes & FOREGROUND_TRUECOLOR) == 0
+			|| ((cells[token_col].Attributes >> 16) & 0xffffff) == 0
+			|| (cells[token_col].Attributes & ~kBack) != (want_fore & ~kBack)) {
+			printf("FAILED tint: the cell under the token is 0x%llx, want the role "
+				"foreground on the tint (want 0x%llx)\n",
+				(unsigned long long)cells[token_col].Attributes,
+				(unsigned long long)want_fore);
+			SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+			return 1;
+		}
+		printf("ok tint: the code row (y=%d): the cell under the token (%d) and the cells "
+			"past the text (%d, 79) draw the tint 0x%06x; the token keeps its foreground\n",
+			3 + (int)row, token_col, text_end, want3);
+	}
+
+	SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+	return 0;
+}
+
 struct Case
 {
 	const char* name;
@@ -957,6 +1199,7 @@ const Case s_cases[] = {
 	{"look_ini", look_ini},
 	{"look_generation", look_generation},
 	{"look_new_roles", look_new_roles},
+	{"tint", tint},
 };
 } // namespace
 

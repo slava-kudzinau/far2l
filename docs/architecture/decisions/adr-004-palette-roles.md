@@ -40,6 +40,13 @@ The resolver uses this order:
 
 The fork holds the table of defaults in `far2l/src/markdown/MdPalette.cpp`. The contrast rule is all or none. Each RGB default needs 3:1 or more against the real viewer background, or all defaults use step 2. An override has no contrast check.
 
+Exception (story markdown-code-tint, 2026-11-07): the background of a code-block row is the
+block tint, not the viewer text background. The tint blends one eighth of the code role's
+resolved foreground into the viewer background. The gate is true color and 3:1 on (code
+foreground, tint).
+
+The runs of the row keep their role foregrounds and ride the tint.
+
 ## Consequences
 
 - A theme change shows on the next redraw, because roles are resolved when the screen is drawn.

@@ -1,6 +1,6 @@
 ---
 description: Give code blocks in the F3 Markdown view a full-width background tint, so that a block stands apart from the text.
-status: planned
+status: done
 size: S
 risk: contract
 depends-on: markdown-palette
@@ -44,3 +44,15 @@ S. One row-level field, one draw change and one test. The story changes one poin
 
 - Decided by the owner on 2026-11-06: a tint on code blocks, as part of markdown-theme-colors. On the same day the owner moved it to this later story when markdown-palette replaced that story.
 - Branch `feat/markdown-code-tint`. Base `next/2.9.1-ovr.1`, after `markdown-palette` merges.
+- Ledger, 2026-11-07: docs recorded: `gate.md`, `spec.md`, `plan.md` (4 tasks; design=no).
+- Ledger, 2026-11-07: status in-progress. `flow tier=full docs=spec,plan design=no
+  orchestrator=yes final=final-reviewer gate=stop scan=yes verifier=none`. Check: "The check" in
+  `AGENTS.md` plus a full build (all plugins) and the smoke run of all tests. Budget $8, hard
+  stop $12. Base `feat/markdown-colorer-fences` at `782d918ad` (`next/2.9.1-ovr.1` after the
+  fences merge), branch `feat/markdown-code-tint`, worktree `.worktrees/markdown-code-tint`.
+  started: 2026-11-07T11:05:12Z
+- Ledger, 2026-11-07: status done. Merged in PR #15, `2a032e3f8` (2026-11-07). Check
+  requests: 4 (docs gate, gate close-out, post-merge suite, final suite). Mid-build `next`
+  moved (fences V2 export): printer, palette, driver and 000d ported to V2 ranges, merged
+  in `c92a5cbba`, `0adbf77a5`, `0495c85bb`, `eaf27cf12`. Gate check: all PASS (two known
+  Mac failures), drivers 0. done: 2026-11-07T21:10:00Z

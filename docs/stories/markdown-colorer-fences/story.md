@@ -1,6 +1,6 @@
 ---
 description: Paint fenced code in the F3 Markdown view with the exact F4 colors, one color and underline bit for each token from the active Colorer scheme.
-status: planned
+status: done
 size: M
 risk: contract,security
 depends-on: markdown-colorer-look
@@ -62,3 +62,21 @@ M. One export, one change of the token group, one print path, three docs. One in
 - Owner's choice, 2026-11-07: "Exact F4 colors". The four classes of V1 are not enough.
 - Branch `feat/markdown-colorer-fences`. Base `next/2.9.1-ovr.1`, after markdown-colorer-look merges. Budget and hard stop M $15/$20.
 - Build order: after markdown-colorer-look, before markdown-code-tint. They share `ViewerPrinter.cpp`.
+- Ledger, 2026-11-07: status in-progress. `flow tier=full docs=spec,plan design=no
+  orchestrator=yes final=final-reviewer gate=stop scan=yes verifier=none`. Check: "The check"
+  in `AGENTS.md` plus a full build (all plugins) and the smoke run of all tests. Budget $15,
+  hard stop $20. Base `next/2.9.1-ovr.1` at `5049c6aa8`, branch `feat/markdown-colorer-fences`,
+  worktree `.worktrees/markdown-colorer-fences`. started: 2026-11-07T07:03:54Z
+- Ledger, 2026-11-07: gate, spec, plan written (`782d918ad`, `215367a07`), owner approved
+  G2-design with the four answers recorded as rulings at the gate foot.
+- Ledger, 2026-11-07: T1 done: `0c2dc3174`, review 1 Important fixed (`0691ddf33`, the export
+  never creates `FarEditorSet`).
+- Ledger, 2026-11-07: T2 done: `fa75d065b`, review clean (generation rides every V2 answer).
+- Ledger, 2026-11-07: T3 done: `035952c1c`, review passes (5 P3 nits, folded in T4).
+- Ledger, 2026-11-07: T4 done: `ed99f16e1`, review passes (comments folded in T5); cost mean
+  9.5 ms worst 10.9 ms, hostile 12.7 ms, fetches 8 for 7 fences.
+- Ledger, 2026-11-07: T5 done: `5c68cc8ad` (main session: ADR-010, viewer spec, data view,
+  invariants).
+- Ledger, 2026-11-07: final review: ship; five doc-precision nits folded (`5501844ee`).
+- Ledger, 2026-11-07: close-out: gate At-merge and Spend filled, index row done, merged in
+  PR #14 `52ad4d440`, merge check green (drivers + 0007/0008/0009/000c/000d, spend $2.99).

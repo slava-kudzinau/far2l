@@ -70,6 +70,10 @@ fi
 # driver the app's tree there, so FindPlugin sees the colorer module.
 ln -sfn install/far2l.app/Contents/MacOS/Plugins "$build/Plugins"
 
+# The fixtures live next to the script, wherever the driver is invoked from
+# (`tokens_v2_cost` reads fixture.py through the real plugin).
+export FAR2L_TESTING_DIR="$script_dir"
+
 FAR2L_PLUGIN="$build/install/far2l.app/Contents/MacOS/Plugins/colorer/plug/colorer.far-plug-wide"
 # Resolve to one absolute path: the core's plugin scan reaches the module
 # through the Plugins symlink above, the driver through this path; dyld must

@@ -338,7 +338,13 @@ struct Builder {
     // budget and the document cache, set by Render before the parse.
     MdTokenSource *token_source = nullptr;
     std::chrono::steady_clock::time_point token_deadline{};
-    std::map<std::pair<std::string, uint64_t>, std::vector<MdTokenGroup>> *token_cache = nullptr;
+    std::map<std::tuple<std::string, uint64_t, unsigned long long>,
+        std::vector<MdTokenGroup>> *token_cache = nullptr;
+    // The scheme generation of this render, fetched at the first fence's cache
+    // key and kept for every later fence's key (spec.md, Cache; story
+    // markdown-colorer-fences): a scheme change re-keys the cache, a resize
+    // keeps it.  ~0 = not fetched yet.
+    unsigned long long token_generation = ~0ULL;
     std::vector<MdTokenGroup> token_groups;   // indexed by MdLine::tokens
 };
 
@@ -355,8 +361,9 @@ uint64_t fnv1a64(const std::string &s)
 }
 
 // Tokenize one fence (plan T3): the caps of spec.md (400 lines, 65536 source
-// bytes; R32), the shared 40 ms render budget (R29), the document cache
-// (R28, R30, R31).  Appends one group per tokenized line to b.token_groups,
+// bytes; R32), the shared 40 ms render budget (R29), the document cache keyed
+// on the scheme generation (R28, R30, R31; story markdown-colorer-fences).
+// Appends one group per tokenized line to b.token_groups,
 // in cells of the code-run text (the 4-cell indent counted), and links
 // `count` rows starting at `first_line` to them; rows the source does not
 // reach keep the plain code role.
@@ -388,7 +395,14 @@ void tokenize_fence(Builder &b, const std::string &lang, const std::wstring &fen
     }
     if (lines.empty())
         return;
-    const std::pair<std::string, uint64_t> key(lang, fnv1a64(joined));
+    // The cache key: the language, the hash of the fence source and the scheme
+    // generation (spec.md, Cache; story markdown-colorer-fences): a resize
+    // re-keys nothing and reuses the ranges (R30); a scheme change re-keys, so
+    // the next render refetches the fence once.
+    if (b.token_generation == ~0ULL) {
+        b.token_generation = MdGetLookSource().Generation(); // the key's generation
+    }
+    const auto key = std::make_tuple(lang, fnv1a64(joined), b.token_generation);
     std::vector<MdTokenGroup> groups;
     auto hit = b.token_cache->find(key);
     if (hit != b.token_cache->end()) {
@@ -407,21 +421,24 @@ void tokenize_fence(Builder &b, const std::string &lang, const std::wstring &fen
         } else {
             const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
                 b.token_deadline - now).count();
-            std::vector<MdToken> flat;
-            cacheable = b.token_source->Tokenize(lang, lines, left > 0 ? (int)left : 1, flat);   // R48: a plain fence caches too
+            std::vector<MdTokenRange> flat;
+            // The scheme's colors, not classes; a V2 answer updates the key's
+            // generation to the scheme the colors came from (T2).
+            cacheable = b.token_source->TokenizeV2(lang, lines, left > 0 ? (int)left : 1,
+                flat, b.token_generation);   // R48: a plain fence caches too
             groups.resize(lines.size());
-            for (const MdToken &t : flat) {
-                if (t.line < groups.size())
-                    groups[t.line].tokens.push_back(t);
+            for (const MdTokenRange &r : flat) {
+                if (r.line < groups.size())
+                    groups[r.line].ranges.push_back(r);
             }
             for (MdTokenGroup &g : groups) {
-                for (MdToken &t : g.tokens) {
-                    t.start += CODE_INDENT;
-                    t.end += CODE_INDENT;
+                for (MdTokenRange &r : g.ranges) {
+                    r.start += CODE_INDENT;
+                    r.end += CODE_INDENT;
                 }
-                // Colorer closes nested regions inner-first; the printer walks tokens in cell order.
-                std::sort(g.tokens.begin(), g.tokens.end(),
-                    [](const MdToken &a, const MdToken &b) {
+                // Colorer closes nested regions inner-first; the printer walks ranges in cell order.
+                std::sort(g.ranges.begin(), g.ranges.end(),
+                    [](const MdTokenRange &a, const MdTokenRange &b) {
                         return a.start < b.start || (a.start == b.start && a.end > b.end);
                     });
             }
@@ -625,6 +642,10 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                     b.set_line_pos(line_pos);
                 b.append(std::wstring(CODE_INDENT, L' ') + line, MD_ROLE_CODE);
                 b.flush();
+                // The fence's rows take the block's tint (story markdown-code-tint): a
+                // non-negative tint marks the row, the printer resolves the theme's blend
+                // at draw time, so a theme change shows on the next redraw.
+                b.out.back().tint = 0;
                 ++count;
                 if (nl == std::wstring::npos) break;
                 start = nl + 1;
@@ -889,6 +910,7 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width)
             MdLine hint;
             hint.runs.push_back(MdRun{it->lead + MERMAID_HINT, MD_ROLE_BODY});
             hint.nFilePos = m_lines[code_end - 1].nFilePos;
+            hint.tint = 0;   // the hint sits under the fence's code rows: same block, same tint
             m_lines.insert(m_lines.begin() + code_end, std::move(hint));
             continue;
         }
@@ -930,6 +952,7 @@ bool MarkdownDoc::NextLines(std::vector<MdLine> &out, int64_t at_file_pos)
 void MarkdownDoc::Invalidate(int width)
 {
     m_mermaid_cache.clear();
-    // The token cache outlives a resize: a key is language plus fence hash (R30).
+    // The token cache outlives a resize: a key is language, fence hash and
+    // scheme generation (R30); a scheme change re-keys, a resize does not.
     Render(m_text, width);
 }

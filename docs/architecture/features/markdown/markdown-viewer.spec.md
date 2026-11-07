@@ -105,6 +105,7 @@ Other viewer functions act on the source file:
 | HTML block | Verbatim, as code. Nothing runs. |
 | Horizontal rule | A row of `─`. This is the only full-width line. A `---` line under a paragraph makes a heading, not a rule. |
 | Emphasis, strikethrough, underline | The markers go and the text stays. Emphasis text takes the `em` role. No italic, bold or strikeout attribute shows. Underline shows when the Colorer look carries it: heading and link in the default scheme. |
+| Fence token colors | A fence token takes the Colorer scheme's color for its region, and the underline where the scheme underlines. The gate is the view-wide Colorer batch verdict. Cells with no token, and the row's tail, keep the `code` role. |
 | Link | The label shows. The target is dropped. |
 | Image | The alt text shows. The target is dropped. |
 
@@ -161,7 +162,20 @@ The resolver order:
    - `COL_PANELHIGHLIGHTTEXT` for art
 5. The fork's 16-color fallback.
 
-The contrast rule is all or none. Each RGB default needs 3:1 or more against the real viewer background (`wcagComputeContrast`), or all defaults use step 4. The Colorer look has its own batch verdict, the same way. Each scheme color it offers needs 3:1, or every role takes the steps below. The Colorer verdict is keyed on the pair (viewer background, scheme generation): a theme change and a Colorer scheme change both recompute it. An override has no contrast check. The defaults are in `far2l/src/markdown/MdPalette.cpp`.
+The contrast rule is all or none. Each RGB default needs 3:1 or more against the real viewer background (`wcagComputeContrast`), or all defaults use step 4. The Colorer look has its own batch verdict, the same way. Each scheme color it offers needs 3:1, or every role takes the steps below. One view-wide Colorer verdict gates prose and fences together. The verdict is keyed on the pair (viewer background, scheme generation): a theme change and a scheme change both recompute it. An absent region (`fore` 0) is not a contrast failure: that role takes its fork default. An override has no contrast check. The defaults are in `far2l/src/markdown/MdPalette.cpp`.
+
+### Code block tint
+
+Every row of a code block paints its background with the block tint, to the right edge, also
+past the end of the text. The rows are the code rows and, under undrawn mermaid art, the hint
+row. The tint blends one eighth of the code role's resolved foreground into the real viewer
+background (the `BlendRgb` pattern of the file compare). It shows when the terminal reports
+true color. The pair (code foreground, tint) must reach 3:1; one verdict is cached on (viewer
+background, code color).
+A theme change and a scheme change both show on the next redraw. The block background is a
+row property, not a run property: the runs ride it, the cells past the text keep it.
+A run with a token role rides the tint too (story markdown-colorer-fences): the token
+foreground, the tint background.
 
 ### Tables
 
@@ -241,7 +255,7 @@ Each failure writes one stderr line, `AsciiMermaid: render failed: <err>`, and s
 | Art and hint row in the viewer | `testing/tests/0007-view-file-markdown` with `sample.md` |
 | Bundle output, size limit (300 KB), no `elkjs` | `sh testing/markdown/ascii-golden.sh` |
 | `AsciiMermaid` failures, deadline, speed | `sh testing/markdown/ascii-driver.sh` |
-| Fence token colors, the token cache | `testing/tests/000c-view-md-highlight`, `sh testing/markdown/highlight-driver.sh` |
+| Fence token colors, the token cache | `testing/tests/000c-view-md-highlight`, `testing/tests/000d-view-md-look`, `sh testing/markdown/highlight-driver.sh`, `sh testing/markdown/look-driver.sh` |
 | Colorer look, underline, F4/F6 parity, scheme change | `testing/tests/000d-view-md-look`, `sh testing/markdown/look-driver.sh --rgb` |
 
 No test covers these parts:
