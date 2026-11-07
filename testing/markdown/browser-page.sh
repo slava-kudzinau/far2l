@@ -1367,6 +1367,541 @@ case_cache_tmp_removed_on_error() {
     exit 0
 }
 
+# --- tree settings, root and scan (story markdown-browser-tree-panel) --------
+
+# md_wd ARGS...: md under a watchdog. A run that takes 20 s is killed, and the
+# case fails. The watchdog writes nothing to the test output.
+md_wd() {
+    rm -f "$d/killed"
+    sh "$md_open" "$@" > "$d/out" 2> "$d/err" &
+    p=$!
+    ( sleep 20; kill -9 "$p" 2>/dev/null && : > "$d/killed" ) > /dev/null 2>&1 &
+    w=$!
+    wait "$p"
+    rc=$?
+    { kill "$w"; wait "$w"; } 2>/dev/null
+    [ ! -e "$d/killed" ] || bad "the watchdog killed the run of: $*"
+}
+
+# lt FILE [ARGS...]: md-open.sh --list-tree under the watchdog. It must exit 0
+# with an empty stderr and write no page.
+lt() {
+    f=$1
+    shift
+    md_wd --list-tree "$@" -- "$f"
+    [ "$rc" = 0 ] || bad "--list-tree exit $rc: $(cat "$d/err")"
+    [ ! -s "$d/err" ] || bad "--list-tree stderr: $(cat "$d/err")"
+}
+
+# real DIR: the real path of DIR.
+real() {
+    (cd -P "$1" && pwd -P) || bad "real $1"
+}
+
+# enc TEXT: TEXT encoded as the spec says (each byte outside A-Za-z0-9._~/-
+# as %XX). Written apart from the script under test, with od.
+enc() {
+    printf '%s' "$1" | od -An -v -tx1 | tr -s ' \n' '\n\n' | sed '/^$/d' | while read -r h; do
+        case $h in
+            2d|2e|2f|3[0-9]|4[1-9a-f]|5[0-9a]|5f|6[1-9a-f]|7[0-9a]|7e)
+                printf "\\$(printf '%03o' "0x$h")" ;;
+            *)
+                printf '%%%s' "$(echo "$h" | tr a-f A-F)" ;;
+        esac
+    done
+    echo
+}
+
+# line1: the first line of the --list-tree output. body: the lines after it.
+line1() {
+    sed -n 1p "$d/out"
+}
+body() {
+    sed 1d "$d/out"
+}
+
+# has LINE / hasnt PATTERN: a line of the output is LINE / no line matches PATTERN.
+has() {
+    grep -qxF -- "$1" "$d/out" || bad "no line [$1] in: $(cat "$d/out")"
+}
+hasnt() {
+    ! grep -q -- "$1" "$d/out" || bad "a line matches [$1]: $(grep -- "$1" "$d/out")"
+}
+
+# chain DIR N: folders c1/c2/.../cN under DIR, with a file dK.md in folder cK,
+# and top.md in DIR. File dK.md has depth K+1.
+chain() {
+    : > "$1/top.md" || bad "touch top"
+    cdir=$1
+    k=1
+    while [ "$k" -le "$2" ]; do
+        cdir=$cdir/c$k
+        mkdir "$cdir" || bad "mkdir $cdir"
+        : > "$cdir/d$k.md" || bad "touch d$k"
+        k=$((k + 1))
+    done
+}
+
+# deepest: the largest depth of a tree path in the output.
+deepest() {
+    body | awk '$1 != "cap" { p = substr($0, index($0, " ") + 1); n = split(p, a, "/"); if (n > m) m = n } END { print m + 0 }'
+}
+
+# many DIR N: files f001.md to fN.md (three digits) in DIR.
+many() {
+    awk -v n="$2" 'BEGIN { for (i = 1; i <= n; i++) printf "%03d\n", i }' | while read -r k; do
+        : > "$1/f$k.md" || exit 1
+    done || bad "many"
+}
+
+case_tree_ini_keys() {
+    fresh
+    mkdir -p proj/.git proj/sub/c1/c2/c3 || bad "mkdir"
+    : > proj/a.md; : > proj/b.md; : > proj/c.md
+    : > proj/sub/s.md; : > proj/sub/c1/c2/c3/deep.md
+    write_ini '[View]' 'tree=off'
+    lt proj/sub/s.md
+    [ "$(body)" = off ] || bad "tree=off gave: $(cat "$d/out")"
+    write_ini '[View]' 'root=repo'
+    lt proj/sub/s.md
+    [ "$(line1)" = "$(enc "$(real proj)")" ] || bad "root=repo gave root [$(line1)]"
+    has 'page a.md'
+    write_ini '[View]' 'root=repo' 'tree_depth=2'
+    lt proj/sub/s.md
+    [ "$(deepest)" = 2 ] || bad "tree_depth=2 gave depth $(deepest)"
+    hasnt 'deep.md'
+    write_ini '[View]' 'root=repo' 'tree_max_files=2'
+    lt proj/sub/s.md
+    [ "$(body | grep -c '^page ')" = 3 ] || bad "tree_max_files=2: $(cat "$d/out")"
+    has 'page a.md'
+    has 'page b.md'
+    has 'page sub/s.md'
+    has 'cap 2'
+    [ "$(sed -n '$p' "$d/out")" = 'cap 2' ] || bad "cap is not the last line"
+    # The section counts: a key outside [View] is ignored.
+    write_ini '[Other]' 'tree=off' '[View]' 'tree_depth = 1 '
+    lt proj/sub/s.md
+    [ "$(body | sed -n 1p)" != off ] || bad "a key outside [View] was used"
+    exit 0
+}
+
+case_tree_ini_ceiling() {
+    fresh
+    mkdir proj || bad "mkdir"
+    chain proj 14
+    write_ini '[View]' 'tree_depth=99'
+    lt proj/top.md
+    [ "$(deepest)" = 12 ] || bad "tree_depth=99 gave depth $(deepest)"
+    write_ini '[View]' 'tree_depth=99999999999999999999999'
+    lt proj/top.md
+    [ "$(deepest)" = 12 ] || bad "a long tree_depth gave depth $(deepest)"
+    mkdir proj/m || bad "mkdir m"
+    many proj/m 2010
+    write_ini '[View]' 'tree_max_files=99999'
+    lt proj/top.md
+    has 'cap 2000'
+    [ "$(body | grep -c '^page ')" = 2000 ] || bad "cap 2000 lists $(body | grep -c '^page ')"
+    exit 0
+}
+
+case_tree_ini_hostile() {
+    fresh
+    mkdir proj || bad "mkdir"
+    chain proj 9
+    for v in '-1' '<scriptXQX>' '0' '000' '6x' ' ' '' '+3' '1e2' '$(touch PWNED)' '0x3'; do
+        write_ini '[View]' "tree_depth=$v" "tree_max_files=$v" "tree=$v" "root=$v"
+        lt proj/top.md
+        [ "$(deepest)" = 6 ] || bad "tree_depth=[$v] gave depth $(deepest), want 6"
+        hasnt '^cap'
+        [ "$(line1)" = "$(enc "$(real proj)")" ] || bad "root=[$v] gave root [$(line1)]"
+    done
+    # A leading zero is a decimal number.
+    write_ini '[View]' 'tree_depth=007'
+    lt proj/top.md
+    [ "$(deepest)" = 7 ] || bad "tree_depth=007 gave depth $(deepest)"
+    # The page has no text from a bad value.
+    write_ini '[View]' 'tree_depth=<scriptXQX>' 'tree_max_files=<scriptXQX>' 'tree=XQX' 'root=XQX'
+    md --no-open --out "$page" proj/top.md
+    [ "$rc" = 0 ] || bad "page exit $rc"
+    ! grep -q XQX "$page" || bad "the page has text from a bad value"
+    no_pwned
+    exit 0
+}
+
+case_tree_flag() {
+    fresh
+    mkdir proj || bad "mkdir"
+    : > proj/a.md; : > proj/b.md
+    lt proj/a.md --tree off
+    [ "$(body)" = off ] || bad "--tree off gave: $(cat "$d/out")"
+    write_ini '[View]' 'tree=off'
+    lt proj/a.md --tree on
+    has 'page b.md'
+    write_ini '[View]' 'tree=on'
+    lt proj/a.md --tree off
+    [ "$(body)" = off ] || bad "--tree off did not beat tree=on"
+    for v in maybe ON '' '-1' '"><script>'; do
+        md --no-open --out "$page" --tree "$v" proj/a.md
+        expect_usage "--tree [$v]"
+    done
+    md --no-open --out "$page" proj/a.md --tree
+    expect_usage "--tree with no value"
+    exit 0
+}
+
+case_tree_off_no_scan() {
+    fresh
+    mkdir -p "$d/proj/sub" "$d/fstub" || bad "mkdir"
+    : > "$d/proj/a.md"; : > "$d/proj/sub/b.md"
+    realfind=$(command -v find) || bad "no find"
+    {
+        echo '#!/bin/sh'
+        echo 'printf "%s|" "$(pwd -P)" "$@" >> "$FIND_LOG"'
+        echo 'echo >> "$FIND_LOG"'
+        printf 'exec "%s" "$@"\n' "$realfind"
+    } > "$d/fstub/find" || bad "write stub"
+    chmod 755 "$d/fstub/find" || bad "chmod stub"
+    FIND_LOG=$d/find.log
+    export FIND_LOG
+    PATH=$d/fstub:$PATH
+    rootr=$(real "$d/proj")
+    # The stub logs a call when the tree is on.
+    : > "$FIND_LOG"
+    lt "$d/proj/a.md"
+    grep -q "^$rootr|" "$FIND_LOG" || bad "the stub did not log the scan: $(cat "$FIND_LOG")"
+    # tree=off, --tree off and a root of HOME: no call in the root, and no call
+    # that names the root folder.
+    no_root_call() {
+        while IFS= read -r l; do
+            case $l in
+                "$rootr"/*|"$rootr"\|*) bad "$1: find ran in the root: $l" ;;
+                *"|$rootr|"*|*"|$rootr/|"*|*"|$d/proj|"*|*"|.|"*) bad "$1: find got the root: $l" ;;
+            esac
+        done < "$FIND_LOG"
+    }
+    write_ini '[View]' 'tree=off'
+    : > "$FIND_LOG"
+    lt "$d/proj/a.md"
+    [ "$(line1)" = "$(enc "$rootr")" ] || bad "tree=off line 1 is [$(line1)]"
+    [ "$(body)" = off ] || bad "tree=off gave: $(cat "$d/out")"
+    md --no-open "$d/proj/a.md"
+    [ "$rc" = 0 ] || bad "page exit $rc"
+    md --no-open "$d/proj/a.md"
+    [ "$rc" = 0 ] || bad "page reuse exit $rc"
+    no_root_call 'tree=off'
+    rm -f "$ini"
+    : > "$FIND_LOG"
+    lt "$d/proj/a.md" --tree off
+    [ "$(body)" = off ] || bad "--tree off gave: $(cat "$d/out")"
+    md --no-open --tree off "$d/proj/a.md"
+    md --no-open --tree off "$d/proj/a.md"
+    no_root_call '--tree off'
+    HOME=$d/proj
+    : > "$FIND_LOG"
+    lt "$d/proj/a.md"
+    [ "$(body)" = off ] || bad "root of HOME gave: $(cat "$d/out")"
+    md --no-open "$d/proj/a.md"
+    md --no-open "$d/proj/a.md"
+    no_root_call 'HOME'
+    exit 0
+}
+
+case_root_dir() {
+    fresh
+    mkdir -p "proj/.git" "proj/sub" || bad "mkdir"
+    : > proj/sub/s.md; : > proj/top.md
+    ln -s "$d/work/proj/sub" lnk || bad "ln"
+    lt proj/sub/s.md
+    [ "$(line1)" = "$(enc "$(real proj/sub)")" ] || bad "root=dir root is [$(line1)]"
+    [ "$(body)" = 'page s.md' ] || bad "root=dir lists: $(body)"
+    # A path through a linked folder gives the real folder.
+    lt lnk/s.md
+    [ "$(line1)" = "$(enc "$(real proj/sub)")" ] || bad "root through a link is [$(line1)]"
+    write_ini '[View]' 'root=dir'
+    (cd proj/sub && lt s.md) || exit 1
+    [ "$(line1)" = "$(enc "$(real proj/sub)")" ] || bad "a relative file gave root [$(line1)]"
+    exit 0
+}
+
+case_root_repo() {
+    fresh
+    mkdir -p proj/.git proj/a/b other/x/y || bad "mkdir"
+    : > proj/top.md; : > proj/a/b/f.md
+    printf 'gitdir: elsewhere\n' > other/.git || bad "write .git file"
+    : > other/o.md; : > other/x/y/g.md
+    write_ini '[View]' 'root=repo'
+    lt proj/a/b/f.md
+    [ "$(line1)" = "$(enc "$(real proj)")" ] || bad ".git folder: root is [$(line1)]"
+    has 'page top.md'
+    has 'page a/b/f.md'
+    # .git as a file is a match too.
+    lt other/x/y/g.md
+    [ "$(line1)" = "$(enc "$(real other)")" ] || bad ".git file: root is [$(line1)]"
+    has 'page o.md'
+    has 'page x/y/g.md'
+    # The first match upward wins.
+    mkdir proj/a/.git || bad "mkdir inner .git"
+    lt proj/a/b/f.md
+    [ "$(line1)" = "$(enc "$(real proj/a)")" ] || bad "inner .git: root is [$(line1)]"
+    has 'page b/f.md'
+    exit 0
+}
+
+case_root_repo_none() {
+    fresh
+    # A .git above HOME is not seen: the walk stops after HOME.
+    mkdir -p "$d/.git" "$HOME/p/q" || bad "mkdir"
+    : > "$HOME/p/q/f.md"; : > "$HOME/p/up.md"
+    write_ini '[View]' 'root=repo'
+    lt "$HOME/p/q/f.md"
+    [ "$(line1)" = "$(enc "$(real "$HOME/p/q")")" ] || bad "no .git: root is [$(line1)]"
+    [ "$(body)" = 'page f.md' ] || bad "no .git lists: $(body)"
+    # A file outside HOME with no .git up to /: the root=dir folder.
+    rmdir "$d/.git" || bad "rmdir"
+    mkdir -p "$d/out1/r" || bad "mkdir"
+    : > "$d/out1/r/g.md"
+    lt "$d/out1/r/g.md"
+    [ "$(line1)" = "$(enc "$(real "$d/out1/r")")" ] || bad "outside HOME: root is [$(line1)]"
+    exit 0
+}
+
+case_root_home_off() {
+    fresh
+    HOME=$d/home
+    : > "$HOME/notes.md"; : > "$HOME/other.md"
+    lt "$HOME/notes.md"
+    [ "$(line1)" = "$(enc "$(real "$HOME")")" ] || bad "line 1 is [$(line1)]"
+    [ "$(body)" = off ] || bad "a file in HOME gave: $(cat "$d/out")"
+    # root=repo from a folder under HOME with .git in HOME: the root is HOME.
+    mkdir -p "$HOME/.git" "$HOME/p" || bad "mkdir"
+    : > "$HOME/p/x.md"
+    write_ini '[View]' 'root=repo'
+    lt "$HOME/p/x.md"
+    [ "$(body)" = off ] || bad "root=repo to HOME gave: $(cat "$d/out")"
+    exit 0
+}
+
+case_scan_skip_rules() {
+    fresh
+    mkdir -p proj/.git proj/node_modules proj/.hid proj/sub/node_modules proj/sub/.x \
+        "proj/n
+l" "proj/t	b" || bad "mkdir"
+    for f in .git/x.md node_modules/x.md .hid/x.md sub/node_modules/y.md sub/.x/z.md \
+             .hidden.md sub/.h.md "n
+l/a.md" "t	b/a.md" "nl
+name.md" "tab	name.md" "$(printf 'bell\007.md')" \
+             notes.txt README sub/x.mdx sub/y.md.bak; do
+        : > "proj/$f" || bad "touch [$f]"
+    done
+    for f in top.md UP.MD sub/s.Md long.markdown sub/L.MarkDown; do
+        : > "proj/$f" || bad "touch [$f]"
+    done
+    lt proj/top.md
+    want='page UP.MD
+page long.markdown
+page top.md
+page sub/L.MarkDown
+page sub/s.Md'
+    [ "$(body)" = "$want" ] || bad "lists: $(body)"
+    exit 0
+}
+
+case_scan_symlinks() {
+    fresh
+    mkdir -p outside/dir proj || bad "mkdir"
+    : > outside/o.md; : > outside/dir/od.md; : > proj/a.md
+    ln -s "$d/work/outside/o.md" proj/link.md || bad "ln file"
+    ln -s "$d/work/outside/dir" proj/linkdir || bad "ln dir"
+    ln -s "$d/work/proj" proj/loop || bad "ln loop"
+    lt proj/a.md
+    [ "$(body)" = 'page a.md' ] || bad "lists: $(body)"
+    # A symlink opened file shows under its own name.
+    lt proj/link.md
+    want='page a.md
+page link.md'
+    [ "$(body)" = "$want" ] || bad "a symlink opened file: $(body)"
+    exit 0
+}
+
+case_scan_depth() {
+    fresh
+    mkdir proj || bad "mkdir"
+    chain proj 14
+    lt proj/top.md
+    [ "$(deepest)" = 6 ] || bad "default depth is $(deepest)"
+    has 'page c1/c2/c3/c4/c5/d5.md'
+    hasnt 'd6.md'
+    write_ini '[View]' 'tree_depth=1'
+    lt proj/top.md
+    [ "$(body)" = 'page top.md' ] || bad "tree_depth=1 lists: $(body)"
+    # The opened file is in the tree at any depth.
+    write_ini '[View]' 'tree_depth=3'
+    lt proj/c1/c2/c3/c4/c5/c6/c7/c8/d8.md
+    [ "$(line1)" = "$(enc "$(real proj/c1/c2/c3/c4/c5/c6/c7/c8)")" ] || bad "root=dir for a deep file"
+    write_ini '[View]' 'tree_depth=3' 'root=repo'
+    mkdir proj/.git || bad "mkdir .git"
+    lt proj/c1/c2/c3/c4/c5/c6/c7/c8/d8.md
+    want='page top.md
+page c1/d1.md
+page c1/c2/d2.md
+page c1/c2/c3/c4/c5/c6/c7/c8/d8.md'
+    [ "$(body)" = "$want" ] || bad "a deep opened file: $(body)"
+    exit 0
+}
+
+case_scan_cap() {
+    fresh
+    mkdir proj || bad "mkdir"
+    many proj 600
+    lt proj/f001.md
+    [ "$(body | grep -c '^page ')" = 500 ] || bad "lists $(body | grep -c '^page ') files"
+    has 'page f500.md'
+    hasnt 'f501.md'
+    [ "$(sed -n '$p' "$d/out")" = 'cap 500' ] || bad "last line is $(sed -n '$p' "$d/out")"
+    # No cap line when the files fit.
+    write_ini '[View]' 'tree_max_files=600'
+    lt proj/f001.md
+    hasnt '^cap'
+    [ "$(body | grep -c '^page ')" = 600 ] || bad "600 files fit, lists $(body | grep -c '^page ')"
+    exit 0
+}
+
+case_scan_open_past_cap() {
+    fresh
+    mkdir proj || bad "mkdir"
+    many proj 600
+    lt proj/f550.md
+    [ "$(body | sed -n 500p)" = 'page f500.md' ] || bad "line 500 is $(body | sed -n 500p)"
+    [ "$(body | sed -n 501p)" = 'page f550.md' ] || bad "line 501 is $(body | sed -n 501p)"
+    [ "$(body | sed -n 502p)" = 'cap 500' ] || bad "line 502 is $(body | sed -n 502p)"
+    [ "$(body | wc -l | tr -d ' ')" = 502 ] || bad "$(body | wc -l) lines"
+    [ "$(grep -c 'f550.md' "$d/out")" = 1 ] || bad "the opened file is listed twice"
+    exit 0
+}
+
+# big NAME BYTES: a file of BYTES bytes, lines of "x".
+mkbytes() {
+    yes x | head -c "$2" > "$1" || bad "write $1"
+}
+
+case_scan_big() {
+    fresh
+    mkdir proj || bad "mkdir"
+    mkbytes proj/big.md 1048577
+    mkbytes proj/edge.md 1048576
+    : > proj/a.md
+    lt proj/a.md
+    want='page a.md
+big big.md
+page edge.md'
+    [ "$(body)" = "$want" ] || bad "lists: $(body)"
+    # The opened file is in the page at any size.
+    lt proj/big.md
+    has 'page big.md'
+    exit 0
+}
+
+case_scan_cut() {
+    fresh
+    mkdir proj || bad "mkdir"
+    for n in a b c d e f g h i z; do
+        mkbytes "proj/$n.md" 1000000
+    done
+    printf 'small\n' > proj/j.md
+    lt proj/z.md
+    # z counts first (1000000), then a to g fit (8000000); h and i pass 8388608.
+    want='page a.md
+page b.md
+page c.md
+page d.md
+page e.md
+page f.md
+page g.md
+cut h.md
+cut i.md
+page j.md
+page z.md'
+    [ "$(body)" = "$want" ] || bad "lists: $(body)"
+    exit 0
+}
+
+case_scan_order() {
+    fresh
+    mkdir -p proj/sub proj/Z proj/a proj/_u || bad "mkdir"
+    for f in B.md a.md 'a b.md' _x.md '~t.md' sub/a.md Z/z.md a/0.md _u/k.md 'a-b.md'; do
+        : > "proj/$f" || bad "touch [$f]"
+    done
+    lt proj/a.md
+    # A.md and a.md would be one file on a disk that ignores case.
+    want='page B.md
+page _x.md
+page a%20b.md
+page a-b.md
+page a.md
+page ~t.md
+page Z/z.md
+page _u/k.md
+page a/0.md
+page sub/a.md'
+    [ "$(body)" = "$want" ] || bad "lists: $(body)"
+    exit 0
+}
+
+case_scan_names_hostile() {
+    fresh
+    mkdir -p 'proj/d "q" $(touch PWNED)' || bad "mkdir"
+    for f in '"><script>.md' 'a b.md' '100%.md' "it's.md" '<x>.md' 'a&b.md' '-dash.md' \
+             "$(printf '\303\251.md')" '`touch PWNED`.md' '$(touch PWNED).md' 'q?*[x].md' \
+             'd "q" $(touch PWNED)/in.md'; do
+        : > "proj/$f" || bad "touch [$f]"
+    done
+    lt 'proj/-dash.md'
+    body | while IFS= read -r l; do
+        case ${l#* } in
+            *[!A-Za-z0-9._~/%-]*) echo "$l" ;;
+        esac
+    done > "$d/badlines"
+    [ ! -s "$d/badlines" ] || bad "lines with a raw byte: $(cat "$d/badlines")"
+    for w in 'page %22%3E%3Cscript%3E.md' 'page a%20b.md' 'page 100%25.md' 'page it%27s.md' \
+             'page %3Cx%3E.md' 'page a%26b.md' 'page -dash.md' 'page %C3%A9.md' \
+             'page %60touch%20PWNED%60.md' 'page %24%28touch%20PWNED%29.md' 'page q%3F%2A%5Bx%5D.md' \
+             'page d%20%22q%22%20%24%28touch%20PWNED%29/in.md'; do
+        has "$w"
+    done
+    [ "$(body | wc -l | tr -d ' ')" = 12 ] || bad "$(body | wc -l) lines"
+    no_pwned
+    exit 0
+}
+
+case_list_tree_flag() {
+    fresh
+    # A root path with pattern characters cannot change a pattern of the scan.
+    mkdir -p 'r[a]*? x/sub' 'r[a]*? x/other' || bad "mkdir"
+    : > 'r[a]*? x/a.md'; : > 'r[a]*? x/sub/b.md'; : > 'r[a]*? x/other/c.md'; : > 'r[a]*? x/b.txt'
+    : > ra.md
+    lt 'r[a]*? x/a.md'
+    r=$(real 'r[a]*? x')
+    want="$(enc "$r")
+page a.md
+page other/c.md
+page sub/b.md"
+    [ "$(cat "$d/out")" = "$want" ] || bad "output: $(cat "$d/out")"
+    case $(line1) in
+        *'%5Ba%5D%2A%3F%20x') ;;
+        *) bad "line 1 does not end in the encoded root name: $(line1)" ;;
+    esac
+    # Byte-exact: each line ends in a newline, and nothing else is printed.
+    printf '%s\n' "$want" > "$d/want"
+    cmp -s "$d/want" "$d/out" || bad "output is not byte-exact"
+    # No page, no cache file, no opener.
+    [ ! -e "$OPEN_LOG" ] || bad "an opener ran"
+    [ -z "$(find "$XDG_CACHE_HOME" "$TMPDIR" -type f 2>/dev/null)" ] || bad "a page was made"
+    md --list-tree --out "$page" 'r[a]*? x/a.md'
+    [ "$rc" = 0 ] || bad "exit $rc with --out"
+    [ ! -e "$page" ] || bad "--list-tree wrote the --out page"
+    exit 0
+}
+
 for c in flags_ok flag_width_bad flag_theme_bad flag_width_missing \
          ini_valid ini_hostile ini_missing ini_browser_bad ini_browser_app_dir \
          init_config_writes init_config_keeps print_association_ok \
@@ -1377,7 +1912,11 @@ for c in flags_ok flag_width_bad flag_theme_bad flag_width_missing \
          vendor_no_close_tag vendor_sha384 \
          cache_path_stable cache_two_files cache_reuse cache_rebuild_on_edit cache_rebuild_on_flag \
          cache_rebuild_on_ini cache_no_cache_flag cache_dir_mode cache_dir_fallback cache_name_safe \
-         out_direct_write cache_umask_restored cache_tmp_removed_on_error; do
+         out_direct_write cache_umask_restored cache_tmp_removed_on_error \
+         tree_ini_keys tree_ini_ceiling tree_ini_hostile tree_flag tree_off_no_scan \
+         root_dir root_repo root_repo_none root_home_off \
+         scan_skip_rules scan_symlinks scan_depth scan_cap scan_open_past_cap scan_big scan_cut \
+         scan_order scan_names_hostile list_tree_flag; do
     run "$c"
 done
 

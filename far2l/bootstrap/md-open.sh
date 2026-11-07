@@ -8,6 +8,8 @@
 #     --theme light|dark|auto
 #     --browser auto|firefox|chrome|safari|<absolute path>
 #     --no-cache          build the page again
+#     --tree on|off       show the file tree of the root folder, or one file
+#     --list-tree         print the root and the tree files, write no page
 #   md-open.sh --init-config
 #   md-open.sh --print-association
 #
@@ -20,7 +22,8 @@
 # CSS and the highlight.js files are read from this script's folder too.
 #
 # Defaults come from ${XDG_CONFIG_HOME:-$HOME/.config}/far2l/settings/md-view.ini,
-# section [View], keys width, theme and browser. A flag beats the file. No value
+# section [View], keys width, theme, browser, tree, root, tree_depth and
+# tree_max_files. A flag beats the file. No value
 # from the file or a flag is run as code; it is used only when it equals an
 # accepted word, or (browser only) when it is an absolute path to a program.
 
@@ -35,7 +38,8 @@ old_umask=$(umask)
 
 usage() {
     echo 'usage: md-open.sh [--out <page.html>] [--no-open] [--width 60|70|80]' >&2
-    echo '                  [--theme light|dark|auto] [--browser B] [--no-cache] <file.md>' >&2
+    echo '                  [--theme light|dark|auto] [--browser B] [--no-cache]' >&2
+    echo '                  [--tree on|off] [--list-tree] <file.md>' >&2
     echo '       md-open.sh --init-config' >&2
     echo '       md-open.sh --print-association' >&2
     exit 2
@@ -64,14 +68,42 @@ browser_ok() {
     esac
 }
 
-# read_ini: reads md-view.ini, section [View]. Sets cfg_width, cfg_theme and
-# cfg_browser to the last valid value of each key; sets cfg_browser_bad=1 if a
-# browser= line has a value that is not accepted. Other values are ignored.
+# num_val VALUE CEILING: sets num to VALUE, or to CEILING when VALUE is larger.
+# VALUE must be a decimal number of 1 or more; else num is empty and the return
+# is 1. A long number is not given to the shell arithmetic, so it cannot overflow.
+num_val() {
+    num=
+    case $1 in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    v=$1
+    while :; do
+        case $v in
+            0?*) v=${v#0} ;;
+            *) break ;;
+        esac
+    done
+    [ "$v" = 0 ] && return 1
+    if [ "${#v}" -gt 5 ] || [ "$v" -gt "$2" ]; then
+        num=$2
+    else
+        num=$v
+    fi
+}
+
+# read_ini: reads md-view.ini, section [View]. Sets cfg_width, cfg_theme,
+# cfg_browser, cfg_tree, cfg_root, cfg_depth and cfg_max to the last valid value
+# of each key; sets cfg_browser_bad=1 if a browser= line has a value that is not
+# accepted. Other values are ignored.
 read_ini() {
     cfg_width=
     cfg_theme=
     cfg_browser=
     cfg_browser_bad=0
+    cfg_tree=
+    cfg_root=
+    cfg_depth=
+    cfg_max=
     [ -f "$ini" ] && [ -r "$ini" ] || return 0
     section=
     while IFS= read -r line || [ -n "$line" ]; do
@@ -108,6 +140,18 @@ read_ini() {
                 else
                     cfg_browser_bad=1
                 fi ;;
+            tree)
+                case $val in
+                    on|off) cfg_tree=$val ;;
+                esac ;;
+            root)
+                case $val in
+                    dir|repo) cfg_root=$val ;;
+                esac ;;
+            tree_depth)
+                num_val "$val" 12 && cfg_depth=$num ;;
+            tree_max_files)
+                num_val "$val" 2000 && cfg_max=$num ;;
         esac
     done < "$ini"
 }
@@ -260,6 +304,182 @@ open_page() {
     fi
 }
 
+# find_repo_root START: sets repo_root to the first folder from START upward
+# that has .git (a folder or a file). START is a real path. The walk checks
+# $HOME (its real path, in home_real) and stops there; it never checks /.
+# Returns 1 when no folder matches.
+find_repo_root() {
+    repo_root=
+    d=$1
+    while [ "$d" != / ]; do
+        if [ -e "$d/.git" ]; then
+            repo_root=$d
+            return 0
+        fi
+        [ -n "$home_real" ] && [ "$d" = "$home_real" ] && break
+        d=$(cd -P "$d/.." && pwd -P) || break
+    done
+    return 1
+}
+
+# The awk function enc(s): s with each byte outside A-Za-z0-9._~/- written as
+# %XX, two upper-case hex digits. Only A-Za-z0-9._~/%- come out.
+enc_fn='
+BEGIN {
+    for (i = 1; i < 256; i++) ord[sprintf("%c", i)] = i
+    hex = "0123456789ABCDEF"
+    safe = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._~/-"
+}
+function enc(s,    r, i, c, n) {
+    r = ""
+    for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1)
+        if (index(safe, c) > 0) {
+            r = r c
+        } else {
+            n = ord[c]
+            r = r "%" substr(hex, int(n / 16) + 1, 1) substr(hex, n % 16 + 1, 1)
+        }
+    }
+    return r
+}
+'
+
+# enc_path TEXT: prints TEXT encoded. A newline in TEXT becomes %0A.
+enc_path() {
+    printf '%s' "$1" | awk "$enc_fn"'
+        { s = s (NR > 1 ? "%0A" : "") enc($0) }
+        END { print s }'
+}
+
+# scan_find [PRIMARY...]: lists the tree files under the root as ./<tree path>,
+# one per line. It runs in the root, so a pattern character in the root path
+# cannot change a pattern. It skips .git, node_modules and hidden folders,
+# hidden files, a name with a byte below 0x20 and a path deeper than
+# tree_depth. find does not follow a symlink, and -type f skips a symlink.
+# The extra primaries (for example -size) go before -print.
+scan_find() {
+    deep='./*'
+    i=0
+    while [ "$i" -lt "$tree_depth" ]; do
+        deep=$deep/*
+        i=$((i + 1))
+    done
+    ctl=$(printf '*[\001-\037]*')
+    (
+        cd "$tree_root" || exit 1
+        # scan-rule
+        find . \( -name "$ctl" -o -type d \( -name '.?*' -o -name node_modules \) \) -prune -o -path "$deep" -prune -o -type f ! -name '.*' \( -name '*.[mM][dD]' -o -name '*.[mM][aA][rR][kK][dD][oO][wW][nN]' \) "$@" -print 2>/dev/null
+        exit 0
+    )
+}
+
+# scan_tree: scans the root. Sets tree_list to the "<state> <tree path>" lines
+# in tree order, up to the cap (state is page, big or cut), tree_count to their
+# number, tree_capped to 1 when more files exist, and opened_in_list to 1 when
+# the opened file is one of the lines. The opened file is always "page"; when it
+# is not in tree_list, list_tree_text adds it after the list. Its bytes count
+# first toward the page limit.
+scan_tree() {
+    [ -d "$tree_root" ] || return 1
+    nl='
+'
+    files=$(scan_find) || return 1
+    big=$(scan_find -size +1048576c) || return 1
+    # The opened file joins the scan unless its tree path has a byte below 0x20.
+    ctlb=$(printf '\001-\037')
+    case $tree_opened in
+        *[$ctlb]*) extra= ;;
+        *) extra=./$tree_opened ;;
+    esac
+    sorted=$(
+        { [ -n "$files" ] && printf '%s\n' "$files"; [ -n "$extra" ] && printf '%s\n' "$extra"; } |
+        awk '!seen[$0]++ { p = substr($0, 3); n = split(p, a, "/"); print n " " p }' |
+        LC_ALL=C sort -k1,1n -k2
+    )
+    res=$(
+        cd "$tree_root" || exit 1
+        { [ -n "$big" ] && printf '%s\n' "$big"; echo; [ -n "$sorted" ] && printf '%s\n' "$sorted"; } |
+        MD_OPENED=$tree_opened MD_MAX=$tree_max awk '
+        # size(f, room): bytes of f as lines with a newline each, read with
+        # getline; the read stops once the count passes room.
+        function size(f, room,    n, line) {
+            n = 0
+            while ((getline line < f) > 0) {
+                n += length(line) + 1
+                if (n > room) break
+            }
+            close(f)
+            return n
+        }
+        BEGIN {
+            limit = 8388608
+            opened = ENVIRON["MD_OPENED"]
+            max = ENVIRON["MD_MAX"] + 0
+            total = size("./" opened, limit + 1)
+            phase = 0
+            count = 0
+            capped = 0
+            inlist = 0
+        }
+        phase == 0 {
+            if ($0 == "") phase = 1
+            else isbig[$0] = 1
+            next
+        }
+        $0 == "" { next }
+        {
+            p = substr($0, index($0, " ") + 1)
+            if (count >= max) { capped = 1; next }
+            count++
+            if (p == opened) {
+                state = "page"
+                inlist = 1
+            } else if (("./" p) in isbig) {
+                state = "big"
+            } else {
+                n = size("./" p, limit - total)
+                if (total + n > limit) state = "cut"
+                else { total += n; state = "page" }
+            }
+            print state " " p
+        }
+        END { print "#meta " count " " capped " " inlist }'
+    ) || return 1
+    meta=${res##*"$nl"}
+    case $res in
+        *"$nl"*) tree_list=${res%"$nl"*} ;;
+        *) tree_list= ;;
+    esac
+    meta=${meta#\#meta }
+    tree_count=${meta%% *}
+    meta=${meta#* }
+    tree_capped=${meta%% *}
+    opened_in_list=${meta#* }
+}
+
+# list_tree_text: the --list-tree output. Line 1 is the root, encoded. In
+# one-file mode line 2 is "off". Else one "<state> <ENC>" line per tree file,
+# the opened file after them when it is not in the list, and "cap <N>" last
+# when the cap stopped the scan.
+list_tree_text() {
+    enc_path "$tree_root"
+    if [ "$tree_mode" != 1 ]; then
+        echo off
+        return 0
+    fi
+    if [ -n "$tree_list" ]; then
+        printf '%s\n' "$tree_list" | awk "$enc_fn"'
+            { i = index($0, " "); print substr($0, 1, i - 1) " " enc(substr($0, i + 1)) }'
+    fi
+    if [ "$opened_in_list" != 1 ]; then
+        printf 'page %s\n' "$(enc_path "$tree_opened")"
+    fi
+    if [ "$tree_capped" = 1 ]; then
+        printf 'cap %s\n' "$tree_count"
+    fi
+}
+
 file=
 out=
 do_open=1
@@ -269,6 +489,8 @@ flag_width=
 flag_theme=
 flag_browser=
 flag_browser_set=0
+flag_tree=
+list_tree=0
 while [ $# -gt 0 ]; do
     case $1 in
         --print-association)
@@ -276,6 +498,15 @@ while [ $# -gt 0 ]; do
             exit 0 ;;
         --init-config)
             do_init=1 ;;
+        --list-tree)
+            list_tree=1 ;;
+        --tree)
+            [ $# -ge 2 ] || usage
+            case $2 in
+                on|off) flag_tree=$2 ;;
+                *) usage ;;
+            esac
+            shift ;;
         --no-open)
             do_open=0 ;;
         --no-cache)
@@ -354,6 +585,68 @@ fi
 if [ ! -f "$file" ] || [ ! -r "$file" ]; then
     echo "md-open: cannot read $file" >&2
     usage
+fi
+
+# The tree settings: a flag, else the file, else the default. Only accepted
+# words and numbers are kept.
+tree=${flag_tree:-${cfg_tree:-on}}
+root_mode=${cfg_root:-dir}
+tree_depth=${cfg_depth:-6}
+tree_max=${cfg_max:-500}
+tree_why=
+if [ "$tree" = off ]; then
+    if [ -n "$flag_tree" ]; then tree_why=flag; else tree_why=ini; fi
+fi
+
+# The real folder of the opened file and its name. The shell parameter forms
+# keep a name that ends in a newline; "./" keeps cd from using CDPATH.
+case $file in
+    */*) file_dir=${file%/*}; [ -n "$file_dir" ] || file_dir=/ ;;
+    *) file_dir=. ;;
+esac
+case $file_dir in
+    /*) ;;
+    *) file_dir=./$file_dir ;;
+esac
+file_name=${file##*/}
+real_dir=$(cd -P "$file_dir" && pwd -P) || { echo "md-open: cannot read $file" >&2; exit 2; }
+home_real=
+case ${HOME:-} in
+    /*) home_real=$(cd -P "$HOME" 2>/dev/null && pwd -P) || home_real= ;;
+esac
+
+# The root: the real folder of the opened file, or with root=repo the first
+# folder upward that has .git. The walk does not check / and stops after $HOME.
+tree_root=$real_dir
+if [ "$root_mode" = repo ] && find_repo_root "$real_dir"; then
+    tree_root=$repo_root
+fi
+if [ -z "$tree_why" ]; then
+    if [ "$tree_root" = / ]; then
+        tree_why=slash
+    elif [ -n "$home_real" ] && [ "$tree_root" = "$home_real" ]; then
+        tree_why=home
+    fi
+fi
+[ -z "$tree_why" ] && tree_mode=1 || tree_mode=0
+
+# The tree path of the opened file: its real folder under the root, then its own
+# name (a symlink keeps its name).
+rel=${real_dir#"$tree_root"}
+rel=${rel#/}
+tree_opened=${rel:+$rel/}$file_name
+
+tree_list=
+tree_count=0
+tree_capped=0
+opened_in_list=0
+if [ "$tree_mode" = 1 ]; then
+    scan_tree || { echo 'md-open: cannot read the file tree' >&2; exit 2; }
+fi
+
+if [ "$list_tree" = 1 ]; then
+    list_tree_text
+    exit 0
 fi
 
 # The page path. --out names it. Else it is <base>-<crc>.html in the cache
