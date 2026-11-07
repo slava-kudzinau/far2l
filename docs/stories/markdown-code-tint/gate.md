@@ -158,11 +158,22 @@ Runs of the row, token runs included, ride the tint. `--norgb` draws the block w
 - `bc084a675` Durable docs: ADR-004's exception, the viewer spec, the data view, the invariants.
 - `a7541dffa` The gate check resolves the build path to an absolute one: the harness resolves a
   relative app path from the test folder.
+- `c92a5cbba` Merge of `next` (fences V2 export, browser view) into the story branch.
+- `0adbf77a5` The tint rides the V2 token ranges: a group carries ranges with their
+  own colors; the printer paints range slice, code gaps and the tinted tail in one pass.
+- `0495c85bb` The palette keeps both: the V2 `MdRangeColor`/`MdTokenClassLook` pair and
+  the tint's `MdCodeTint`.
+- `eaf27cf12` 000d's `--norgb` run reads the V2 colors: a plain code cell carries
+  console.hrd's Code `#d7d7af` on index 13; a cell under a token carries its region's color.
 
 ### Decisions changed during the build
 
 The print order moved: a tinted row paints in one pass (runs, then the tinted tail), not the
 fill first and the runs over it. The row count per Markdown row is what the smoke measures.
+
+V2 (from `markdown-colorer-fences`, merged mid-build): fence tokens carry the scheme's
+own region colors. The tint stayed a row property and now blends under the range colors;
+the code role survives in the cells between and past tokens. 000d reads the new shape.
 
 ### What the reviews caught
 
