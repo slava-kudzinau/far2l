@@ -51,6 +51,24 @@ The core picks the file type by the fake file name `x.<lang>`. The alias table i
 | `c++` | `x.cpp` |
 | `zsh` | `x.sh` |
 
+The table also maps the long slug of every language that Colorer knows
+by a shorter name: `javascript` to `js`, `typescript` to `ts`, `python`
+to `py`, `bash` and `shell` to `sh`, `rust` to `rs`, `csharp` to `cs`,
+`golang` to `go`, `kotlin` to `kt`, `powershell` to `ps1`, `docker` to
+`dockerfile`, `latex` to `tex`, `plaintext` to `text`, `perl` to `pl`,
+`elixir` to `ex`, `erlang` to `erl`, `haskell` to `hs`, `julia` to
+`jl`, `objectivec`, `objc` and `obj-c` to `m`, `fsharp` to `fs`,
+`vbnet` to `vb`, `assembly` to `asm`, `pascal` to `pas`, `fortran` to
+`f`, `make` to `makefile`, `gitignore` to `ignore`, `apache` and
+`apacheconf` to `conf`, `blade` to `php`, `handlebars` to `hbs`,
+`brainfuck` to `bf`, `graphviz` to `dot` and `terraform` to `hcl`. A
+slug absent from the table is sent as it is. The `slug_probe` driver
+case checks every row against the installed plugin (owner list
+2026-11-07). The languages without a scheme in the bundle keep the
+code role: `matlab`, `clojure`, `nim`, `scheme`, `prolog`,
+`actionscript`, `applescript`, `nginx`, `http`, `liquid`, `ejs`,
+`mermaid`.
+
 The file type `default` means no colors: the fence keeps the code role. These twelve names reach all four classes in the fixture test: `js`, `ts`, `python`, `bash`, `c`, `cpp`, `go`, `rust`, `java`, `sql`. `json` and `yaml` reach the classes their HRC scheme defines, at least string and number, and are accepted with fewer classes.
 
 ## Token roles and colors

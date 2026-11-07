@@ -123,6 +123,14 @@ M. One new plugin file, about five lines in `pcolorer.cpp` and one line in the p
   - Helper process: this tree has no Colorer console tool.
   - HRC data with a new tokenizer: needs Colorer's regex dialect.
 - `.tsx` maps to the `jsx` type. This is accepted.
+- Owner's words, 2026-11-07: "we could have mapping of known slugs to
+  colorer, if slug is unknown assume is an extention/colorer slug". The
+  alias table in the export and the bridge now has 38 rows, verified slug
+  by slug against the installed plugin (`slug_probe` driver case, commit
+  `4fc11226a`). Thirteen common slugs have no scheme in the bundle and
+  keep the code role: `matlab`, `clojure`, `nim`, `scheme`, `prolog`,
+  `actionscript`, `applescript`, `nginx`, `http`, `liquid`, `ejs`,
+  `mermaid`.
 - `plugins/colorer` had 14 commits since the move on 2026-08-26, and none since 2026-09-27. A new file there merges easily.
 - Tier from `flow-for.mjs`: `flow tier=full docs=spec,plan design=no orchestrator=yes final=final-reviewer gate=stop scan=yes verifier=none`. The owner reads the gate before the build, because of the storage choice and the input limits.
 - Branch `feat/markdown-code-highlight`. Base `next/2.9.1-ovr.1`, after `markdown-palette` merges. Budget and hard stop M $15/$20.
