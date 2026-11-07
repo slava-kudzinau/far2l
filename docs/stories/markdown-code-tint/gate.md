@@ -99,8 +99,9 @@ LOOK_BUILD="$BUILD" sh testing/markdown/look-driver.sh
 (cd testing && pkill -9 -f -- '--test=/tmp/far2l'; sleep 1
  find tests -maxdepth 1 -type s -delete
  for s in tests/*; do [ -S "$s" ] && rm -f "$s"; done
- APP="$PWD/../far2l.markdown-code-tint.build/install/far2l.app/Contents/MacOS/far2l"
- for t in $(ls tests); do o=$(./far2l-smoke-run.sh "$APP" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && echo "PASS $t" || echo "FAIL $t"; done)
+ for t in $(ls tests); do pkill -9 -f -- '--test=/tmp/far2l'; sleep 0.5
+  find tests -maxdepth 1 -type s -delete; for s in tests/*; do [ -S "$s" ] && rm -f "$s"; done
+  o=$(./far2l-smoke-run.sh "$PWD/../far2l.markdown-code-tint.build/install/far2l.app/Contents/MacOS/far2l" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && echo "PASS $t" || echo "FAIL $t"; done)
 ```
 
 Every test prints `PASS` (the two known Mac failures allowed), every driver exits 0, and the
