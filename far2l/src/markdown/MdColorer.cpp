@@ -196,7 +196,6 @@ public:
 		CollectCtx ctx{&out};
 		const int rc = m_tokenize(wide_lang.c_str(), pointers.data(),
 			static_cast<int>(pointers.size()), Collect, &ctx, budget_ms);
-		fprintf(stderr, "[mdcolorer] tokenize rc=%d out=%zu\n", rc, out.size());
 		if (rc == -2) { // unknown language: the fence keeps the plain code role (R44)
 			return false;
 		}

@@ -402,7 +402,6 @@ void tokenize_fence(Builder &b, const std::string &lang, const std::wstring &fen
                 b.token_deadline - now).count();
             std::vector<MdToken> flat;
             cacheable = b.token_source->Tokenize(lang, lines, left > 0 ? (int)left : 1, flat);   // R48: a plain fence caches too
-            fprintf(stderr, "[tk] call first=%zu flat=%zu\n", first_line, flat.size());
             groups.resize(lines.size());
             for (const MdToken &t : flat) {
                 if (t.line < groups.size())
@@ -625,8 +624,6 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             }
             // One call per fence, with the remaining render budget (plan T3).
             // A mermaid fence is tokenized like any fence (R33).
-            fprintf(stderr, "[fence] key=%llu first=%zu count=%zu\n",
-                (unsigned long long)fnv1a64(wide_to_utf8(fence_src)), first_line, count);
             tokenize_fence(b, fence_lang, fence_src, first_line, count);
             if (is_mermaid)
                 b.fences.push_back(Builder::Fence{fence_pos, fence_src, first_line, count, b.row_lead()});
