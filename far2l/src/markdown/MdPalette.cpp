@@ -389,6 +389,24 @@ bool LookAllowed(unsigned long long gen, const LookCache &cache)
 	return s_verdict;
 }
 
+// The view-wide verdict of spec.md, Contrast (story markdown-colorer-fences):
+// the look's batch verdict, keyed (viewer background, scheme generation),
+// decides for the whole view - the fences and the prose consult this one
+// verdict, recomputed once on a theme change.  A 4-bit scheme (a console
+// far2l.hrd style scheme) answers the 4-bit path: the scheme's 4-bit rows,
+// no 3:1 check.
+bool LookBatchAllowed()
+{
+	if (WINPORT(GetConsoleColorPalette)(NULL) < 8)
+		return true;   // the 4-bit path: the scheme's fg4 rows, no 3:1 check
+	MdLookSource &src = MdGetLookSource();
+	const unsigned long long gen = src.Generation();
+	if (gen == 0)
+		return false;  // no scheme: the plain code role, as the prose's fork table
+	const LookCache &cache = LookRows(gen, src);
+	return cache.valid && LookAllowed(gen, cache);
+}
+
 // The index of a role's region in the ten-name table (spec, Region map);
 // -1 for roles the Colorer look does not paint (art, the fence-token roles).
 int RoleRegionIndex(uint64_t role)
@@ -413,8 +431,6 @@ int RoleRegionIndex(uint64_t role)
 uint64_t MdRunColor(uint64_t role)
 {
 	const uint64_t body = FarColorToReal(COL_VIEWERTEXT);
-
-	// Out-of-range roles take the body look, not the body override.
 	if (role >= MD_ROLE_COUNT)
 		return body;
 
@@ -495,4 +511,38 @@ uint64_t MdRoleColor256(uint64_t role)
 		return 0;
 	const RoleDefault &def = kRoleDefaults[role - 1];
 	return RgbRealColor(RoleDefault{def.def256, 0, def.fallback16});
+}
+
+// The alias row of a token class: the fork table's own defaults, the rows
+// MdRunColor answers with no Colorer (story markdown-colorer-fences, V1
+// fallback: the class rides as the 24-bit and 4-bit pair).
+void MdTokenClassLook(uint8_t cls, uint32_t *fg, uint32_t *fg4)
+{
+	if (fg == nullptr || fg4 == nullptr)
+		return;
+	const RoleDefault &def = kRoleDefaults[MdRoleForTokenClass(cls) - 1];
+	*fg = def.rgb;
+	*fg4 = def.fallback16 & 0x0f;
+}
+
+uint64_t MdRangeColor(uint32_t fg, uint32_t fg4, bool underline)
+{
+	const uint64_t body = FarColorToReal(COL_VIEWERTEXT);
+	uint64_t entry;
+	// The scheme's 24-bit foreground under the look's batch verdict (keyed
+	// (viewer background, generation)): one verdict for the whole view - on a
+	// failure the range takes the plain code role, the color MdRunColor gives
+	// the code runs, and the prose moves to the fork table (spec.md,
+	// Contrast).  The scheme's fg4 rides the low bits: a terminal that ignores
+	// RGB shows the scheme's 4-bit row.  A 4-bit scheme answers the 4-bit
+	// path: fg4 alone, no 3:1 check.
+	if (WINPORT(GetConsoleColorPalette)(NULL) < 8)
+		entry = fg4 & 0x0f;
+	else if (LookBatchAllowed())
+		entry = TrueForeColor(fg) | fg4;
+	else
+		entry = MdRunColor(MD_ROLE_CODE);   // the plain code role
+	if (underline)
+		entry |= COMMON_LVB_UNDERSCORE;   // the printer's span pass re-applies it
+	return (entry & ~kBackBits) | (body & kBackBits);
 }
