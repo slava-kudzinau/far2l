@@ -1,6 +1,6 @@
 ---
 description: Paint fenced code in the F3 Markdown view with the exact F4 colors, one color and underline bit for each token from the active Colorer scheme.
-status: in-progress
+status: planned
 size: M
 risk: contract,security
 depends-on: markdown-colorer-look
@@ -62,10 +62,3 @@ M. One export, one change of the token group, one print path, three docs. One in
 - Owner's choice, 2026-11-07: "Exact F4 colors". The four classes of V1 are not enough.
 - Branch `feat/markdown-colorer-fences`. Base `next/2.9.1-ovr.1`, after markdown-colorer-look merges. Budget and hard stop M $15/$20.
 - Build order: after markdown-colorer-look, before markdown-code-tint. They share `ViewerPrinter.cpp`.
-- Ledger, 2026-11-07: docs recorded: `gate.md`, `spec.md`, `plan.md` (4 tasks; design=no).
-- Ledger, 2026-11-07: status in-progress. `flow tier=full docs=spec,plan design=no
-  orchestrator=yes final=final-reviewer gate=stop scan=yes verifier=none`. Check: "The check" in
-  `AGENTS.md` plus a full build (all plugins) and the smoke run of all tests. Budget $15, hard
-  stop $20. Base `feat/markdown-colorer-look` at `84a79a5c8` (`next/2.9.1-ovr.1` after the look
-  merges), branch `feat/markdown-colorer-fences`, worktree `.worktrees/markdown-colorer-fences`.
-  started: 2026-11-07T10:52:41Z

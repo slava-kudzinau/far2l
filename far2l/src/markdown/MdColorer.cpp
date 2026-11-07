@@ -351,7 +351,14 @@ public:
 			out[i].fore = words[static_cast<size_t>(2) * i];
 			out[i].style = words[static_cast<size_t>(2) * i + 1];
 		}
-		return generation;
+		// An answer with every name empty is "no look": the roles take the fork
+		// table (spec.md, Bridge: all ten rows empty gives generation 0).
+		for (int i = 0; i < count; ++i) {
+			if (out[i].fore != 0) {
+				return generation;
+			}
+		}
+		return 0;
 	}
 };
 
