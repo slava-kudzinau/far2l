@@ -205,10 +205,14 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 		}
 	}
 
-	// Blank cells (past the line end, or an empty line) take the viewer text color,
-	// not whatever color the last run or the arrows left behind.
+	// Blank cells (past the line end, or an empty line) take the viewer text
+	// color, not whatever color the last run or the arrows left behind.  A row
+	// with a token group pads with the code role (spec.md, Token roles).
 	if (print_len > 0) {
-		SetColor(_selection ? _sel_color : FarColorToReal(COL_VIEWERTEXT));
+		const bool tokenized_row = line && line->tokens >= 0 && _groups != nullptr &&
+			(size_t)line->tokens < _groups->size();
+		SetColor(_selection ? _sel_color :
+			(tokenized_row ? MarkdownRunColor(MD_ROLE_CODE) : FarColorToReal(COL_VIEWERTEXT)));
 		PrintSpaces(print_len);
 	}
 }
