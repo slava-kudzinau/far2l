@@ -92,9 +92,10 @@ scan=yes verifier=none
 ## Spend
 
 - Budget: M story. $15 spend, $20 hard stop.
-- Last recorded: `spend markdown-colorer-look $0.00 of budget $15.00, hard stop $20.00: ok`
-  (10:32 snapshot, cost.jsonl).  The omp transcripts flush at session close; the main session
-  reruns `spend.mjs` at close-out for the real number.
+- Last recorded (close-out): $13.88 of budget $15.00, hard stop $20.00: ok. The sum of the
+  harness task costs: T1 0.64, T2 1.45, T3 1.71, T4 6.17, T5 0.80, T6 1.77, final review 1.34.
+  `spend.mjs` reads the Claude Code transcript root, which stays at $0.00 under this harness
+  (the 10:32 `cost.jsonl` snapshot). The money at merge lands on this line at merge.
 
 ## Check
 

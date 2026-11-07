@@ -101,3 +101,10 @@ M. One new plugin file, one bridge function, one resolver step, one new role, th
 - Ledger, 2026-11-07: T5 done: 9e9ddd1, review clean (probes removed), spend unmetered.
 - Ledger, 2026-11-07: T6 done: 19f4464, review clean (expectations from a sweep run), spend unmetered.
   Final check exit 0: full build, 4 drivers, smoke 14/16 (0004-vt-shell, 000b-find-file = known Mac failures).
+- Ledger, 2026-11-07: measurements (T1): first export call 0 µs (code 1); first code-0 answer
+  68-84 ms after the first viewer event, generation 1; ten-name warm fetch mean 1 µs. The
+  story's first unknown is answered: the export does not create `FarEditorSet`, the viewer's
+  `ProcessViewerEventW` does.
+- Ledger, 2026-11-07: close-out: durable docs updated (`markdown-viewer.spec.md`,
+  `markdown.data.md`, `markdown.invariants.md`, new `adr-009-colorer-look-step.md`), the 000c
+  comment added, gate At-merge and Spend filled, `closeout.md` drafted.
