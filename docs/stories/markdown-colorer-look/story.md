@@ -1,6 +1,6 @@
 ---
 description: Give the prose of the F3 Markdown view the same colors and underline as F4 with Colorer on a Markdown file, from the active HRD scheme, through one small plugin export.
-status: in-progress
+status: done
 size: M
 risk: contract
 depends-on: markdown-code-highlight
