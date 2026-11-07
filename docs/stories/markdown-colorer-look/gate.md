@@ -93,9 +93,9 @@ scan=yes verifier=none
 
 - Budget: M story. $15 spend, $20 hard stop.
 - Last recorded (close-out): $13.88 of budget $15.00, hard stop $20.00: ok. The sum of the
-  harness task costs: T1 0.64, T2 1.45, T3 1.71, T4 6.17, T5 0.80, T6 1.77, final review 1.34.
-  `spend.mjs` reads the Claude Code transcript root, which stays at $0.00 under this harness
-  (the 10:32 `cost.jsonl` snapshot). The money at merge lands on this line at merge.
+  harness task costs is below. T1 0.64, T2 1.45, T3 1.71, T4 6.17, T5 0.80, T6 1.77, final
+  review 1.34. The fix wave, this session's orchestration and the merge-gate check ride on the
+  same store (the 10:32 `cost.jsonl` snapshot). The money at merge lands on this line at merge.
 
 ## Check
 
@@ -110,7 +110,9 @@ sh testing/markdown/look-driver.sh
 (cd testing && pkill -9 -f -- '--test=/tmp/far2l'; sleep 1
  find tests -maxdepth 1 -type s -delete
  for s in tests/*; do [ -S "$s" ] && rm -f "$s"; done
- for t in $(ls tests); do o=$(./far2l-smoke-run.sh "$PWD/../far2l.markdown-colorer-look.build/install/far2l.app/Contents/MacOS/far2l" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && echo "PASS $t" || echo "FAIL $t"; done)
+ for t in $(ls tests); do pkill -9 -f -- '--test=/tmp/far2l'; sleep 0.5
+  find tests -maxdepth 1 -type s -delete; for s in tests/*; do [ -S "$s" ] && rm -f "$s"; done
+  o=$(./far2l-smoke-run.sh "$PWD/../far2l.markdown-colorer-look.build/install/far2l.app/Contents/MacOS/far2l" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && echo "PASS $t" || echo "FAIL $t"; done)
 ```
 
 The full build (with the plugins) is part of the check: this story draws its colors from the
@@ -140,15 +142,15 @@ Any other failure is new.
 
 ### What was built
 
-Same as "What it builds", plus: in a 16-color terminal the F3 look is the console.hrd rows (the
-scheme's 4-bit path), the table draws with box characters, and the scheme underline rides every
-run the scheme underlines.  F4 and F6 on the same file show the same scheme, and a scheme change
-(the editor's parse, then the reopen) moves the F3 look - the cache and generation contract work.
+Same as "What it builds", plus: in a 16-color terminal the F3 look is the console.hrd rows, the
+scheme's 4-bit path. The table draws with box characters, and the scheme underline rides every
+run the scheme underlines. F4 and F6 on the same file show the same scheme. A scheme change (the
+editor's parse, then the reopen) moves the F3 look: the cache and generation contract work.
 
 ### Decisions changed during the build
 
-None of the decision table's rows.  The 000d expectations are the console.hrd rows because the
-harness runs a 16-color terminal (ruling R9); the truecolor far2l.hrd rows are asserted by the
+None of the decision table's rows. The 000d expectations are the console.hrd rows, because the
+harness runs a 16-color terminal (ruling R9). The truecolor far2l.hrd rows are asserted by the
 driver's `look_real_hrd`.
 
 ### What the reviews caught
@@ -161,6 +163,38 @@ driver's `look_real_hrd`.
 ### Run it
 
 Run the Check section above; expect all PASS except the two known Mac failures (`0004-vt-shell`,
-`000b-find-file`).  In the built app, F3 a `.md` file: in a truecolor terminal you see the
-far2l.hrd colors (`#8888ff` headings underlined, `#40a000` strong, `#ff20a0` emphasis); in a
-16-color terminal the console.hrd rows, all underlined.  F4 on the same file matches.
+`000b-find-file`). In the built app, F3 a `.md` file. In a truecolor terminal you see the
+far2l.hrd colors (`#8888ff` headings underlined, `#40a000` strong, `#ff20a0` emphasis). In a
+16-color terminal you see the console.hrd rows, all underlined. F4 on the same file matches.
+
+### What changed
+
+- `0a0eef809` colorer: export the look of a region list for the F3 Markdown view. The new
+  `ColorerRegionLookV1` dispatch entry, the far attribute build, and the generation counter in
+  `FarEditorSet`.
+- `99e1f2a4e` markdown: bridge the Colorer look export into the core palette. `MdColorer`
+  fetches the ten-name list once per view. The cache rides the palette, and the codes drive the
+  fallback.
+- `4b21a5f35` markdown: resolve the Colorer look between the user file and the fork table. The
+  resolver order, the underline bit on the run, and the 3:1 contrast verdict.
+- `9e9ddd13f` markdown: print the Colorer look in the F3 viewer, underline included. The
+  printer paints the foreground and the underline for a run, the 4-bit path included.
+- `19f4464a9` markdown: check the Colorer look in the 000d smoke session. The real-plugin cell
+  reads for the console.hrd rows.
+- `3e708935b` markdown: record the Colorer look build at the merge gate. This gate page, the
+  story ledger, and the close-out draft.
+- `84a79a5c8` docs: record the Colorer look in the durable views: ADR-009, the viewer spec, the
+  data view, and the invariants.
+
+### How to verify
+
+In the built app, F3 a `.md` file: headings and links show `#8888ff`, underlined, in a truecolor
+terminal (far2l.hrd). Press F4 on the same file: the same scheme. Change the scheme (F4, Ctrl-F7,
+pick a scheme, reopen F3): the look moves. The smoke `000d` asserts the console.hrd rows, because
+the harness runs 16 colors; the truecolor rows are asserted by the driver's `look_real_hrd`.
+
+### Spend
+
+Budget $15, hard stop $20. The fix wave and the merge-gate check ride on this line; the harness
+task costs are recorded at close-out. The build used the pre-baked cmake config, so the rebuild
+after each task is incremental.

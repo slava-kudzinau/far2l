@@ -159,7 +159,10 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 {
 	const MdLine *line = (_row < _lines->size()) ? &(*_lines)[_row] : nullptr;
 	++_row;
-	_spans.clear();
+	// The selection overlay is a second Print of the same row (Viewer::ShowPage):
+	// its spans join the row's underline spans, they do not replace them.
+	if (!_selection)
+		_spans.clear();
 
 	int pos = 0;   // cell coordinate in the row, counted over all runs
 	if (line) {

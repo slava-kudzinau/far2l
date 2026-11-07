@@ -21,6 +21,15 @@
 #include "markdown/MdColorer.hpp"
 #include "cfg/config.hpp"
 #include "mix/pathmix.hpp"
+#include "farcolors.hpp"
+#include "markdown/MdPalette.hpp"
+
+#include <utils.h>
+
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <memory>
 
 #include <chrono>
 #include <cstdio>
@@ -331,13 +340,22 @@ int look_cost()
 
 // ---- T2 cases: the core bridge ----
 
-// A fake look source: records the names of the last Fetch, answers fixed
-// rows and generation, cycles codes for look_codes.
+// A fake look source: records the names and the fetches of the last Fetch, answers the
+// rows and the generation of one scheme, cycles codes for look_codes.
 class FakeLookSource : public MdLookSource
 {
 public:
+	FakeLookSource()
+	{
+		for (int i = 0; i < 10; ++i) {
+			m_fore[i] = 0x110000u + static_cast<unsigned>(i);
+			m_style[i] = 4;
+		}
+	}
+
 	unsigned long long Generation() override
 	{
+		++m_probes;
 		if (m_codes_left > 0) {
 			return 0; // the export answered 1..4: no look
 		}
@@ -347,20 +365,36 @@ public:
 	unsigned long long Fetch(const char *const *names, int count,
 		MdRegionLook *out) override
 	{
+		++m_fetches;
 		m_last_names.assign(names, names + count);
 		if (m_codes_left > 0) {
 			return 0; // the export answered 1..4: no look
 		}
 		for (int i = 0; i < count; ++i) {
-			out[i].fore = 0x110000u + static_cast<unsigned>(i);
-			out[i].style = 4;
+			out[i].fore = m_fore[i];
+			out[i].style = m_style[i];
 		}
 		return m_generation;
+	}
+
+	// The rows of one scheme generation, in the order of the ten names.
+	void SetRows(const unsigned int *fore, const unsigned int *style)
+	{
+		for (int i = 0; i < 10; ++i) {
+			m_fore[i] = fore[i];
+			m_style[i] = style[i];
+		}
 	}
 
 	std::vector<std::string> m_last_names;
 	unsigned long long m_generation = 7;
 	int m_codes_left = 0;
+	int m_fetches = 0;
+	int m_probes = 0;
+
+private:
+	unsigned int m_fore[10];
+	unsigned int m_style[10];
 };
 
 // The bridge hands the plugin the ten names of Global Constraints, in order,
@@ -867,6 +901,409 @@ int tokens_v2_v1_callers()
 	return 0;
 }
 
+// ---- T5 cases: the resolver, the contrast rule, the user file, the generations ----
+
+// The driver's copies of the palette's private constants: the background bits a
+// resolved entry always carries (kBackBits in MdPalette.cpp) and the underline bit of
+// the far attribute (COMMON_LVB_UNDERSCORE).
+constexpr uint64_t kBack = 0xf0 | BACKGROUND_TRUECOLOR | (uint64_t(0xffffff) << 40);
+constexpr uint64_t kUnderline = 0x8000;
+
+// The ten roles the Colorer look paints, in the order of the ten names (spec, Region
+// map); body takes the tenth row, markdown:Text (spec, Body).
+const uint64_t s_scheme_roles[10] = {MD_ROLE_H1, MD_ROLE_H2, MD_ROLE_H3, MD_ROLE_STRONG,
+	MD_ROLE_LINK, MD_ROLE_CODE, MD_ROLE_QUOTE, MD_ROLE_RULE, MD_ROLE_EM, MD_ROLE_LISTMARK};
+
+// A 24-bit foreground in the layout of a far attribute: the copy of TrueForeColor.
+uint64_t TrueFore(uint32_t rgb)
+{
+	const uint64_t bgr = ((rgb & 0xff) << 16) | (rgb & 0xff00) | ((rgb >> 16) & 0xff);
+	return (bgr << 16) | FOREGROUND_TRUECOLOR;
+}
+
+uint64_t WithBack(uint64_t fore_bits)
+{
+	const uint64_t body = FarColorToReal(COL_VIEWERTEXT);
+	return (fore_bits & ~kBack) | (body & kBack);
+}
+
+// Step 1: a user ini value, no contrast check.
+uint64_t WantLiteral(uint32_t rgb) { return WithBack(TrueFore(rgb)); }
+
+// Step 2: the scheme row, the style word's bit 4 as the underline bit (spec,
+// Underline).
+uint64_t WantScheme(uint32_t fore, uint32_t style)
+{
+	uint64_t bits = TrueFore(fore);
+	if (style & 4) {
+		bits |= kUnderline;
+	}
+	return WithBack(bits);
+}
+
+// Step 3: the fork RGB default with the 4-bit fallback in the low bits (the exact
+// constants of MdPalette.cpp).
+uint64_t WantRgb(uint64_t role)
+{
+	static const uint32_t kRgb[MD_ROLE_COUNT - 1] = {0xffff5f, 0xffaf5f, 0x87afff, 0xffffff,
+		0x87ff87, 0xff87ff, 0xafafd7, 0x8787af, 0, 0x87afff, 0x87ff87, 0x8787af, 0xffaf5f,
+		0xd7d7af, 0x8787af};
+	static const uint64_t k16[MD_ROLE_COUNT - 1] = {F_YELLOW, F_LIGHTRED, F_LIGHTGRAY, F_WHITE,
+		F_LIGHTGREEN, F_LIGHTMAGENTA, F_CYAN, F_CYAN, 0, F_LIGHTGRAY, F_LIGHTGREEN, F_CYAN,
+		F_LIGHTRED, F_LIGHTMAGENTA, F_CYAN};
+	return WithBack(TrueFore(kRgb[role - 1]) | k16[role - 1]);
+}
+
+// Step 4: today's look, the palette entry of the fork table (spec, New roles).
+uint64_t WantToday(uint64_t role)
+{
+	static const unsigned int kEntry[MD_ROLE_COUNT] = {COL_VIEWERTEXT, COL_HELPTOPIC,
+		COL_HELPTOPIC, COL_HELPTOPIC, COL_HELPTOPIC, COL_HELPTOPIC, COL_HELPHIGHLIGHTTEXT,
+		COL_VIEWERTEXT, COL_VIEWERTEXT, COL_PANELHIGHLIGHTTEXT, COL_HELPHIGHLIGHTTEXT,
+		COL_HELPHIGHLIGHTTEXT, COL_HELPHIGHLIGHTTEXT, COL_HELPHIGHLIGHTTEXT, COL_VIEWERTEXT,
+		COL_VIEWERTEXT};
+	return WithBack(FarColorToReal(kEntry[role]));
+}
+
+// The region index of a role in the ten-name table (spec, Region map).
+int SchemeRoleIndex(uint64_t role)
+{
+	switch (role) {
+		case MD_ROLE_H1:
+		case MD_ROLE_H2:
+		case MD_ROLE_H3: return 1;
+		case MD_ROLE_LINK: return 2;
+		case MD_ROLE_STRONG: return 3;
+		case MD_ROLE_EM: return 4;
+		case MD_ROLE_CODE: return 5;
+		case MD_ROLE_QUOTE: return 6;
+		case MD_ROLE_LISTMARK: return 7;
+		case MD_ROLE_RULE: return 8;
+		default: return -1;
+	}
+}
+
+bool CheckRole(const char *case_name, uint64_t role, uint64_t want)
+{
+	const uint64_t got = MdRunColor(role);
+	if (got != want) {
+		printf("FAILED %s: role %llu is 0x%llx, want 0x%llx\n", case_name,
+			(unsigned long long)role, (unsigned long long)got, (unsigned long long)want);
+		return false;
+	}
+	return true;
+}
+
+// A truecolor backend for the resolver cases: the Colorer step runs at 8 bits of color
+// and above.
+void EnsureTrueColor()
+{
+	if (g_winport_con_out != nullptr && WINPORT(GetConsoleColorPalette)(NULL) < 8) {
+		static_cast<ConsoleOutput *>(g_winport_con_out)->SetBackend(new RgbBackend);
+	}
+}
+
+void EnsureNoTrueColor()
+{
+	if (g_winport_con_out != nullptr && WINPORT(GetConsoleColorPalette)(NULL) >= 8) {
+		static_cast<ConsoleOutput *>(g_winport_con_out)->SetBackend(nullptr);
+	}
+}
+
+// The viewer background of the contrast rule: extractColor takes it from the background
+// bits of COL_VIEWERTEXT, so a truecolor entry of the color table sets it.
+uint64_t SaveBackground()
+{
+	return FarColors::setcolors[COL_VIEWERTEXT];
+}
+
+void SetBackground(uint32_t rgb)
+{
+	FarColors::setcolors[COL_VIEWERTEXT] = TrueFore(0xffffff) | (uint64_t(rgb) << 40)
+		| BACKGROUND_TRUECOLOR;
+}
+
+// settings/markdown-colors.ini.  The palette caches the file on its mtime, so every
+// write pins an mtime of its own: a seed, so the cache reloads on every round.
+int WriteOverrides(const char *text, int seed)
+{
+	const std::string path = InMyConfig("settings/markdown-colors.ini");
+	std::ofstream out(path, std::ios::trunc);
+	if (!out) {
+		printf("FAILED: cannot write %s\n", path.c_str());
+		return 1;
+	}
+	out << text;
+	out.close();
+	std::error_code ec;
+	std::filesystem::last_write_time(std::filesystem::path(path),
+		std::filesystem::file_time_type(std::chrono::seconds(seed)), ec);
+	return ec ? 1 : 0;
+}
+
+// A fake scheme of one generation, installed as the look source for the process.
+FakeLookSource *FakeScheme(unsigned long long gen, const unsigned int *fore,
+	const unsigned int *style)
+{
+	auto fake = std::make_unique<FakeLookSource>();
+	fake->SetRows(fore, style);
+	fake->m_generation = gen;
+	FakeLookSource *keep = fake.get();
+	MdSetLookSourceForTest(std::move(fake));
+	return keep;
+}
+
+// The resolver order of spec.md over a fake scheme: a user ini value wins for its role,
+// the Colorer row wins over the fork default, an absent row (fore 0) takes the fork
+// default, and a style word with bit 4 sets the underline bit inside the word.
+int look_roles()
+{
+	EnsureTrueColor();
+	if (WriteOverrides("[markdown]\nheading1 = #ff0000\n", 1) != 0) {
+		return 1;
+	}
+	static const unsigned int kFore[10] = {0x010203, 0x040506, 0x070809, 0x0a0b0c, 0x0d0e0f,
+		0x101112, 0, 0x131415, 0x161718, 0x191a1b};
+	static const unsigned int kStyle[10] = {0, 4, 5, 0, 0, 0, 0, 0, 0, 0};
+	const uint64_t saved = SaveBackground();
+	SetBackground(0x808080);
+	FakeScheme(21, kFore, kStyle);
+
+	static const uint64_t s_roles[] = {MD_ROLE_H1, MD_ROLE_H2, MD_ROLE_H3, MD_ROLE_STRONG,
+		MD_ROLE_LINK, MD_ROLE_CODE, MD_ROLE_QUOTE, MD_ROLE_RULE, MD_ROLE_EM, MD_ROLE_LISTMARK,
+		MD_ROLE_BODY, MD_ROLE_ART, MD_ROLE_TOKEN_KEYWORD};
+	for (uint64_t role : s_roles) {
+		uint64_t want;
+		if (role == MD_ROLE_H1) {
+			want = WantLiteral(0xff0000);            // step 1: the user file
+		} else if (role == MD_ROLE_QUOTE) {
+			want = WantToday(MD_ROLE_QUOTE);          // the absent row (fore 0)
+		} else if (role == MD_ROLE_TOKEN_KEYWORD) {
+			want = WantToday(MD_ROLE_TOKEN_KEYWORD);  // the token roles have no region
+		} else if (role == MD_ROLE_ART) {
+			want = WantToday(MD_ROLE_ART);            // art never takes the scheme
+		} else if (role == MD_ROLE_BODY) {
+			want = WantScheme(kFore[9], kStyle[9]);   // R2: body takes markdown:Text
+		} else {
+			const int i = SchemeRoleIndex(role);
+			want = WantScheme(kFore[i], kStyle[i]);   // step 2: the Colorer row
+		}
+		if (!CheckRole("look_roles", role, want)) {
+			SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+			return 1;
+		}
+	}
+	if (!(MdRunColor(MD_ROLE_H2) & kUnderline)) {
+		printf("FAILED look_roles: a style-4 heading has no underline bit\n");
+		return 1;
+	}
+	if (MdRunColor(MD_ROLE_STRONG) & kUnderline) {
+		printf("FAILED look_roles: a style-0 strong carries the underline bit\n");
+		return 1;
+	}
+	SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+	printf("ok look_roles: ini over scheme over fork default, the style-4 underline\n");
+	return 0;
+}
+
+// The 3:1 rule of the scheme batch (spec, Cache): all rows pass and the Colorer look
+// wins; one row below 3.0 sends every role to the fork table; a new scheme generation
+// and a new viewer background both recompute the verdict.
+int look_contrast()
+{
+	EnsureTrueColor();
+	static const unsigned int kLight[10] = {0xd0d0d0, 0xd8d8d8, 0xe0e0e0, 0xe8e8e8, 0xf0f0f0,
+		0xf8f8f8, 0xd0d0ff, 0xffd0d0, 0xd0ffd0, 0xffffd0};
+	static const unsigned int kFail[10] = {0xd0d0d0, 0xd8d8d8, 0xe0e0e0, 0xe8e8e8, 0xf0f0f0,
+		0xf8f8f8, 0xd0d0ff, 0xffd0d0, 0x303030, 0xffffd0};
+	static const unsigned int kStyle[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	const uint64_t saved = SaveBackground();
+
+	// A clean user file: the resolver cases each own their ini round.
+	if (WriteOverrides("[markdown]\n", 7) != 0) {
+		return 1;
+	}
+
+	// All ten rows at 3:1 or more against a dark background: the scheme wins.
+	FakeScheme(31, kLight, kStyle);
+	SetBackground(0x101010);
+	for (uint64_t role : s_scheme_roles) {
+		const int i = SchemeRoleIndex(role);
+		if (!CheckRole("look_contrast", role, WantScheme(kLight[i], 0))) {
+			return 1;
+		}
+	}
+	// One row below 3.0, in a new generation: every role takes the fork table.
+	FakeScheme(32, kFail, kStyle);
+	for (uint64_t role : s_scheme_roles) {
+		if (!CheckRole("look_contrast", role, WantRgb(role))) {
+			return 1;
+		}
+	}
+	// The same rows against a light background: the scheme fails and the fork's own RGB
+	// defaults fail the rule too: the whole table moves to today's look.
+	SetBackground(0xd0d0d0);
+	for (uint64_t role : s_scheme_roles) {
+		if (!CheckRole("look_contrast", role, WantToday(role))) {
+			return 1;
+		}
+	}
+	// A new generation against the dark background again: the scheme wins it back.
+	FakeScheme(33, kLight, kStyle);
+	SetBackground(0x101010);
+	for (uint64_t role : s_scheme_roles) {
+		const int i = SchemeRoleIndex(role);
+		if (!CheckRole("look_contrast", role, WantScheme(kLight[i], 0))) {
+			return 1;
+		}
+	}
+	SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+	printf("ok look_contrast: all or none at 3.0, recomputed on a new scheme and theme\n");
+	return 0;
+}
+
+// The user file over the Colorer look (spec, Resolution order): a set key wins for its
+// role, both as a literal and as a palette name; a key without a value falls through.
+int look_ini()
+{
+	EnsureTrueColor();
+	static const unsigned int kFore[10] = {0x010203, 0x040506, 0x070809, 0x0a0b0c, 0x0d0e0f,
+		0x101112, 0x131415, 0x161718, 0x191a1b, 0x1c1d1e};
+	static const unsigned int kStyle[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	const uint64_t saved = SaveBackground();
+	SetBackground(0x808080);
+	FakeScheme(41, kFore, kStyle);
+
+	// A literal beats the scheme row for heading1 and code; a name beats it for link;
+	// a key without a value leaves quote on its scheme row.
+	if (WriteOverrides("[markdown]\nheading1 = #00ff00\ncode = #0000ff\nlink = @Help.Topic\n"
+		"quote =\n", 2) != 0) {
+		return 1;
+	}
+	if (!CheckRole("look_ini", MD_ROLE_H1, WantLiteral(0x00ff00)))
+		return 1;
+	if (!CheckRole("look_ini", MD_ROLE_CODE, WantLiteral(0x0000ff)))
+		return 1;
+	if (!CheckRole("look_ini", MD_ROLE_LINK, WantToday(MD_ROLE_LINK)))
+		return 1;
+	if (!CheckRole("look_ini", MD_ROLE_QUOTE, WantScheme(kFore[6], 0)))
+		return 1;
+
+	// A key that names a role the scheme does not paint: the fork default of the token
+	// roles moves, and only it.  A 4-bit name is a literal too, with no contrast check.
+	if (WriteOverrides("[markdown]\ntoken-string = #010203\nemphasis = F_LIGHTCYAN\n", 3) != 0) {
+		return 1;
+	}
+	if (!CheckRole("look_ini", MD_ROLE_TOKEN_STRING, WantLiteral(0x010203)))
+		return 1;
+	if (!CheckRole("look_ini", MD_ROLE_TOKEN_KEYWORD, WantToday(MD_ROLE_TOKEN_KEYWORD)))
+		return 1;
+	if (!CheckRole("look_ini", MD_ROLE_EM, WithBack(F_LIGHTCYAN)))
+		return 1;
+
+	// An empty file: every role back on the scheme.
+	if (WriteOverrides("[markdown]\n", 4) != 0) {
+		return 1;
+	}
+	for (uint64_t role : s_scheme_roles) {
+		const int i = SchemeRoleIndex(role);
+		if (!CheckRole("look_ini", role, WantScheme(kFore[i], 0))) {
+			return 1;
+		}
+	}
+	SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+	printf("ok look_ini: the user file beats the Colorer row\n");
+	return 0;
+}
+
+// The scheme generations of spec.md, Cache: the palette fetches a scheme once, and a new
+// generation replaces the cached rows.
+int look_generation()
+{
+	EnsureTrueColor();
+	static const unsigned int kFore[10] = {0x010203, 0x040506, 0x070809, 0x0a0b0c, 0x0d0e0f,
+		0x101112, 0x131415, 0x161718, 0x191a1b, 0x1c1d1e};
+	static const unsigned int kNext[10] = {0x0b0c0d, 0x0e0f10, 0x111213, 0x141516, 0x171819,
+		0x1a1b1c, 0x1d1e1f, 0x202122, 0x232425, 0x262728};
+	static const unsigned int kStyle[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	const uint64_t saved = SaveBackground();
+	SetBackground(0x808080);
+	FakeLookSource *keep = FakeScheme(51, kFore, kStyle);
+	if (WriteOverrides("[markdown]\n", 5) != 0) {
+		return 1;
+	}
+	if (!CheckRole("look_generation", MD_ROLE_H1, WantScheme(kFore[1], 0))) {
+		return 1;
+	}
+	MdRunColor(MD_ROLE_H1);
+	if (keep->m_fetches != 1) {
+		printf("FAILED look_generation: generation 51 fetched %d times\n", keep->m_fetches);
+		return 1;
+	}
+	// The plugin reports a new scheme after a ReloadBase: the next draw refetches, and
+	// the new rows replace the cached ones.
+	keep->SetRows(kNext, kStyle);
+	keep->m_generation = 52;
+	if (!CheckRole("look_generation", MD_ROLE_H1, WantScheme(kNext[1], 0))) {
+		return 1;
+	}
+	MdRunColor(MD_ROLE_H1);
+	if (keep->m_fetches != 2) {
+		printf("FAILED look_generation: generation 52 fetched %d times\n", keep->m_fetches);
+		return 1;
+	}
+	SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+	printf("ok look_generation: one fetch per generation, the new rows replace the cache\n");
+	return 0;
+}
+
+// The two new roles on the fork path (spec, New roles): the palette table answers with
+// no scheme at all, in the 16-color path, in the 256-color look and under truecolor.
+int look_new_roles()
+{
+	if (WriteOverrides("[markdown]\n", 6) != 0) {
+		return 1;
+	}
+	const uint64_t em256 = MdRoleColor256(MD_ROLE_EM);
+	const uint64_t listmark256 = MdRoleColor256(MD_ROLE_LISTMARK);
+	if (em256 != (TrueFore(0xd7d7af) | F_LIGHTMAGENTA)) {
+		printf("FAILED look_new_roles: MdRoleColor256(emphasis) is 0x%llx\n",
+			(unsigned long long)em256);
+		return 1;
+	}
+	if (listmark256 != (TrueFore(0x8787af) | F_CYAN)) {
+		printf("FAILED look_new_roles: MdRoleColor256(listmark) is 0x%llx\n",
+			(unsigned long long)listmark256);
+		return 1;
+	}
+
+	// The 16-color path: the 256-color look with the 4-bit index in the low bits (R52).
+	EnsureNoTrueColor();
+	if (!CheckRole("look_new_roles", MD_ROLE_EM, WithBack(em256)))
+		return 1;
+	if (!CheckRole("look_new_roles", MD_ROLE_LISTMARK, WithBack(listmark256)))
+		return 1;
+
+	// Truecolor, no scheme rows: the fork RGB defaults under a dark background, today's
+	// look under a mid-luminance one (spec, Resolution order).
+	EnsureTrueColor();
+	const uint64_t saved = SaveBackground();
+	static const unsigned int kZero[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	FakeScheme(71, kZero, kZero);
+	SetBackground(0x101010);
+	if (!CheckRole("look_new_roles", MD_ROLE_EM, WantRgb(MD_ROLE_EM)))
+		return 1;
+	if (!CheckRole("look_new_roles", MD_ROLE_LISTMARK, WantRgb(MD_ROLE_LISTMARK)))
+		return 1;
+	SetBackground(0x808080);
+	if (!CheckRole("look_new_roles", MD_ROLE_EM, WantToday(MD_ROLE_EM)))
+		return 1;
+	if (!CheckRole("look_new_roles", MD_ROLE_LISTMARK, WantToday(MD_ROLE_LISTMARK)))
+		return 1;
+	SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+	printf("ok look_new_roles: emphasis and listmark resolve on the fork path\n");
+}
+
 struct Case
 {
 	const char* name;
@@ -880,6 +1317,11 @@ const Case s_cases[] = {
 	{"look_bridge", look_bridge},
 	{"look_codes", look_codes},
 	{"look_bridge_real", look_bridge_real},
+	{"look_roles", look_roles},
+	{"look_contrast", look_contrast},
+	{"look_ini", look_ini},
+	{"look_generation", look_generation},
+	{"look_new_roles", look_new_roles},
 	{"tokens_v2", tokens_v2},
 	{"tokens_v2_limits", tokens_v2_limits},
 	{"tokens_v2_v1_callers", tokens_v2_v1_callers},
@@ -950,6 +1392,21 @@ int main(int argc, char** argv)
 	} else if (argc > 3) {
 		fprintf(stderr, "usage: look_driver [--rgb] [--case <name>]\n");
 		return 2;
+	}
+
+	// A typo in --case must not pass as success.
+	if (want != nullptr) {
+		bool known = false;
+		for (const Case& c : s_cases) {
+			if (strcmp(c.name, want) == 0) {
+				known = true;
+				break;
+			}
+		}
+		if (!known) {
+			fprintf(stderr, "unknown case: %s\n", want);
+			return 1;
+		}
 	}
 
 	for (const Case& c : s_cases) {
