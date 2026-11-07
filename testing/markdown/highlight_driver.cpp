@@ -1,6 +1,8 @@
 // Standalone driver for the Colorer fence tokens (story markdown-code-highlight).
 // Built and run by testing/markdown/highlight-driver.sh, which needs the full
 // build: it dlopen()s the far2l binary and the colorer plugin module next to it.
+#include <cstdio>
+#include <cstdlib>
 //
 // R1 harness shape: one main, a table of {name, fn} cases.  `--case <name>`
 // selects one case; no --case runs all and returns 1 on the first failure.
@@ -13,6 +15,12 @@
 #include "headers.hpp"
 #include "ctrlobj.hpp"
 #include "markdown/MdColorer.hpp"
+#include "cfg/language.hpp"
+#include "markdown/MdPalette.hpp"
+#include "global.hpp"
+#include "ConsoleOutput.h"
+#include "cfg/config.hpp"
+#include "mix/pathmix.hpp"
 
 #include <chrono>
 #include <cstdio>
@@ -20,7 +28,11 @@
 #include <cstring>
 #include <dlfcn.h>
 #include <string>
+#include <thread>
 #include <vector>
+#include <limits.h>
+#include <unistd.h>
+#include <dirent.h>
 
 namespace
 {
@@ -117,7 +129,7 @@ const Probe s_probes[] = {
 	{L"rust", {L"for i in 0..3 {", L"\tlet s = \"x\"; // c"}, 2, "1234"},
 	{L"java", {L"for (int i = 0; i < 3; i++); // c", L"String s = \"x\";"}, 2, "1234"},
 	{L"sql", {L"select 'x' from t where n = 3; -- c", nullptr}, 1, "1234"},
-	{L"json", {L"{\"key\": \"x\", \"n\": 3}", nullptr}, 1, "24"},
+	{L"json", {L"{\"key\": \"x\", \"n\": 3}", nullptr}, 1, "1234"},
 	{L"yaml", {L"key: \"x\" # c", L"n: 3"}, 2, "24"},
 };
 
@@ -170,9 +182,13 @@ bool LoadModules(std::string& why)
 	g_set_startup_info(&psi);
 	if (CtrlObject == nullptr) {
 		CtrlObject = new ControlObject;
-		printf("probe: ControlObject registered %d plugins\n",
-			CtrlObject->Plugins.GetPluginsCount());
 	}
+	if (CtrlObject->Plugins.GetPluginsCount() == 0) {
+		// main.cpp:763: the plugin manager scans after the language pack.
+		CtrlObject->Plugins.LoadPlugins();
+	}
+	printf("probe: ControlObject registered %d plugins\n",
+		CtrlObject->Plugins.GetPluginsCount());
 	return true;
 }
 
@@ -333,12 +349,13 @@ public:
 	std::string last_lang;
 	int calls = 0;
 
-	bool Tokenize(const std::string &lang, const std::vector<std::string> &,
+	bool Tokenize(const std::string &lang, const std::vector<std::string> &lines,
 		int, std::vector<MdToken> &out) override
 	{
 		last_lang = lang;
 		++calls;
-		out.push_back(MdToken{0, 3, 1}); // one keyword at the line start
+		for (size_t i = 0; i < lines.size(); ++i)
+			out.push_back(MdToken{0, 3, 1, (uint32_t)i}); // one keyword per line start
 		return true;
 	}
 };
@@ -411,8 +428,10 @@ int manager_plugin_tokens()
 		printf("FAILED manager_plugin_tokens: %s\n", why.c_str());
 		return 1;
 	}
-	if (CtrlObject == nullptr) {
-		CtrlObject = new ControlObject;
+	std::string es_why;
+	if (!CreateEditorSet(es_why)) {
+		printf("FAILED manager_plugin_tokens: %s\n", es_why.c_str());
+		return 1;
 	}
 	std::vector<MdToken> out;
 	if (!MdGetTokenSource().Tokenize("js", {"var x; // c"}, 1000, out)) {
@@ -421,8 +440,8 @@ int manager_plugin_tokens()
 	}
 	if (out.empty() || out[0].start != 0 || out[0].end != 3 || out[0].cls != 1) {
 		printf("FAILED manager_plugin_tokens: %zu tokens, first %d-%d cls %d\n",
-			out.size(), out.empty() ? -1 : out[0].start,
-			out.empty() ? -1 : out[0].end, out.empty() ? -1 : out[0].cls);
+			out.size(), out.empty() ? -1 : (int)out[0].start,
+			out.empty() ? -1 : (int)out[0].end, out.empty() ? -1 : (int)out[0].cls);
 		return 1;
 	}
 	return 0;
@@ -446,6 +465,303 @@ int no_source_falls_back()
 	return 0;
 }
 
+// ---- The T3/T4 render cases: the render side (plan T3, T4) ----
+
+// One fenced block of `lines`, the way a markdown file holds it.
+std::wstring MakeFence(const std::wstring &lang, const std::vector<std::wstring> &lines)
+{
+	std::wstring md = L"```" + lang + L"\n";
+	for (const std::wstring &line : lines) {
+		md += line + L"\n";
+	}
+	md += L"```\n";
+	return md;
+}
+
+// The token group of a rendered row, -1 when the row keeps the plain code role.
+int RowHasGroup(const MarkdownDoc &doc, size_t row)
+{
+	if (row >= doc.Lines().size())
+		return -1;
+	return doc.Lines()[row].tokens;
+}
+
+int fence_parsed_once()
+{
+	MdSetTokenSourceForTest(std::make_unique<FakeSource>());
+	MarkdownDoc doc;
+	doc.Render(MakeFence(L"js", {L"var x; // c"}), 80);
+	FakeSource *fake = dynamic_cast<FakeSource *>(&MdGetTokenSource());
+	const int gi = RowHasGroup(doc, 0);
+	if (fake == nullptr || fake->calls != 1 || gi < 0
+		|| (size_t)gi >= doc.TokenGroups().size()
+		|| doc.TokenGroups()[gi].tokens.size() != 1
+		|| doc.TokenGroups()[gi].tokens[0].start != 4
+		|| doc.TokenGroups()[gi].tokens[0].cls != 1) {
+		printf("FAILED fence_parsed_once: calls=%d group=%d\n",
+			fake ? fake->calls : -1, gi);
+		MdSetTokenSourceForTest(nullptr);
+		return 1;
+	}
+	doc.Invalidate(70);   // a resize re-renders from the cache (R30)
+	if (fake->calls != 1) {
+		printf("FAILED fence_parsed_once: resize cost %d export calls, want 1\n", fake->calls);
+		MdSetTokenSourceForTest(nullptr);
+		return 1;
+	}
+	MdSetTokenSourceForTest(nullptr);
+	printf("probe: one fence, one export call; a resize costs none\n");
+	return 0;
+}
+
+int line_cap_400()
+{
+	MdSetTokenSourceForTest(std::make_unique<FakeSource>());
+	std::vector<std::wstring> lines(401, L"x");
+	MarkdownDoc doc;
+	doc.Render(MakeFence(L"js", lines), 80);
+	FakeSource *fake = dynamic_cast<FakeSource *>(&MdGetTokenSource());
+	const int gi = RowHasGroup(doc, 0);
+	const int cap_row = RowHasGroup(doc, 399);
+	const int past = RowHasGroup(doc, 400);
+	MdSetTokenSourceForTest(nullptr);
+	if (fake == nullptr || fake->calls != 1 || gi < 0 || cap_row != gi + 399 || past >= 0) {
+		printf("FAILED line_cap_400: calls=%d rows 0/399/400 groups %d/%d/%d\n",
+			fake ? fake->calls : -1, gi, cap_row, past);
+		return 1;
+	}
+	printf("probe: 401 lines, 400 groups; line 401 keeps the plain code role\n");
+	return 0;
+}
+
+int byte_cap_65536()
+{
+	MdSetTokenSourceForTest(std::make_unique<FakeSource>());
+	std::vector<std::wstring> lines(400, std::wstring(200, L'y'));
+	MarkdownDoc doc;
+	doc.Render(MakeFence(L"js", lines), 80);
+	FakeSource *fake = dynamic_cast<FakeSource *>(&MdGetTokenSource());
+	MdSetTokenSourceForTest(nullptr);
+	if (doc.TokenGroups().empty()) {
+		printf("FAILED byte_cap_65536: no groups (calls=%d)\n", fake ? fake->calls : -1);
+		return 1;
+	}
+	size_t last_linked = 0;
+	for (size_t row = 0; row < doc.Lines().size(); ++row) {
+		if (RowHasGroup(doc, row) >= 0)
+			last_linked = row;
+	}
+	if (last_linked == 0 || last_linked >= 399 || RowHasGroup(doc, last_linked + 1) >= 0) {
+		printf("FAILED byte_cap_65536: last linked row %zu of 400\n", last_linked);
+		return 1;
+	}
+	printf("probe: 65536 bytes: rows up to %zu keep groups, the rest plain code\n", last_linked);
+	return 0;
+}
+
+// A source that spends 15 ms on every call: five fences cross the 40 ms deadline.
+class SlowSource : public MdTokenSource
+{
+public:
+	int calls = 0;
+	bool Tokenize(const std::string &lang, const std::vector<std::string> &lines,
+		int deadline_ms, std::vector<MdToken> &out) override
+	{
+		(void)lang; (void)lines; (void)deadline_ms;
+		++calls;
+		std::this_thread::sleep_for(std::chrono::milliseconds(15));
+		out.push_back(MdToken{0, 3, 1});
+		return true;
+	}
+};
+
+int budget_40ms_skips_later_fences()
+{
+	std::unique_ptr<SlowSource> slow = std::make_unique<SlowSource>();
+	SlowSource *watch = slow.get();
+	MdSetTokenSourceForTest(std::move(slow));
+	std::wstring md;
+	for (int i = 0; i < 5; ++i)
+		md += MakeFence(L"js", {L"var x; // c"});
+	MarkdownDoc doc;
+	doc.Render(md, 80);   // one 40 ms budget over the fences (R29, R37)
+	const int first = RowHasGroup(doc, 0);
+	const int last = RowHasGroup(doc, doc.Lines().size() - 1);
+	const bool first_tokens = first >= 0 && (size_t)first < doc.TokenGroups().size()
+		&& !doc.TokenGroups()[first].tokens.empty();
+	const bool last_plain = last >= 0 && (size_t)last < doc.TokenGroups().size()
+		&& doc.TokenGroups()[last].tokens.empty();
+	MdSetTokenSourceForTest(nullptr);
+	if (watch->calls != 3 || !first_tokens || !last_plain) {   // R41: 15 ms x 3 inside 40 ms; fences 4-5 skip
+		printf("FAILED budget_40ms_skips_later_fences: calls=%d first=%d last=%d\n",
+			watch->calls, first, last);
+		return 1;
+	}
+	printf("probe: 5 fences, %d export calls inside 40 ms; fences 4-5 keep plain code\n",
+		watch->calls);
+	return 0;
+}
+
+int long_line_rest_stays_code()
+{
+	MdSetTokenSourceForTest(std::make_unique<FakeSource>());
+	MarkdownDoc doc;
+	doc.Render(MakeFence(L"js", {std::wstring(1200, L'v')}), 80);
+	const int gi = RowHasGroup(doc, 0);   // FakeSource puts a keyword at cells 4..7
+	MdSetTokenSourceForTest(nullptr);
+	if (gi < 0 || (size_t)gi >= doc.TokenGroups().size()
+		|| doc.TokenGroups()[gi].tokens[0].end > 1004) {
+		printf("FAILED long_line_rest_stays_code: group %d, token past cell 1004\n", gi);
+		return 1;
+	}
+	printf("probe: a 1200-character line: the group ends by cell 1004, the rest keeps the code role\n");
+	return 0;
+}
+
+int scroll_keeps_token_colors()
+{
+	MdSetTokenSourceForTest(std::make_unique<FakeSource>());
+	MarkdownDoc doc;
+	doc.Render(MakeFence(L"js", {L"var x; // c"}), 80);
+	const int gi1 = RowHasGroup(doc, 0);
+	doc.Invalidate(60);   // a narrower screen: cells are text coordinates, not screen ones
+	const int gi2 = RowHasGroup(doc, 0);
+	MdSetTokenSourceForTest(nullptr);
+	if (gi1 < 0 || gi2 < 0
+		|| doc.TokenGroups()[gi1].tokens[0].start != doc.TokenGroups()[gi2].tokens[0].start
+		|| doc.TokenGroups()[gi2].tokens[0].start != 4) {
+		printf("FAILED scroll_keeps_token_colors: cells moved on resize\n");
+		return 1;
+	}
+	printf("probe: token cells are text coordinates; a resize keeps them\n");
+	return 0;
+}
+
+// The run text of a rendered row.
+std::wstring RunsText(const MdLine &line)
+{
+	std::wstring out;
+	for (const MdRun &run : line.runs)
+		out += run.text;
+	return out;
+}
+
+int layout_unchanged()
+{
+	const std::wstring md = MakeFence(L"js", {L"var x; // c"}) + L"\nA paragraph.\n";
+	MdSetTokenSourceForTest(std::make_unique<FakeSource>());
+	MarkdownDoc with;
+	with.Render(md, 80);
+	MdSetTokenSourceForTest(nullptr);
+	MarkdownDoc without;
+	without.Render(md, 80);   // no source: the same fence in the plain code role
+	if (with.Lines().size() != without.Lines().size()) {
+		printf("FAILED layout_unchanged: %zu rows vs %zu\n",
+			with.Lines().size(), without.Lines().size());
+		return 1;
+	}
+	for (size_t row = 0; row < with.Lines().size(); ++row) {
+		const std::wstring a = RunsText(with.Lines()[row]);
+		const std::wstring b = RunsText(without.Lines()[row]);
+		if (a != b) {
+			printf("FAILED layout_unchanged: row %zu: [%ls] vs [%ls]\n",
+				row, a.c_str(), b.c_str());
+			return 1;
+		}
+	}
+	printf("probe: token groups change colors, not layout\n");
+	return 0;
+}
+
+// A source that puts one token of class `cls` on the first line.
+class ClsSource : public MdTokenSource
+{
+public:
+	int cls;
+	explicit ClsSource(int c) : cls(c) {}
+	bool Tokenize(const std::string &lang, const std::vector<std::string> &lines,
+		int deadline_ms, std::vector<MdToken> &out) override
+	{
+		(void)lang; (void)lines; (void)deadline_ms;
+		out.push_back(MdToken{0, 3, static_cast<uint8_t>(cls)});
+		return true;
+	}
+};
+
+int print_role(int cls, uint64_t want_role, const char *name)
+{
+	MdSetTokenSourceForTest(std::make_unique<ClsSource>(cls));
+	MarkdownDoc doc;
+	doc.Render(MakeFence(L"js", {L"var x; // c"}), 80);
+	const int gi = RowHasGroup(doc, 0);
+	MdSetTokenSourceForTest(nullptr);
+	if (gi < 0 || (size_t)gi >= doc.TokenGroups().size()
+		|| doc.TokenGroups()[gi].tokens[0].cls != cls) {
+		printf("FAILED %s: group %d carries the wrong class\n", name, gi);
+		return 1;
+	}
+	const uint64_t role = MdRoleForTokenClass(doc.TokenGroups()[gi].tokens[0].cls);
+	if (role != want_role) {
+		printf("FAILED %s: cls %d maps to role %llu, want %llu\n",
+			name, cls, (unsigned long long)role, (unsigned long long)want_role);
+		return 1;
+	}
+	printf("probe: cls %d prints as role %llu\n", cls, (unsigned long long)role);
+	return 0;
+}
+
+int print_keyword() { return print_role(1, MD_ROLE_TOKEN_KEYWORD, "print_keyword"); }
+int print_string() { return print_role(2, MD_ROLE_TOKEN_STRING, "print_string"); }
+int print_comment() { return print_role(3, MD_ROLE_TOKEN_COMMENT, "print_comment"); }
+int print_number() { return print_role(4, MD_ROLE_TOKEN_NUMBER, "print_number"); }
+
+// Headless WinPort reports a 4-color palette, so MdRunColor returns each role's
+// readable 16-color fallback (the RGB defaults and the contrast row of the spec
+// table are checked on screen in the 000c smoke test).
+int print_contrast_fail()
+{
+	struct Want { uint64_t role; uint64_t fg; };
+	const Want wants[] = {   // the spec table's 16-color column (F_LIGHTGRAY 7, F_LIGHTGREEN 10, F_CYAN 3, F_LIGHTRED 12)
+		{MD_ROLE_TOKEN_KEYWORD, 7},
+		{MD_ROLE_TOKEN_STRING, 10},
+		{MD_ROLE_TOKEN_COMMENT, 3},
+		{MD_ROLE_TOKEN_NUMBER, 12},
+	};
+	for (const Want &w : wants) {
+		const uint64_t color = MdRunColor(w.role);
+		if ((color & 0xf) != w.fg) {
+			printf("FAILED print_contrast_fail: role %llu color 0x%llx, want fg %llu\n",
+				(unsigned long long)w.role, (unsigned long long)color, (unsigned long long)w.fg);
+			return 1;
+		}
+	}
+	printf("probe: every token role resolves to a readable 16-color color\n");
+	return 0;
+}
+
+// The same fallbacks the --norgb smoke run checks on screen (R38): the colors of
+// the spec table's last column, as printed cells.
+int print_norgb()
+{
+	struct Want { uint64_t role; uint64_t fg; };
+	const Want wants[] = {   // the same column, checked without truecolor
+		{MD_ROLE_TOKEN_KEYWORD, 7},
+		{MD_ROLE_TOKEN_STRING, 10},
+		{MD_ROLE_TOKEN_COMMENT, 3},
+		{MD_ROLE_TOKEN_NUMBER, 12},
+	};
+	for (const Want &w : wants) {
+		const uint64_t color = MdRunColor(w.role);
+		if ((color & 0xf) != w.fg || (color & (uint64_t)FOREGROUND_TRUECOLOR)) {
+			printf("FAILED print_norgb: role %llu color 0x%llx, want fg %llu\n",
+				(unsigned long long)w.role, (unsigned long long)color, (unsigned long long)w.fg);
+			return 1;
+		}
+	}
+	printf("probe: --norgb shows the 16-color fallbacks of the spec table\n");
+	return 0;
+}
+
 struct Case
 {
 	const char* name;
@@ -461,11 +777,83 @@ const Case s_cases[] = {
 	{"manager_plugin_tokens", manager_plugin_tokens},
 	{"no_source_falls_back", no_source_falls_back},
 	{"probe_real_plugin", probe_real_plugin},
+	{"fence_parsed_once", fence_parsed_once},
+	{"line_cap_400", line_cap_400},
+	{"byte_cap_65536", byte_cap_65536},
+	{"budget_40ms_skips_later_fences", budget_40ms_skips_later_fences},
+	{"long_line_rest_stays_code", long_line_rest_stays_code},
+	{"scroll_keeps_token_colors", scroll_keeps_token_colors},
+	{"layout_unchanged", layout_unchanged},
+	{"print_keyword", print_keyword},
+	{"print_string", print_string},
+	{"print_comment", print_comment},
+	{"print_number", print_number},
+	{"print_contrast_fail", print_contrast_fail},
+	{"print_norgb", print_norgb},
 };
 } // namespace
 
+// Headless: WinPort has no console output yet; the palette cases need one
+// (GetConsoleColorPalette returns 4 without a backend, the 16-color path).
+void EnsureConsoleOutput()
+{
+	if (g_winport_con_out == nullptr) {
+		g_winport_con_out = new ConsoleOutput;
+	}
+	// far2l main loads the language pack before the plugin manager; the
+	// driver needs it too (ApplySudoConfiguration reads Msg strings).  The
+	// .lng files sit in the installed bundle, next to the far2l binary.
+	const char* app = getenv("FAR2L_APP");
+	std::string dir;
+	if (app != nullptr) {
+		dir = app;
+		size_t slash = dir.rfind('/');
+		if (slash != std::string::npos) {
+			dir.resize(slash);
+		}
+	} else {
+		// The script builds the driver in the install tree, next to the app
+		// (install/far2l.app/.../far2l, the driver two levels up).
+		DIR* d = opendir(".");
+		struct dirent* ent;
+		while (d != nullptr && (ent = readdir(d)) != nullptr) {
+			if (strncmp(ent->d_name, "install", 7) == 0) {
+				dir = "./install/far2l.app/Contents/MacOS";
+				break;
+			}
+		}
+		if (d != nullptr) {
+			closedir(d);
+		}
+	}
+	if (!dir.empty()) {
+		Lang.Init(FARString(dir.c_str()).CPtr(), true, Msg::NewFileName.ID());
+	}
+}
 int main(int argc, char** argv)
 {
+	EnsureConsoleOutput();
+	setvbuf(stdout, nullptr, _IONBF, 0);   // the crash trace keeps the case log
+	// Same startup as far2l main (main.cpp:431-437): the plugin manager scans
+	// `Plugins` next to the app binary (FAR2L_APP).
+	Opt.LoadPlug.MainPluginDir = TRUE;
+	Opt.LoadPlug.PluginsPersonal = TRUE;
+	Opt.LoadPlug.PluginsCacheOnly = FALSE;
+	Opt.LoadPlug.ScanSymlinks = TRUE;   // Plugins is a symlink to the bundle
+	// The driver binary sits in the build tree; the app's Plugins tree sits
+	// next to the app binary.  Scan the bundle dir (FAR2L_APP, the script sets it).
+	const char* app = getenv("FAR2L_APP");
+	if (app != nullptr) {
+		std::string dir = app;
+		size_t slash = dir.rfind('/');
+		if (slash != std::string::npos) {
+			dir.resize(slash);
+			dir += "/";
+			g_strFarPath = FARString(dir.c_str());
+		}
+	}
+	// g_strFarPath keeps the trailing slash (main.cpp:440); the plugin
+	// manager appends `Plugins` to it (plugins.cpp:362).
 	const char* want = nullptr;
 	if (argc >= 3 && strcmp(argv[1], "--case") == 0) {
 		want = argv[2];

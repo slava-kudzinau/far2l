@@ -387,23 +387,35 @@ void tokenize_fence(Builder &b, const std::string &lang, const std::wstring &fen
     if (hit != b.token_cache->end()) {
         groups = hit->second;
     } else {
-        const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
-            b.token_deadline - std::chrono::steady_clock::now()).count();
-        const int budget = left > 0 ? (int)left : 1;   // at least 1 ms (plan T3.3)
-        std::vector<MdToken> flat;
-        b.token_source->Tokenize(lang, lines, budget, flat);   // false: plain code role
-        groups.resize(lines.size());
-        for (const MdToken &t : flat) {
-            if (t.line < groups.size())
-                groups[t.line].tokens.push_back(t);
+        const auto now = std::chrono::steady_clock::now();
+        if (b.token_deadline == std::chrono::steady_clock::time_point{}) {
+            // R42: the plugin load happens before the budget; the fences share 40 ms.
+            b.token_source->Ready();
+            b.token_deadline = now + std::chrono::milliseconds(40);
         }
-        for (MdTokenGroup &g : groups) {
-            for (MdToken &t : g.tokens) {
-                t.start += CODE_INDENT;
-                t.end += CODE_INDENT;
+        bool cacheable = true;
+        if (now >= b.token_deadline) {
+            // The fences not yet started are skipped (spec, Input limits).
+            groups.assign(lines.size(), MdTokenGroup());
+        } else {
+            const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
+                b.token_deadline - now).count();
+            std::vector<MdToken> flat;
+            cacheable = b.token_source->Tokenize(lang, lines, left > 0 ? (int)left : 1, flat) && !flat.empty();   // R44: a cold catalog retries on the next render
+            groups.resize(lines.size());
+            for (const MdToken &t : flat) {
+                if (t.line < groups.size())
+                    groups[t.line].tokens.push_back(t);
+            }
+            for (MdTokenGroup &g : groups) {
+                for (MdToken &t : g.tokens) {
+                    t.start += CODE_INDENT;
+                    t.end += CODE_INDENT;
+                }
             }
         }
-        b.token_cache->emplace(key, groups);   // a deadline-trimmed group is cached as is (R29)
+        if (cacheable)
+            b.token_cache->emplace(key, groups);   // a deadline-trimmed group is cached as is (R29)
     }
     const size_t base = b.token_groups.size();
     b.token_groups.insert(b.token_groups.end(), groups.begin(), groups.end());
@@ -813,7 +825,6 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width)
     b.base_size = utf8.size();
     b.token_source = &MdGetTokenSource();
     b.token_cache = &m_token_cache;
-    b.token_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(40);
 
     MD_PARSER parser = {};
     parser.flags = MD_FLAG_TABLES | MD_FLAG_TASKLISTS | MD_FLAG_STRIKETHROUGH

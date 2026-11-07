@@ -177,6 +177,7 @@ bool PluginManager::RemovePlugin(Plugin *pPlugin)
 bool PluginManager::LoadPlugin(const FARString &strModuleName, bool UncachedLoad)
 {
 	const PluginType PlType = PluginTypeByExtension(strModuleName);
+	fprintf(stderr, "[plugins] LoadPlugin type=%d %ls\n", (int)PlType, strModuleName.CPtr());
 
 	if (PlType == NOT_PLUGIN)
 		return false;
@@ -392,6 +393,7 @@ void PluginManager::LoadPlugins()
 			// Получим реальное значение полного длинного пути
 			ConvertNameToFull(strFullName, strFullName);
 			strPluginsDir = strFullName;
+			fprintf(stderr, "[plugins] scan %ls\n", strPluginsDir.CPtr());
 
 			if (strPluginsDir.IsEmpty())	// Хмм... а нужно ли ЭТО условие после такой модернизации алгоритма загрузки?
 				continue;
@@ -401,6 +403,8 @@ void PluginManager::LoadPlugins()
 
 			// ...и пройдемся по нему
 			while (ScTree.GetNextName(&FindData, strFullName)) {
+				fprintf(stderr, "[plugins] match %ls dir=%d\n", strFullName.CPtr(),
+					(FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0);
 				if (!(FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
 					// this will check filename extension
 					LoadPlugin(strFullName, false);

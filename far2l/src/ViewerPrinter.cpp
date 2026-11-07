@@ -235,8 +235,9 @@ void MarkdownPrinter::Cells(const wchar_t *&p, int &pos, int &print_len, int64_t
 				pos += (int)cells;
 			}
 		}
-		if (!p[piece]) break;
-		p += piece + 1;
+		p += piece;
+		if (ShouldSkip(*p)) ++p;   // skip the one skipped char the piece loop stopped at
+		if (!*p) break;
 	}
 }
 

@@ -18,6 +18,10 @@ if [ -z "$app_dir" ]; then
 fi
 build="$app_dir"
 
+# far2l main loads the language pack before the plugin manager; the driver
+# needs it too (ApplySudoConfiguration reads Msg strings).
+export FAR2L_APP="$build/install/far2l.app/Contents/MacOS/far2l"
+
 mkdir -p "$build/testing"
 cand="$build/highlight_driver"
 src="$script_dir/highlight_driver.cpp"
@@ -31,11 +35,11 @@ if [ ! -f "$cand" ] || [ "$src" -nt "$cand" ] || [ "$app_bin" -nt "$cand" ]; the
   for sym in $(nm "$build/install/far2l.app/Contents/MacOS/Plugins/colorer/plug/colorer.far-plug-wide" | awk '/U _WINPORT_/ {print $2}'); do
     undefs="$undefs -Wl,-u,$sym"
   done
-  obj="$build/testing/highlight_driver.o"
-  incs="-I $project_dir/far2l -I $project_dir/far2l/far2sdk -I $project_dir/far2l/src"
+  incs="-I $project_dir/far2l -I $project_dir/far2l/far2sdk -I $project_dir/far2l/src -I $project_dir/WinPort/src -I $project_dir/WinPort/src/Backend"
   for d in base mix bookmarks cfg console panels filemask hist locale macro plug vt shoco markdown; do
     incs="$incs -I $project_dir/far2l/src/$d"
   done
+  obj="$build/testing/highlight_driver.o"
   c++ -std=c++17 -c -o "$obj" $incs \
     -I "$project_dir/far2l/src/markdown/md4c" -I "$build/far2l" \
     -I "$project_dir/WinPort" -I "$project_dir/utils/include" \
@@ -59,5 +63,5 @@ if [ ! -f "$FAR2L_PLUGIN" ]; then
   exit 2
 fi
 
-"$cand" "$@" || { echo "FAILED: $1 $2"; exit 1; }
+"$cand" "$@" || { echo "FAILED: driver exit 1"; exit 1; }
 echo "DONE"

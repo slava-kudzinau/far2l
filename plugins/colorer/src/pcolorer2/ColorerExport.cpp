@@ -83,29 +83,45 @@ public:
 	}
 };
 
-// Maps a region to a token class by climbing to the nearest def:* ancestor
-// (story, Scope 2).  0 means "no class"; the text keeps the code role.
+// Maps a region name to a token class by its base name (the part after the
+// last '.').  A suffix of a class name counts as that class: a
+// 'def:StringEdge' is a string, a 'CommentDoc' a comment, a 'NumberDec' a
+// number (js.hrc and friends name their leaves this way).
+int ClassForName(const UnicodeString& name)
+{
+	const wchar_t* base = wcsrchr(name.getBuffer(), L'.');
+	base = (base != nullptr) ? base + 1 : name.getBuffer();
+	if (wcsncmp(base, L"def:", 4) == 0) {
+		base += 4;
+	}
+	if (wcsncmp(base, L"Keyword", 7) == 0) {
+		return 1;
+	}
+	if (wcsncmp(base, L"String", 6) == 0 || wcsncmp(base, L"Character", 9) == 0
+		|| wcscmp(base, L"Subregion") == 0) {
+		return 2;
+	}
+	if (wcsncmp(base, L"Comment", 7) == 0) {
+		return 3;
+	}
+	if (wcscmp(base, L"PairStart") == 0 || wcscmp(base, L"PairEnd") == 0) {
+		return 3;  // the delimiters and continuation leaves of a comment block
+	}
+	if (wcsncmp(base, L"Number", 6) == 0) {
+		return 4;
+	}
+	return 0;
+}
+
+// Climbs to the nearest class ancestor (story, Scope 2).  0 means "no
+// class"; the text keeps the code role.
 int ClassForRegion(const Region* region)
 {
-	static const UnicodeString s_keyword(L"def:Keyword");
-	static const UnicodeString s_string(L"def:String");
-	static const UnicodeString s_character(L"def:Character");
-	static const UnicodeString s_comment(L"def:Comment");
-	static const UnicodeString s_number(L"def:Number");
 
 	for (const Region* r = region; r != nullptr; r = r->getParent()) {
-		const UnicodeString& name = r->getName();
-		if (name == s_keyword) {
-			return 1;
-		}
-		if (name == s_string || name == s_character) {
-			return 2;
-		}
-		if (name == s_comment) {
-			return 3;
-		}
-		if (name == s_number) {
-			return 4;
+		const int cls = ClassForName(r->getName());
+		if (cls != 0) {
+			return cls;
 		}
 	}
 	return 0;
@@ -151,8 +167,13 @@ public:
 		CheckDeadline();
 	}
 
-	void enterScheme(size_t, UnicodeString*, int, int, const Region*, const Scheme*) override
+	void enterScheme(size_t lno, UnicodeString*, int start, int end, const Region* region,
+		const Scheme* scheme) override
 	{
+		const int cls = ClassForRegion(region);   // block schemes carry their region here
+		if (cls != 0) {
+			_emit(_ctx, static_cast<int>(lno), start, end, cls);
+		}
 		CheckDeadline();
 	}
 
@@ -188,11 +209,13 @@ SHAREDSYMBOL int ColorerTokenizeV1(const wchar_t* lang, const wchar_t* const* li
 		const wchar_t* type_name = AliasLang(lang);
 		UnicodeString file_name(L"x.");
 		file_name.append(UnicodeString(type_name));
-
 		HrcLibrary& library = factory->getHrcLibrary();
 		FileType* file_type = library.chooseFileType(&file_name, nullptr, 0);
 		if (file_type == nullptr) {
 			return -2;
+		}
+		if (file_type->getBaseScheme() == nullptr) {
+			library.loadFileType(file_type);   // the scheme file loads on demand (R45)
 		}
 		if (file_type->getName() == UnicodeString("default")) {
 			return -2; // the type 'default' means no colors

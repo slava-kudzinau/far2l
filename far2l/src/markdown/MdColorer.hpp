@@ -29,6 +29,10 @@ public:
 	// caller then keeps the plain code role.
 	virtual bool Tokenize(const std::string &lang, const std::vector<std::string> &lines,
 		int budget_ms, std::vector<MdToken> &out) = 0;
+
+	// Loads the source's backing (the plugin), once, outside the render budget
+	// (R42).  True when tokens are available; the caller keeps the plain code role.
+	virtual bool Ready() { return true; }
 };
 
 // The fence name the export call gets: lower-cased and alias-mapped (c++ ->

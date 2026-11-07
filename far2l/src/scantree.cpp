@@ -172,6 +172,8 @@ bool ScanTree::ScanDir::GetNext(FAR_FIND_DATA_EX *fdata, bool FilesFirst)
 				Enumer.reset();
 				break;
 			}
+			fprintf(stderr, "[scan] next %ls filesfirst=%d\n", fdata->strFileName.CPtr(),
+				FilesFirst ? 1 : 0);
 			if (!FilesFirst || (fdata->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
 				return true;
 

@@ -138,6 +138,35 @@ class PluginTokenSource : public MdTokenSource
 	}
 
 public:
+	// Loads the plugin module and its export, once, before the render budget starts (R42).
+	bool Ready() override
+	{
+		if (m_broken) {
+			return false;
+		}
+		if (m_tokenize == nullptr && !Open()) {
+			m_broken = true;
+			return false;
+		}
+		if (m_tokenize != nullptr) {
+			// The first parse of a language pays the scheme file load (tens of
+			// ms); pay it for the spec's languages here, outside the 40 ms
+			// render budget (R43).  A language not listed pays its load inside
+			// the budget of its first fence and keeps plain code when it expires.
+			static const wchar_t *const kWarmLangs[] = {
+				L"cpp", L"js", L"jsx", L"ts", L"py", L"sh", L"rs", L"java", L"css", L"go", L"json"
+			};
+			std::vector<MdToken> warm;
+			CollectCtx ctx{&warm};
+			static const wchar_t *const one[] = {L"x = 1;"};
+			for (const wchar_t *lang : kWarmLangs) {
+				m_tokenize(lang, one, 1, Collect, &ctx, 5000);
+			}
+			return true;
+		}
+		return false;
+	}
+
 	bool Tokenize(const std::string &lang, const std::vector<std::string> &lines,
 		int budget_ms, std::vector<MdToken> &out) override
 	{
@@ -167,8 +196,9 @@ public:
 		CollectCtx ctx{&out};
 		const int rc = m_tokenize(wide_lang.c_str(), pointers.data(),
 			static_cast<int>(pointers.size()), Collect, &ctx, budget_ms);
-		if (rc == -2) { // unknown language: this fence keeps the plain code role
-			return true;
+		fprintf(stderr, "[mdcolorer] tokenize rc=%d out=%zu\n", rc, out.size());
+		if (rc == -2) { // unknown language: the fence keeps the plain code role (R44)
+			return false;
 		}
 		if (rc < 0) { // -1 no editorSet, -3 a Colorer exception
 			m_broken = true;
