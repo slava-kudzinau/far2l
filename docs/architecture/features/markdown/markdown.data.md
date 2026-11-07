@@ -54,8 +54,8 @@ flowchart LR
 | `[Viewer] Markdown_Auto` | Default 1. Setting of the rule. | The settings dialog | `MarkdownRuleMode` |
 | `[Viewer] Markdown` | Default 0. The last Shift-F4 mode. | `ProcessMarkdownMode` | Nothing |
 | `settings/markdown-colors.ini`, section `[markdown]` | One key per role: `body`, `heading1`, `heading2`, `heading3`, `strong`, `em`, `link`, `code`, `quote`, `listmark`, `rule`, `art`, plus the four fence roles `token-keyword`, `token-string`, `token-comment`, `token-number`. A value is `foreground:#rrggbb`, `#rrggbb`, `#rgb`, `F_*`, or `@Name`. | The user, by hand. far2l never writes it. | `MdRunColor` in `far2l/src/markdown/`, re-read when the file mtime changes |
-| `settings/md-view.ini`, section `[View]` | `width` (60, 70 or 80), `theme` (light, dark or auto), `browser` (auto, firefox, chrome, safari or an absolute path to a program). Defaults 70, auto, auto. | The user, by hand, or `md-open.sh --init-config` for a sample when there is no file. far2l never writes it. | `md-open.sh` |
-| Browser `localStorage`, keys `far2l-md-width` and `far2l-md-theme` | The width and the theme that the reader chose on the page. Only an accepted word is used. | The page script. It is in the browser profile, not in the repo or in `~/.config`. | The page script. A page that a flag started ignores it. |
+| `settings/md-view.ini`, section `[View]` | `width` (60, 70 or 80), `theme` (light, dark or auto), `browser` (auto, firefox, chrome, safari or a path). The tree keys are `tree` (on or off), `root` (dir or repo), `tree_depth` (1 to 12) and `tree_max_files` (1 to 2000). Defaults are 70, auto, auto, on, dir, 6 and 500. | The user, by hand, or `md-open.sh --init-config` for a sample when there is no file. far2l never writes it. | `md-open.sh` |
+| Browser `localStorage`, keys `far2l-md-width`, `far2l-md-theme` and `far2l-md-tree` | The width, the theme and the open or closed tree panel that the reader chose on the page. Only an accepted word is used. | The page script. It is in the browser profile, not in the repo or in `~/.config`. | The page script. A page that a flag started ignores it. |
 
 Order of use in the browser view: the saved page choice, then `md-view.ini`, then the built-in defaults. A flag replaces the file value, and a page that a flag started ignores the saved choice. The folder of `md-view.ini` is `${XDG_CONFIG_HOME:-$HOME/.config}/far2l/`.
 
@@ -63,7 +63,7 @@ Order of use in the browser view: the saved page choice, then `md-view.ini`, the
 
 | File | Contents | Written by | Removed by |
 |---|---|---|---|
-| `${XDG_CACHE_HOME:-$HOME/.cache}/far2l/md/<base>-<cksum>.html` | The escaped Markdown text, marked, `highlight.js`, the four inlined styles, the page script, the key and the state of `md-view.ini`. The folder has mode 700 and the file has mode 600. `<cksum>` is the `cksum` of the real path of the file, so the name stays the same for each run. | `md-open.sh` | Nothing. The user can delete the folder. |
+| `${XDG_CACHE_HOME:-$HOME/.cache}/far2l/md/<base>-<cksum>.html` | The escaped Markdown text of every page file, with the tree index. It holds marked, `highlight.js`, the four inlined styles, the page script, the key and the state of `md-view.ini`. The folder has mode 700 and the file has mode 600. `<cksum>` is the `cksum` of the real path of the file, so the name stays the same for each run. | `md-open.sh` | Nothing. The user can delete the folder. |
 | `<page>.tmp.<pid>` in the folder of the page | The page while the script writes it. The script moves it over the page. | `md-open.sh` | `md-open.sh`, on an error or a signal |
 | `${TMPDIR:-/tmp}/far2l-md-<pid>.html` | The same page, only if the cache folder cannot be used | `md-open.sh` | The operating system |
 | The path of `--out` | The same page, written directly | `md-open.sh` | The user |

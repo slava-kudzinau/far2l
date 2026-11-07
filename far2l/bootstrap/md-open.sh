@@ -194,11 +194,21 @@ init_config() {
 # theme: light, dark or auto (auto follows the system).
 # browser: auto, firefox, chrome, safari, or an absolute path to a program.
 # Browsers found on this system: ${list:-none}
+# tree: on shows the files under the root in one page, with a file tree on
+# the left; off shows one file, as a page without the tree.
+# root: dir takes the folder of the opened file; repo takes the nearest
+# folder upward with .git, else the folder of the file.
+# tree_depth: 1 to 12 (default 6). tree_max_files: 1 to 2000 (default 500).
+# A number over the ceiling gives the ceiling.
 
 [View]
 width=70
 theme=auto
 browser=auto
+tree=on
+root=dir
+tree_depth=6
+tree_max_files=500
 EOF
     set +C
     echo "$ini"
