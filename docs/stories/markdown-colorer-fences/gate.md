@@ -115,7 +115,7 @@ cmake -S . -B "$BUILD" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTING=Yes -DUSEWX=N
 cmake --build "$BUILD" -j8
 sh testing/markdown/ascii-golden.sh && sh testing/markdown/ascii-driver.sh
 HIGH_BUILD="$BUILD" sh testing/markdown/highlight-driver.sh
-sh testing/markdown/look-driver.sh
+LOOK_BUILD="$BUILD" sh testing/markdown/look-driver.sh
 (cd testing && pkill -9 -f -- '--test=/tmp/far2l'; sleep 1
  find tests -maxdepth 1 -type s -delete
  for s in tests/*; do [ -S "$s" ] && rm -f "$s"; done
