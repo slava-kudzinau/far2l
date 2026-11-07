@@ -904,6 +904,7 @@ extern "C"
 			if (!Statocaster((root + mask).c_str(), mask.c_str()).FillWFD(lpFindFileData)) {
 				return INVALID_HANDLE_VALUE;
 			}
+
 			LPCWSTR last_slash = wcsrchr(lpFileName, GOOD_SLASH);
 			wcsncpy(lpFindFileData->cFileName, last_slash ? last_slash + 1 : lpFileName, MAX_NAME);
 			return (HANDLE)&g_unix_found_file_dummy;
