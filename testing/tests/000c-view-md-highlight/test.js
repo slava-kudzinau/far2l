@@ -44,7 +44,7 @@ CheckTok("js keyword", ReadCell(js_line.X, js_line.Y), 0xff87ff, 13)
 var ts_kw = ExpectString("const y")
 CheckTok("ts keyword", ReadCell(ts_kw.X, ts_kw.Y), 0xff87ff, 13)
 var js_str = ExpectString("\"wjs")
-CheckTok("js string", ReadCell(js_str.X, js_str.Y), 0xff87ff, 13)    
+CheckTok("js string", ReadCell(js_str.X, js_str.Y), 0xff87ff, 13)
 // The js scheme's '//' block reports its start leaf; the rest of the line
 // keeps the code role (R49).
 var js_num = ExpectString(" 41")
@@ -83,7 +83,7 @@ CheckTok("json number", ReadCell(json_num.X, json_num.Y), 0xff87ff, 13)
 var c_kw = ExpectString("int c")
 CheckTok("c keyword", ReadCell(c_kw.X, c_kw.Y), 0xff87ff, 13)
 var c_num = ExpectString("44")
-CheckTok("c number", ReadCell(c_num.X, c_num.Y), 0xff87ff, 13)        
+CheckTok("c number", ReadCell(c_num.X, c_num.Y), 0xff87ff, 13)
 var c_com = ExpectString("cc */")
 CheckTok("c comment", ReadCell(c_com.X - 3, c_com.Y), 0xff87ff, 13)
 
@@ -109,7 +109,7 @@ CheckTok("java string", ReadCell(java_str.X, java_str.Y), 0xff87ff, 13) // (R49)
 
 // css: number.
 var css_num = ExpectString("10;")
-CheckTok("css number", ReadCell(css_num.X, css_num.Y), 0xff87ff, 13)  
+CheckTok("css number", ReadCell(css_num.X, css_num.Y), 0xff87ff, 13)
 
 // The plain-code fallback: a fence with no language shows its text in the code role.
 var plain_code = ExpectString("no language, no tokens")

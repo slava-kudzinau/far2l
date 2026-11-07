@@ -477,4 +477,3 @@ MD_COLORER_API const char *const *MdRegionNames(int *count)
 	}
 	return s_region_names;
 }
-

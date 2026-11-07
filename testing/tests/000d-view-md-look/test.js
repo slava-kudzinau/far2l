@@ -45,8 +45,9 @@ ExpectString("left/fixture.md")
 // Session 1: the harness runs a truecolor terminal (COLORTERM), so the scheme is
 // far2l.hrd, and the 3:1 batch verdict against the blue Viewer.Text fails
 // (markdown:EmText) - one verdict decides for the whole view (story
-// markdown-colorer-fences, spec Contrast): the roles take the fork table's RGB
-// defaults, without underline (the scheme rows are the driver's `look_real_hrd`).
+// markdown-colorer-fences, spec Contrast): the scheme rows decide (the scheme
+// rows are the driver's `look_real_hrd`); emphasis and body take the plain code
+// look's cyan 0xffff00 with the theme underline.
 // The table draws with box characters.
 var h = ExpectString("Heading")
 CheckLook("heading", h.X, h.Y, 0x5fffff, true)
@@ -89,4 +90,51 @@ TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
 TypeEnter()
 ExpectAppExit(0);
+
+// --- Third run: the 16-color harness. Under --norgb the Colorer picks the
+// scheme's console.hrd, and a 4-bit scheme always passes the 3:1 gate, so the
+// fences print the scheme's 4-bit rows (V2's fg4); a cell with no scheme row
+// keeps the code role's plain look in the truecolor bits (R52). The console
+// scheme's attr carries the underline bit, so the scheme's rows ride underlined.
+function CheckFence(name, x, y, fore, tc, underlined) {
+ var cell = ReadCell(x, y)
+ if (cell.Fore != fore || cell.ForeTC != tc) {
+  Log(name + ": fore " + cell.Fore + "/" + cell.ForeTC.toString(16) + ", expected " + fore + "/" + tc.toString(16))
+  Panic(name + " shows the wrong scheme row")
+ }
+ var raw = ReadCellRaw(x, y)
+ var under = (raw.Attributes & 0x8000) != 0
+ if (under != underlined) {
+  Log(name + ": underline " + under + ", expected " + underlined)
+  Panic(name + " shows the wrong underline")
+ }
+}
+
+StartAppWithSize(["--tty", "--nodetect", "--norgb", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 28);
+if (Exists(profile + "/.config/history/viewer.pos"))
+ Remove(profile + "/.config/history/viewer.pos")
+TypeDown(10)
+TypeFKey(3)
+ExpectString("left/fixture.md")
+var f_kw = ExpectString("function tailSum")
+CheckFence("js keyword", f_kw.X, f_kw.Y, 15, 0, true)
+CheckFence("js function", f_kw.X + 9, f_kw.Y, 11, 0, true)
+var f_str = ExpectString("\\lit")
+CheckFence("js string", f_str.X - 1, f_str.Y, 14, 0, true)
+CheckFence("js escape", f_str.X, f_str.Y, 14, 0, true)
+var f_num = ExpectString("42 * true")
+CheckFence("js number", f_num.X, f_num.Y, 10, 0, true)
+CheckFence("js operator", f_num.X + 3, f_num.Y, 15, 0, true)
+CheckFence("js constant", f_num.X + 6, f_num.Y, 11, 0, true)
+var f_com = ExpectString("// note")
+CheckFence("js comment", f_com.X, f_com.Y, 3, 0, true)
+var f_call = ExpectString("tailSum(s, 7)")
+CheckFence("js tail", f_call.X, f_call.Y, 13, 0xafd7d7, true)
+CheckFence("js tail operator", f_call.X + 13, f_call.Y, 14, 0, true)
+CheckFence("code padding", 60, f_kw.Y, 13, 0xafd7d7, true)
+TypeEscape()
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0)
 0;

@@ -22,6 +22,7 @@
 #include "markdown/MarkdownRender.hpp"
 #include "cfg/config.hpp"
 #include "mix/pathmix.hpp"
+#include "Colorspace.h"   // iRGB, toIRGB: the fail-path split below
 #include "farcolors.hpp"
 #include "markdown/MdPalette.hpp"
 
@@ -904,6 +905,205 @@ int tokens_v2_v1_callers()
 	return 0;
 }
 
+// UTF-8 to wide: the hostile fixture carries non-ASCII (CJK, emoji, the
+// Gothic 𐍈 surrogate pair); the viewer reads its file as wide text.
+std::wstring Utf8ToWide(const std::string &s)
+{
+	std::wstring out;
+	out.reserve(s.size());
+	size_t i = 0;
+	while (i < s.size()) {
+		const unsigned char c = static_cast<unsigned char>(s[i]);
+		uint32_t cp = c;
+		int extra = c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : c >= 0xC0 ? 1 : 0;
+		if (extra != 0 && i + extra < s.size()) {
+			cp = c & (0xFF >> (extra + 1));
+			for (int k = 1; k <= extra; ++k) {
+				cp = (cp << 6) | (static_cast<unsigned char>(s[i + k]) & 0x3F);
+			}
+		} else {
+			extra = 0;
+		}
+		i += static_cast<size_t>(extra) + 1;
+		if (cp >= 0x10000) {
+			cp -= 0x10000;
+			out.push_back(static_cast<wchar_t>(0xD800 + (cp >> 10)));
+			out.push_back(static_cast<wchar_t>(0xDC00 + (cp & 0x3FF)));
+		} else {
+			out.push_back(static_cast<wchar_t>(cp));
+		}
+	}
+	return out;
+}
+
+// A counting shell over the real plugin's fence source: the doc path's fence
+// cache, probed - one fetch per (language, hash, generation).
+class CountingFenceSource : public MdTokenSource
+{
+public:
+	MdTokenSource *m_real = nullptr;
+	int m_fetches = 0;
+	bool Tokenize(const std::string &lang, const std::vector<std::string> &lines,
+		int budget_ms, std::vector<MdToken> &out) override
+	{
+		return m_real->Tokenize(lang, lines, budget_ms, out);
+	}
+	bool TokenizeV2(const std::string &lang, const std::vector<std::string> &lines,
+		int budget_ms, std::vector<MdTokenRange> &out,
+		unsigned long long &generation) override
+	{
+		++m_fetches;
+		return m_real->TokenizeV2(lang, lines, budget_ms, out, generation);
+	}
+	bool Ready() override { return m_real->Ready(); }
+};
+
+// T4: the fences' cost through the real plugin.  Six 20k-line fences, each
+// salted unique, so every fence renders exactly once - the cache's cold key
+// (language, text hash, generation), one fetch per fence, counted.  A fence's
+// render is the doc's Render: the join, the parse, the fetch, the printer.
+// The deadline is the viewer's 100 ms per fence (spec, Runtime).
+int tokens_v2_cost()
+{
+	std::string why;
+	if (!LoadModules(why) || !CreateEditorSet(why)) {
+		printf("FAILED tokens_v2_cost: %s\n", why.c_str());
+		return 1;
+	}
+	auto src = std::make_unique<CountingFenceSource>();
+	CountingFenceSource *count = src.get();
+	count->m_real = &MdGetTokenSource();
+	MdSetTokenSourceForTest(std::move(src));
+	constexpr int kFences = 6;
+	constexpr int kFenceLines = 20000;
+	constexpr int kBudgetMs = 100;
+	double total_ms = 0, worst_ms = 0;
+	// One warm render, not counted: the first Render pays the cold pages of
+	// the doc and the plugin, the story's number is the steady cost.
+	{
+		std::wstring warm = L"```javascript\n";
+		for (int i = 0; i < 200; ++i) {
+			warm += kJsFence[i % 3];
+			warm += L" // warm\n";
+		}
+		warm += L"```\n";
+		MarkdownDoc doc;
+		doc.Render(warm, 80);
+	}
+	const int base = count->m_fetches;
+	for (int f = 0; f < kFences; ++f) {
+		std::wstring text = L"```javascript\n";
+		for (int i = 0; i < kFenceLines; ++i) {
+			text += kJsFence[i % 3];
+			text += L" // f";
+			text += std::to_wstring(f);
+			text += L'-';
+			text += std::to_wstring(i);
+			text += L'\n';
+		}
+		text += L"```\n";
+		MarkdownDoc doc;
+		const auto t0 = std::chrono::steady_clock::now();
+		doc.Render(text, 80);
+		const double ms = std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - t0).count() / 1000.0;
+		bool any_range = false;
+		for (const MdTokenGroup &g : doc.TokenGroups()) {
+			if (!g.ranges.empty()) {
+				any_range = true;
+				break;
+			}
+		}
+		if (!any_range) {
+			printf("FAILED tokens_v2_cost: fence %d rendered no scheme ranges\n", f);
+			MdSetTokenSourceForTest(nullptr);
+			return 1;
+		}
+		if (ms > kBudgetMs) {
+			printf("FAILED tokens_v2_cost: fence %d rendered in %.1f ms, want under %d\n",
+				f, ms, kBudgetMs);
+			MdSetTokenSourceForTest(nullptr);
+			return 1;
+		}
+		total_ms += ms;
+		if (ms > worst_ms) {
+			worst_ms = ms;
+		}
+		printf("fence %d: %d javascript lines in %.1f ms\n", f, kFenceLines, ms);
+	}
+	if (count->m_fetches != base + kFences) {
+		printf("FAILED tokens_v2_cost: the fences fetched %d, want one per fence\n",
+			count->m_fetches - base);
+		MdSetTokenSourceForTest(nullptr);
+		return 1;
+	}
+	printf("tokens_v2_cost: %d fences x %d lines (javascript), mean %.1f ms, worst %.1f ms, deadline %d ms\n",
+		kFences, kFenceLines, total_ms / kFences, worst_ms, kBudgetMs);
+
+	// The hostile fixture: 1 MB of python - long lines, nested regions,
+	// unterminated strings, unicode - through the same fence path.  The first
+	// render fetches the fence; the second render of the same fence rides the
+	// cache, one fetch per (language, hash, generation).  look-driver.sh
+	// exports FAR2L_TESTING_DIR; the fallback serves a run from the root.
+	const char *dir = getenv("FAR2L_TESTING_DIR");
+	const std::string path = (dir != nullptr && *dir != '\0')
+		? std::string(dir) + "/fixture.py" : "testing/markdown/fixture.py";
+	std::ifstream in(path, std::ios::binary);
+	if (!in) {
+		printf("FAILED tokens_v2_cost: no fixture at %s\n", path.c_str());
+		MdSetTokenSourceForTest(nullptr);
+		return 1;
+	}
+	const std::string bytes((std::istreambuf_iterator<char>(in)),
+		std::istreambuf_iterator<char>());
+	if (bytes.size() < 1048576) {
+		printf("FAILED tokens_v2_cost: fixture is %zu bytes, want 1 MB\n", bytes.size());
+		MdSetTokenSourceForTest(nullptr);
+		return 1;
+	}
+	const std::wstring md = L"```python\n" + Utf8ToWide(bytes) + L"```\n";
+	MarkdownDoc hostile;
+	const int hostile_base = count->m_fetches;
+	const auto t1 = std::chrono::steady_clock::now();
+	hostile.Render(md, 80);
+	const double ms1 = std::chrono::duration_cast<std::chrono::microseconds>(
+		std::chrono::steady_clock::now() - t1).count() / 1000.0;
+	const auto t2 = std::chrono::steady_clock::now();
+	hostile.Render(md, 80); // the same fence again: the cache answers
+	const double ms2 = std::chrono::duration_cast<std::chrono::microseconds>(
+		std::chrono::steady_clock::now() - t2).count() / 1000.0;
+	bool hostile_range = false;
+	for (const MdTokenGroup &g : hostile.TokenGroups()) {
+		if (!g.ranges.empty()) {
+			hostile_range = true;
+			break;
+		}
+	}
+	if (!hostile_range) {
+		printf("FAILED tokens_v2_cost: the hostile fence rendered no scheme ranges\n");
+		MdSetTokenSourceForTest(nullptr);
+		return 1;
+	}
+	if (ms1 > kBudgetMs) {
+		printf("FAILED tokens_v2_cost: the hostile fence rendered in %.1f ms, want under %d\n",
+			ms1, kBudgetMs);
+		MdSetTokenSourceForTest(nullptr);
+		return 1;
+	}
+	if (count->m_fetches != hostile_base + 1) {
+		printf("FAILED tokens_v2_cost: the hostile fence fetched %d, want one (the cache refetched)\n",
+			count->m_fetches - hostile_base);
+		MdSetTokenSourceForTest(nullptr);
+		return 1;
+	}
+	printf("tokens_v2_cost: hostile fixture.py %zu bytes, first %.1f ms, cached %.1f ms, deadline %d ms\n",
+		bytes.size(), ms1, ms2, kBudgetMs);
+	printf("ok tokens_v2_cost: the 20k-line fences and the 1 MB fixture inside the deadline, fetches=%d\n",
+		count->m_fetches);
+	MdSetTokenSourceForTest(nullptr);
+	return 0;
+}
+
 // ---- T5 cases: the resolver, the contrast rule, the user file, the generations ----
 
 // The driver's copies of the palette's private constants: the background bits a
@@ -1523,6 +1723,23 @@ int look_fence_contrast()
 		EnsureTrueColor();
 		return 1;
 	}
+	// The fail path's companion bits: the range carries the code role's RGB
+	// row in the truecolor bits and the code role's fallback16 (the 0x0d row)
+	// in the low nibble.  An fg/fg4 swap on the fail path splits to the other
+	// pair, where the equality with the prose color cannot see it.
+	RGB split_fg, split_bg;
+	extractColor(fail_range, split_fg, split_bg);
+	const iRGB split_rgb = toIRGB(split_fg);
+	if (split_rgb.r != 0xff || split_rgb.g != 0x87 || split_rgb.b != 0xff
+		|| (fail_range & 0x0f) != 13) {
+		printf("FAILED look_fence_contrast: the fail range splits to 0x%02X%02X%02X/%llu, want 0xFF87FF/13\n",
+			split_rgb.r, split_rgb.g, split_rgb.b,
+			(unsigned long long)(fail_range & 0x0f));
+		SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+		EnsureTrueColor();
+		return 1;
+	}
+	printf("probe look_fence_contrast: the fail range is the code row 0xFF87FF with the 0x0d companion\n");
 	EnsureTrueColor();
 	SetBackground((uint32_t)((saved >> 40) & 0xffffff));
 	printf("ok look_fence_contrast: one view-wide verdict, fences with the prose\n");
@@ -1544,6 +1761,7 @@ const Case s_cases[] = {
 	{"tokens_v2", tokens_v2},
 	{"tokens_v2_limits", tokens_v2_limits},
 	{"tokens_v2_v1_callers", tokens_v2_v1_callers},
+	{"tokens_v2_cost", tokens_v2_cost},
 	{"look_fence_generation", look_fence_generation},
 	{"look_fence_contrast", look_fence_contrast},
 };
