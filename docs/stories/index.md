@@ -21,6 +21,8 @@ The proof of concept `mermaid-image-poc` (status `approved`) is not in this fold
 
 ## Planned
 
+Epic [markdown-browser-reading-epic](markdown-browser-reading-epic.md) groups `markdown-browser-github-look` and `markdown-browser-linked-files`. They run in series.
+
 Build these stories in this order. Each one changes `MarkdownRender.cpp` and the test `0007-view-file-markdown`, so they do not run in parallel.
 
 | Story | Status | Size | Outcome | Depends on | Branch |
@@ -28,6 +30,8 @@ Build these stories in this order. Each one changes `MarkdownRender.cpp` and the
 | [markdown-palette](markdown-palette/story.md) | done | M | A color for each Markdown element, from a fork table that the user can override by value or by palette entry name. | markdown-compact-layout | `feat/markdown-palette` |
 | [markdown-code-highlight](markdown-code-highlight/story.md) | done | M | Syntax colors in fenced code, with tokens from the Colorer plugin through one small export. Merged in PR #11, `c7b612286` (2026-11-07). | markdown-palette | `feat/markdown-code-highlight` |
 | [markdown-code-tint](markdown-code-tint/story.md) | planned | S | A full-width background tint on code blocks. | markdown-palette | `feat/markdown-code-tint` |
+| [markdown-browser-github-look](markdown-browser-github-look/story.md) | planned | M | The Alt-F3 browser page gets the GitHub look, code highlight, a 60/70/80 width and a light/dark theme, set in a defaults file or by flags. It edits only the script and the page, so it can run in parallel with the F3 stories above. | markdown-browser-view | `feat/markdown-browser-github-look` |
+| [markdown-browser-linked-files](markdown-browser-linked-files/story.md) | planned | M | A link to another local Markdown file in the Alt-F3 page opens that file, rendered, in the same page. It runs after the story above, because both edit the script and the page. | markdown-browser-github-look | `feat/markdown-browser-linked-files` |
 
 Story [markdown-theme-colors](markdown-theme-colors/story.md) is superseded. The owner replaced it with markdown-palette and markdown-code-tint on 2026-11-06.
 
