@@ -1,23 +1,157 @@
 #!/bin/sh
 # md-open.sh: show a Markdown file as a web page (far2l Alt-F3; macOS first).
 #
-#   md-open.sh <file.md> [--out <page.html>] [--no-open]
+#   md-open.sh [options] <file.md>
+#     --out <page.html>   write the page there
+#     --no-open           make the page, do not open it
+#     --width 60|70|80    start width of the text column, in percent
+#     --theme light|dark|auto
+#     --browser auto|firefox|chrome|safari|<absolute path>
+#     --no-cache          build the page again
+#   md-open.sh --init-config
 #   md-open.sh --print-association
 #
 # Writes one page (the Markdown text and marked inline; mermaid from a pinned
 # CDN script with an SRI hash) and opens it with the system opener. The page
 # goes to ${TMPDIR:-/tmp}/far2l-md-<pid>.html unless --out names another file.
 # marked.min.js is read from this script's folder, or from MARKED_JS.
+#
+# Defaults come from ${XDG_CONFIG_HOME:-$HOME/.config}/far2l/settings/md-view.ini,
+# section [View], keys width, theme and browser. A flag beats the file. No value
+# from the file or a flag is run as code; it is used only when it equals an
+# accepted word, or (browser only) when it is an absolute path to a program.
 
 LC_ALL=C
 export LC_ALL
 
 self_dir=$(cd "$(dirname -- "$0")" && pwd) || exit 2
+ini=${XDG_CONFIG_HOME:-$HOME/.config}/far2l/settings/md-view.ini
+cr=$(printf '\r')
 
 usage() {
-    echo 'usage: md-open.sh <file.md> [--out <page.html>] [--no-open]' >&2
+    echo 'usage: md-open.sh [--out <page.html>] [--no-open] [--width 60|70|80]' >&2
+    echo '                  [--theme light|dark|auto] [--browser B] [--no-cache] <file.md>' >&2
+    echo '       md-open.sh --init-config' >&2
     echo '       md-open.sh --print-association' >&2
     exit 2
+}
+
+# trim TEXT: sets trimmed to TEXT without the spaces and tabs at both ends.
+trim() {
+    trimmed=$1
+    trimmed=${trimmed#"${trimmed%%[! 	]*}"}
+    trimmed=${trimmed%"${trimmed##*[! 	]}"}
+}
+
+# browser_ok VALUE: true if VALUE is an accepted browser= value. An absolute
+# path must name an executable file, or on macOS a folder that ends in ".app".
+browser_ok() {
+    case $1 in
+        auto|firefox|chrome|safari)
+            return 0 ;;
+        /*.app|/*.app/)
+            [ "$(uname -s)" = Darwin ] && [ -d "$1" ] && return 0
+            [ -f "$1" ] && [ -x "$1" ] ;;
+        /*)
+            [ -f "$1" ] && [ -x "$1" ] ;;
+        *)
+            return 1 ;;
+    esac
+}
+
+# read_ini: reads md-view.ini, section [View]. Sets cfg_width, cfg_theme and
+# cfg_browser to the last valid value of each key; sets cfg_browser_bad=1 if a
+# browser= line has a value that is not accepted. Other values are ignored.
+read_ini() {
+    cfg_width=
+    cfg_theme=
+    cfg_browser=
+    cfg_browser_bad=0
+    [ -f "$ini" ] && [ -r "$ini" ] || return 0
+    section=
+    while IFS= read -r line || [ -n "$line" ]; do
+        line=${line%"$cr"}
+        trim "$line"
+        line=$trimmed
+        case $line in
+            ''|'#'*|';'*)
+                continue ;;
+            '['*)
+                section=$line
+                continue ;;
+            *=*) ;;
+            *)
+                continue ;;
+        esac
+        [ "$section" = '[View]' ] || continue
+        trim "${line%%=*}"
+        key=$trimmed
+        trim "${line#*=}"
+        val=$trimmed
+        case $key in
+            width)
+                case $val in
+                    60|70|80) cfg_width=$val ;;
+                esac ;;
+            theme)
+                case $val in
+                    light|dark|auto) cfg_theme=$val ;;
+                esac ;;
+            browser)
+                if browser_ok "$val"; then
+                    cfg_browser=$val
+                else
+                    cfg_browser_bad=1
+                fi ;;
+        esac
+    done < "$ini"
+}
+
+# browsers_found: the browser words that this system has.
+browsers_found() {
+    found=
+    if command -v firefox >/dev/null 2>&1 || [ -d /Applications/Firefox.app ]; then
+        found="$found firefox"
+    fi
+    if command -v google-chrome >/dev/null 2>&1 || command -v chromium >/dev/null 2>&1 \
+        || [ -d '/Applications/Google Chrome.app' ]; then
+        found="$found chrome"
+    fi
+    if [ -d /Applications/Safari.app ]; then
+        found="$found safari"
+    fi
+    printf '%s\n' "${found# }"
+}
+
+# init_config: writes a commented sample md-view.ini if there is no file. It
+# never replaces a file, a link or anything else at that path.
+init_config() {
+    if [ -e "$ini" ] || [ -L "$ini" ]; then
+        echo "md-open: $ini exists, not changed"
+        exit 0
+    fi
+    mkdir -p "$(dirname -- "$ini")" || { echo "md-open: cannot make the folder of $ini" >&2; exit 1; }
+    list=$(browsers_found)
+    # noclobber: the shell refuses to replace a file made since the test above.
+    set -C
+    cat > "$ini" <<EOF || { echo "md-open: cannot write $ini" >&2; exit 1; }
+# Defaults for the far2l Markdown browser page (md-open.sh, Alt-F3).
+# A flag on the command line beats a value here. A line that starts with
+# "#" or ";" is a comment. A value that is not accepted is ignored.
+#
+# width: start width of the text column, in percent: 60, 70 or 80.
+# theme: light, dark or auto (auto follows the system).
+# browser: auto, firefox, chrome, safari, or an absolute path to a program.
+# Browsers found on this system: ${list:-none}
+
+[View]
+width=70
+theme=auto
+browser=auto
+EOF
+    set +C
+    echo "$ini"
+    exit 0
 }
 
 print_association() {
@@ -46,19 +180,120 @@ Steps in far2l:
   3. In "A file mask or several file masks", type: *.md
   4. Tick "View command (used for Alt+F3)" and type: $cmd
   5. Press OK. Alt+F3 on a .md file now opens it in the browser.
+
+Defaults file (md-open.sh --init-config writes a commented sample):
+  $ini
+  [View]
+  width=60|70|80          (default 70)
+  theme=light|dark|auto   (default auto)
+  browser=auto|firefox|chrome|safari|<absolute path to a program>
+Flags for one run: --width N, --theme T, --browser B, --no-cache.
 EOF
+}
+
+# open_page PAGE: opens PAGE with the browser in $browser. Each command runs
+# with exec in a subshell, with PAGE as one argument, so the exit status shows.
+open_page() {
+    b=$browser
+    if [ "$(uname -s)" = Darwin ]; then
+        case $b in
+            firefox) app=Firefox ;;
+            chrome) app='Google Chrome' ;;
+            safari) app=Safari ;;
+            /*.app|/*.app/) [ -d "$b" ] && app=$b || app= ;;
+            *) app= ;;
+        esac
+        if [ -n "$app" ]; then
+            ( exec open -a "$app" "$1" ) || { echo 'md-open: open failed' >&2; exit 1; }
+            return 0
+        fi
+    else
+        case $b in
+            firefox)
+                command -v firefox >/dev/null 2>&1 && b=firefox || b=auto ;;
+            chrome)
+                if command -v google-chrome >/dev/null 2>&1; then
+                    b=google-chrome
+                elif command -v chromium >/dev/null 2>&1; then
+                    b=chromium
+                else
+                    b=auto
+                fi ;;
+            safari)
+                b=auto ;;
+        esac
+        case $b in
+            auto|/*) ;;
+            *)
+                ( exec "$b" "$1" ) || { echo "md-open: $b failed" >&2; exit 1; }
+                return 0 ;;
+        esac
+    fi
+    case $b in
+        /*)
+            ( exec "$b" "$1" ) || { echo 'md-open: the browser failed' >&2; exit 1; }
+            return 0 ;;
+    esac
+    # auto: a single-word $BROWSER, then open, then xdg-open.
+    if [ -n "${BROWSER:-}" ]; then
+        case $BROWSER in
+            *[!A-Za-z0-9_./+-]*)
+                echo 'md-open: BROWSER is not a single command name, ignored' >&2 ;;
+            *)
+                if command -v "$BROWSER" >/dev/null 2>&1; then
+                    ( exec "$BROWSER" "$1" ) || { echo 'md-open: $BROWSER failed' >&2; exit 1; }
+                    return 0
+                fi ;;
+        esac
+    fi
+    if command -v open >/dev/null 2>&1; then
+        ( exec open "$1" ) || { echo 'md-open: open failed' >&2; exit 1; }
+    elif command -v xdg-open >/dev/null 2>&1; then
+        ( exec xdg-open "$1" ) || { echo 'md-open: xdg-open failed' >&2; exit 1; }
+    else
+        echo "$1"
+    fi
 }
 
 file=
 out=
 do_open=1
+do_init=0
+no_cache=0
+flag_width=
+flag_theme=
+flag_browser=
+flag_browser_set=0
 while [ $# -gt 0 ]; do
     case $1 in
         --print-association)
             print_association
             exit 0 ;;
+        --init-config)
+            do_init=1 ;;
         --no-open)
             do_open=0 ;;
+        --no-cache)
+            no_cache=1 ;;
+        --width)
+            [ $# -ge 2 ] || usage
+            case $2 in
+                60|70|80) flag_width=$2 ;;
+                *) usage ;;
+            esac
+            shift ;;
+        --theme)
+            [ $# -ge 2 ] || usage
+            case $2 in
+                light|dark|auto) flag_theme=$2 ;;
+                *) usage ;;
+            esac
+            shift ;;
+        --browser)
+            [ $# -ge 2 ] || usage
+            flag_browser=$2
+            flag_browser_set=1
+            shift ;;
         --out)
             [ $# -ge 2 ] || usage
             out=$2
@@ -80,7 +315,37 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+[ "$do_init" = 1 ] && init_config
+
 [ -n "$file" ] || usage
+
+# Resolve the start values once: a flag, else the file, else the built-in default.
+read_ini
+forced=0
+width=${flag_width:-${cfg_width:-70}}
+theme=${flag_theme:-${cfg_theme:-auto}}
+{ [ -n "$flag_width" ] || [ -n "$flag_theme" ]; } && forced=1
+if [ "$flag_browser_set" = 1 ]; then
+    if browser_ok "$flag_browser"; then
+        browser=$flag_browser
+    else
+        echo 'md-open: --browser is not auto, firefox, chrome, safari or a program path; using auto' >&2
+        browser=auto
+    fi
+else
+    if [ -z "$cfg_browser" ] && [ "$cfg_browser_bad" = 1 ]; then
+        echo "md-open: browser= in $ini is not accepted; using auto" >&2
+    fi
+    browser=${cfg_browser:-auto}
+fi
+# Only accepted words reach the page.
+case $width in 60|70|80) ;; *) width=70 ;; esac
+case $theme in light|dark|auto) ;; *) theme=auto ;; esac
+if [ "$forced" = 1 ]; then
+    html_attrs="lang=\"en\" data-start-width=\"$width\" data-start-theme=\"$theme\" data-forced=\"1\""
+else
+    html_attrs="lang=\"en\" data-start-width=\"$width\" data-start-theme=\"$theme\""
+fi
 if [ ! -f "$file" ] || [ ! -r "$file" ]; then
     echo "md-open: cannot read $file" >&2
     usage
@@ -115,12 +380,10 @@ base_url=file://$(printf '%s' "$dir" | sed -e 's/%/%25/g' -e 's/ /%20/g' -e 's/#
 
 title=$(basename -- "$file" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g')
 bom=$(printf '\357\273\277')
-cr=$(printf '\r')
 
 {
+    printf '<!doctype html>\n<html %s>\n' "$html_attrs"
     cat <<'HTML'
-<!doctype html>
-<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline'; img-src data: file:">
@@ -261,12 +524,6 @@ JS
 } > "$page" || { echo "md-open: cannot write $page" >&2; exit 1; }
 
 if [ "$do_open" = 1 ]; then
-    if command -v open >/dev/null 2>&1; then
-        open "$page" || { echo 'md-open: open failed' >&2; exit 1; }
-    elif command -v xdg-open >/dev/null 2>&1; then
-        xdg-open "$page" || { echo 'md-open: xdg-open failed' >&2; exit 1; }
-    else
-        echo "$page"
-    fi
+    open_page "$page"
 fi
 exit 0

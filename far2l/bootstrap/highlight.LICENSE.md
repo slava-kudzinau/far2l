@@ -12,7 +12,7 @@ The sha384 of each copied file (`openssl dgst -sha384 -binary <file> | base64`):
 - `hljs-github.min.css`: sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L
 - `hljs-github-dark.min.css`: sha384-wH75j6z1lH97ZOpMOInqhgKzFkAInZPPSPlZpYKYTOqsaizPvhQZmAtLcPKXpLyH
 
-Languages in `highlight.min.js` (37): bash, c, cpp, csharp, css, diff, go, graphql, ini, java, javascript, json, kotlin, less, lua, makefile, markdown, objectivec, perl, php, php_template, plaintext, python, python_repl, r, ruby, rust, scss, shell, sql, swift, typescript, vbnet, wasm, xml, yaml.
+Languages in `highlight.min.js` (36): bash, c, cpp, csharp, css, diff, go, graphql, ini, java, javascript, json, kotlin, less, lua, makefile, markdown, objectivec, perl, php, php_template, plaintext, python, python_repl, r, ruby, rust, scss, shell, sql, swift, typescript, vbnet, wasm, xml, yaml.
 
 Note: the page inlines these files in script and style elements. `highlight.min.js` holds no `</script`. It holds one `<!--`, closed by `-->` a few characters later (in a regex of the xml language). The CSS files hold no `</style`.
 
