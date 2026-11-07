@@ -250,8 +250,10 @@ void MarkdownPrinter::Cells(const wchar_t *&p, int &pos, int &print_len, int64_t
 }
 
 // Print one code run, painting the token ranges of `group` (story
-// markdown-colorer-fences): the scheme's own foreground per range.  Cells
-// past the last range keep the code role; the row padding keeps the text role.
+// markdown-colorer-fences): the scheme's own foreground per range, under the
+// look's view-wide contrast verdict, the scheme's underline where the style
+// carries bit 4 (FinishRow's span pass re-applies the bit).  Cells past the
+// last range keep the code role; the row padding keeps the text role.
 void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstring &text,
 	int &pos, int skip_len, int &print_len)
 {
@@ -272,11 +274,18 @@ void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstrin
 	size_t ti = 0;   // index over the group's ranges, ascending
 	while (print_len > 0 && *p) {
 		if (ti < group.ranges.size() && (int64_t)pos >= (int64_t)group.ranges[ti].start) {
-			// The scheme's 24-bit foreground under a truecolor backend, the
-			// scheme's 4-bit row on the 16-color path (T3, T5).
-			SetColor(_selection ? _sel_color
-				: MdRangeColor(group.ranges[ti].fg, group.ranges[ti].fg4));
+			// The scheme's 24-bit foreground under the view's contrast verdict,
+			// the scheme's 4-bit row on the 16-color path (spec, PrintCodeRuns
+			// and Contrast); the range's underline bit rides the far attribute
+			// and joins the row's spans, the way the runs' underline does.
+			const uint64_t range_color = _selection ? _sel_color
+				: MdRangeColor(group.ranges[ti].fg, group.ranges[ti].fg4,
+					group.ranges[ti].underline);
+			SetColor(range_color);
+			const int run_start = pos;
 			Cells(p, pos, print_len, (int64_t)group.ranges[ti].end);
+			if (range_color & COMMON_LVB_UNDERSCORE)
+				_spans.emplace_back(run_start, pos);
 			SetColor(_selection ? _sel_color : MarkdownRunColor(MD_ROLE_CODE));
 			++ti;
 			continue;

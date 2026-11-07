@@ -189,12 +189,12 @@ class PluginTokenSource : public MdTokenSource
 		if (handle == nullptr) {
 			return false;
 		}
-	m_tokenize = reinterpret_cast<TokenizeFn>(dlsym(handle, "ColorerTokenizeV1"));
-	// One binding for both exports: the module answers V2 beside V1, once
-	// (spec.md, The core bridge; the binding loads lazily, on the first fence).
-	m_tokenize_v2 = reinterpret_cast<TokenizeV2Fn>(
-		dlsym(handle, "ColorerTokenizeV2"));
-	return m_tokenize != nullptr;
+		m_tokenize = reinterpret_cast<TokenizeFn>(dlsym(handle, "ColorerTokenizeV1"));
+		// One binding for both exports: the module answers V2 beside V1, once
+		// (spec.md, The core bridge; the binding loads lazily, on the first fence).
+		m_tokenize_v2 = reinterpret_cast<TokenizeV2Fn>(
+			dlsym(handle, "ColorerTokenizeV2"));
+		return m_tokenize != nullptr;
 	}
 
 public:
@@ -266,11 +266,13 @@ public:
 		return true; // 0 all lines, 1 stopped at the deadline (tokens so far stay)
 	}
 
-	// Tokenizes in the scheme's colors: one V2 export call per line (a cell
-	// carries no line word, so the call carries the line), all lines sharing
-	// one deadline.  The caps are the export's: 32 lines, 256 cells.  Without
-	// the V2 symbol, V1's classes fall through the alias table to the 24-bit
-	// and 4-bit pair (spec.md, The core bridge).
+	// Tokenizes in the scheme's colors: one V2 export call per line.  The
+	// 8-word stride carries no line word, so per-line calls keep the line
+	// attribution exact; the cost is the cross-line region state (an open
+	// block comment restarts on each line), accepted in ADR-010's cost
+	// record.  All lines share one deadline.  The caps are the export's: 32
+	// lines, 256 cells.  Without the V2 symbol, V1's classes fall through the
+	// alias table to the 24-bit and 4-bit pair (spec.md, The core bridge).
 	bool TokenizeV2(const std::string &lang, const std::vector<std::string> &lines,
 		int budget_ms, std::vector<MdTokenRange> &out, unsigned long long &generation) override
 	{
@@ -390,7 +392,8 @@ public:
 			return 0;
 		}
 		unsigned int generation = 0;
-		if (look(1, nullptr, 0, nullptr, 0, &generation) != 0) {
+		const int rc = look(1, nullptr, 0, nullptr, 0, &generation);
+		if (rc != 0) {
 			return 0;
 		}
 		return generation;
@@ -474,3 +477,4 @@ MD_COLORER_API const char *const *MdRegionNames(int *count)
 	}
 	return s_region_names;
 }
+

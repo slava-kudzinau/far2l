@@ -773,8 +773,8 @@ int print_role(int cls, uint64_t want_role, const char *name)
 	}
 	// The bridge's V1 fallback carries the class's alias row (story
 	// markdown-colorer-fences): the 24-bit of the spec table.
-	static const uint32_t kAliasFg[] = {0xff87ff, 0x87afff, 0x87ff87, 0x8787af, 0xffaf5f};
-	const uint32_t want_fg = kAliasFg[cls >= 1 && cls <= 4 ? cls : 0];
+	static const uint32_t kAliasFg[] = {0x87afff, 0x87ff87, 0x8787af, 0xffaf5f};
+	const uint32_t want_fg = kAliasFg[cls - 1];   // the callers use classes 1..4
 	if (doc.TokenGroups()[gi].ranges[0].fg != want_fg) {
 		printf("FAILED %s: cls %d range fg 0x%06X, want 0x%06X\n",
 			name, cls, doc.TokenGroups()[gi].ranges[0].fg, want_fg);

@@ -32,8 +32,13 @@ inline MdRole MdRoleForTokenClass(uint8_t cls)
 // markdown-colorer-fences).  An unknown class takes the plain code row.
 void MdTokenClassLook(uint8_t cls, uint32_t *fg, uint32_t *fg4);
 
-// The far attribute of a cached fence range: the scheme's 24-bit foreground
-// under a truecolor-capable backend, the scheme's 4-bit foreground on the
-// 16-color path, over the viewer text background.  The underline bit is the
-// printer's to apply.
-uint64_t MdRangeColor(uint32_t fg, uint32_t fg4);
+// The far attribute of a cached fence range (story markdown-colorer-fences):
+// the scheme's 24-bit foreground under the look's batch verdict - the one
+// view-wide verdict, keyed (viewer background, scheme generation), that sends
+// the prose to the fork table when it fails (spec.md, Contrast); a failing
+// verdict sends the range to the plain code role, the same verdict the prose
+// path consults.  A 4-bit scheme answers the 4-bit path: the scheme's 4-bit
+// row, no 3:1 check.  `underline` (the style word's bit 4) sets
+// COMMON_LVB_UNDERSCORE; the printer's span pass re-applies it.  The returned
+// color carries the viewer text background.
+uint64_t MdRangeColor(uint32_t fg, uint32_t fg4, bool underline);

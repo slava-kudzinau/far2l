@@ -36,7 +36,6 @@ struct MdTokenRange
 // and its 4-bit foreground (MdPalette.cpp; the V1 fallback of TokenizeV2).
 void MdTokenClassLook(uint8_t cls, uint32_t *fg, uint32_t *fg4);
 
-
 // Token source for fence lines: the Colorer plugin export, or a fake for tests.
 class MdTokenSource
 {

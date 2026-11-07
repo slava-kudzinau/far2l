@@ -1333,12 +1333,14 @@ public:
 
 // One range over each fence line, colored by the case's current fg.  The
 // generation rides the answer unchanged: the key of the entry equals the
-// generation the source answers (the real plugin answers its scheme's).
+// generation the source answers (the real plugin answers its scheme's), so
+// the render's key-update path stays warm across a resize.
 class FenceTokenSource : public MdTokenSource
 {
 public:
 	int m_fetches = 0;
 	uint32_t m_fg = 0x00ff00;
+	unsigned long long m_generation = 52;   // the scheme the colors come from
 	bool Tokenize(const std::string &lang, const std::vector<std::string> &lines,
 		int budget_ms, std::vector<MdToken> &out) override
 	{
@@ -1352,8 +1354,9 @@ public:
 		int budget_ms, std::vector<MdTokenRange> &out,
 		unsigned long long &generation) override
 	{
-		(void)lang; (void)budget_ms; (void)generation;
+		(void)lang; (void)budget_ms;
 		++m_fetches;
+		generation = m_generation;   // the key's generation: the scheme of the colors
 		for (size_t i = 0; i < lines.size(); ++i) {
 			out.push_back(MdTokenRange{0, 3, m_fg, 7, false, static_cast<uint32_t>(i)});
 		}
@@ -1383,7 +1386,10 @@ int look_fence_generation()
 		return 1;
 	}
 
-	doc.Invalidate(72); // a resize: the cache survives, no refetch (R30)
+	doc.Invalidate(72); // a resize: the cache survives, no refetch (R30); the
+	// fake answers the look's generation, so the key the first render stored
+	// (the render updates it from the answer) re-hits: the fetches stay 2,
+	// pinning the key-update path.
 	if (fake->m_fetches != 2) {
 		printf("FAILED look_fence_generation: resize refetched (%d fetches)\n",
 			fake->m_fetches);
@@ -1393,6 +1399,7 @@ int look_fence_generation()
 	}
 
 	probe->m_generation = 0x12345678ULL; // a scheme change
+	fake->m_generation = 0x12345678ULL;   // the new scheme answers its generation
 	fake->m_fg = 0x00ffff;               // the new scheme's rows
 	doc.Render(md, 80);
 	if (fake->m_fetches != 4) {
@@ -1404,6 +1411,12 @@ int look_fence_generation()
 	}
 	if (doc.Lines().size() < 3) {
 		printf("FAILED look_fence_generation: %zu lines\n", doc.Lines().size());
+		MdSetTokenSourceForTest(nullptr);
+		MdSetLookSourceForTest(nullptr);
+		return 1;
+	}
+	if (doc.Lines()[0].tokens < 0 || doc.Lines()[2].tokens < 0) {
+		printf("FAILED look_fence_generation: a fence line carries no group\n");
 		MdSetTokenSourceForTest(nullptr);
 		MdSetLookSourceForTest(nullptr);
 		return 1;
@@ -1426,6 +1439,96 @@ int look_fence_generation()
 	return 0;
 }
 
+// T3: the one view-wide contrast verdict of spec.md, Contrast (story
+// markdown-colorer-fences).  The look's batch verdict, keyed (viewer
+// background, scheme generation), decides for the whole view: a scheme whose
+// foregrounds fail 3:1 sends the fences to the plain code role and the prose
+// to the fork table - the same verdict both paths consult, printed once per
+// round.  A passing scheme sends the scheme colors to the fences: the
+// range's 24-bit foreground, the scheme's 4-bit row as the companion, the
+// underline bit on the far attribute (the printer's span pass re-applies
+// it).  A 4-bit scheme answers the 4-bit path: the scheme's fg4, no 3:1
+// check.
+int look_fence_contrast()
+{
+	EnsureTrueColor();
+	static const unsigned int kLight[10] = {0xd0d0d0, 0xd8d8d8, 0xe0e0e0, 0xe8e8e8, 0xf0f0f0,
+		0xf8f8f8, 0xd0d0ff, 0xffd0d0, 0xd0ffd0, 0xffffd0};
+	static const unsigned int kFail[10] = {0xd0d0d0, 0xd8d8d8, 0xe0e0e0, 0xe8e8e8, 0xf0f0f0,
+		0xf8f8f8, 0xd0d0ff, 0xffd0d0, 0x303030, 0xffffd0};
+	static const unsigned int kStyle[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	if (WriteOverrides("[markdown]\n", 9) != 0) {
+		return 1;
+	}
+	const uint64_t saved = SaveBackground();
+	SetBackground(0x101010);
+	const uint32_t fg = 0x123456;   // the region's row a fence range carries
+	const uint32_t fg4 = 9;         // the scheme's 4-bit row of the same region
+
+	// A passing scheme: the range paints the 24-bit foreground over the
+	// viewer background, the scheme's 4-bit row rides the low bits (a
+	// terminal that ignores RGB shows it), and the underline bit rides the
+	// far attribute for FinishRow's span pass.
+	FakeScheme(91, kLight, kStyle);
+	const uint64_t pass_range = MdRangeColor(fg, fg4, false);
+	if (pass_range != WithBack(TrueFore(fg) | fg4)) {
+		printf("FAILED look_fence_contrast: a passing range is 0x%llx, want 0x%llx\n",
+			(unsigned long long)pass_range,
+			(unsigned long long)WithBack(TrueFore(fg) | fg4));
+		SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+		return 1;
+	}
+	if (MdRangeColor(fg, fg4, true) != (pass_range | kUnderline)) {
+		printf("FAILED look_fence_contrast: an underlined range is 0x%llx, want 0x%llx\n",
+			(unsigned long long)MdRangeColor(fg, fg4, true),
+			(unsigned long long)(pass_range | kUnderline));
+		SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+		return 1;
+	}
+	printf("probe look_fence_contrast: verdict pass, fences 0x%llx, prose 0x%llx\n",
+		(unsigned long long)pass_range, (unsigned long long)MdRunColor(MD_ROLE_CODE));
+
+	// A scheme that fails 3:1 (row 8 at 0x303030), a new generation: the one
+	// verdict sends the fences to the plain code role and the prose to the
+	// fork table, and the fence's color is the code role's color - the same
+	// verdict, one recompute.
+	FakeScheme(92, kFail, kStyle);
+	const uint64_t plain = MdRunColor(MD_ROLE_CODE);
+	const uint64_t fail_range = MdRangeColor(fg, fg4, false);
+	if (fail_range != plain || plain != WantRgb(MD_ROLE_CODE)) {
+		printf("FAILED look_fence_contrast: a failing scheme gives fences 0x%llx prose 0x%llx, want the fork table 0x%llx\n",
+			(unsigned long long)fail_range, (unsigned long long)plain,
+			(unsigned long long)WantRgb(MD_ROLE_CODE));
+		SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+		return 1;
+	}
+	if (MdRangeColor(fg, fg4, true) != (plain | kUnderline)) {
+		printf("FAILED look_fence_contrast: a failing underlined range is 0x%llx, want 0x%llx\n",
+			(unsigned long long)MdRangeColor(fg, fg4, true),
+			(unsigned long long)(plain | kUnderline));
+		SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+		return 1;
+	}
+	printf("probe look_fence_contrast: verdict fail, fences 0x%llx = prose 0x%llx\n",
+		(unsigned long long)fail_range, (unsigned long long)plain);
+
+	// A 4-bit scheme (the same failing rows): the 4-bit path answers - the
+	// scheme's fg4, no 3:1 check.
+	EnsureNoTrueColor();
+	if (MdRangeColor(fg, fg4, false) != WithBack(fg4)) {
+		printf("FAILED look_fence_contrast: the 4-bit path gives 0x%llx, want 0x%llx\n",
+			(unsigned long long)MdRangeColor(fg, fg4, false),
+			(unsigned long long)WithBack(fg4));
+		SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+		EnsureTrueColor();
+		return 1;
+	}
+	EnsureTrueColor();
+	SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+	printf("ok look_fence_contrast: one view-wide verdict, fences with the prose\n");
+	return 0;
+}
+
 const Case s_cases[] = {
 	{"look_first_call", look_first_call},
 	{"look_real_hrd", look_real_hrd},
@@ -1442,6 +1545,7 @@ const Case s_cases[] = {
 	{"tokens_v2_limits", tokens_v2_limits},
 	{"tokens_v2_v1_callers", tokens_v2_v1_callers},
 	{"look_fence_generation", look_fence_generation},
+	{"look_fence_contrast", look_fence_contrast},
 };
 } // namespace
 

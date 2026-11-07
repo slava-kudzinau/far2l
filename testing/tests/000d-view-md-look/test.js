@@ -42,11 +42,12 @@ TypeEscape()
 TypeFKey(3)
 ExpectString("left/fixture.md")
 
-// Session 1: with the plugin loaded the viewer shows the Colorer look: the
-// scheme's regions paint the runs and the scheme's style words underline them
-// (the harness runs a 16-color terminal, so the scheme is console.hrd - the
-// 4-bit path of the resolver, spec "Resolver order"; the truecolor rows are
-// the driver's `look_real_hrd`). The table draws with box characters.
+// Session 1: the harness runs a truecolor terminal (COLORTERM), so the scheme is
+// far2l.hrd, and the 3:1 batch verdict against the blue Viewer.Text fails
+// (markdown:EmText) - one verdict decides for the whole view (story
+// markdown-colorer-fences, spec Contrast): the roles take the fork table's RGB
+// defaults, without underline (the scheme rows are the driver's `look_real_hrd`).
+// The table draws with box characters.
 var h = ExpectString("Heading")
 CheckLook("heading", h.X, h.Y, 0x5fffff, true)
 var l = ExpectString("the link")
@@ -61,7 +62,7 @@ var q = ExpectString("quote text")
 CheckLook("quote", q.X, q.Y, 0xd7afaf, true)
 var it = ExpectString("item one")
 // The bullet of a list item sits two cells left of the text (spec, New roles).
-CheckLook("listmark", it.X - 2, it.Y, 0xffff00, true)
+CheckLook("listmark", it.X - 2, it.Y, 0xaf8787, true)
 CheckLook("body", it.X, it.Y, 0xffff00, true)
 var bd = ExpectString("───┼───")
 CheckLook("rule", bd.X, bd.Y, 0xaf8787, true)
