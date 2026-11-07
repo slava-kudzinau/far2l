@@ -1,7 +1,7 @@
 #!/bin/sh
 # Test of far2l/bootstrap/md-open.sh (story markdown-browser-github-look).
 # Checks the flags, the defaults file md-view.ini, the browser launch, hostile
-# file names and config values, and the vendored files. It needs only sh and
+# file names and config values, the vendored files and the page template. It needs only sh and
 # common tools (openssl for the sha384 case). It does not need the far2l binary.
 #
 # usage: sh testing/markdown/browser-page.sh
@@ -319,6 +319,22 @@ case_ini_browser_bad() {
     exit 0
 }
 
+# browser= may name a folder that ends in .app: on macOS it runs open -a with it.
+case_ini_browser_app_dir() {
+    fresh
+    if [ "$(uname -s)" != Darwin ]; then
+        echo "  ini_browser_app_dir: skipped, open -a is macOS only" >&2
+        exit 0
+    fi
+    mkdir "$d/Tool.app" || bad "mkdir"
+    write_ini '[View]' "browser=$d/Tool.app"
+    md --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc"
+    [ ! -s "$d/err" ] || bad "stderr: $(cat "$d/err")"
+    expect_open -a "$d/Tool.app" "$page"
+    exit 0
+}
+
 # --- --init-config and --print-association -----------------------------------
 
 case_init_config_writes() {
@@ -474,6 +490,25 @@ case_browser_no_shell() {
     exit 0
 }
 
+# A $BROWSER that starts with "-" is not a command name: it is ignored with one
+# line, and auto runs.
+case_browser_env_dash() {
+    fresh
+    mkdir "$d/bin" || bad "mkdir"
+    printf '#!/bin/sh\n: > "%s"\n' "$d/dashran" > "$d/bin/-mybrowser" || bad "write"
+    chmod 755 "$d/bin/-mybrowser" || bad "chmod"
+    PATH=$d/bin:$PATH
+    BROWSER=-mybrowser
+    export PATH BROWSER
+    md --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc for BROWSER=-mybrowser"
+    [ "$(stderr_lines)" = 1 ] || bad "want one stderr line for BROWSER=-mybrowser, got: $(cat "$d/err")"
+    [ ! -e "$d/dashran" ] || bad "the BROWSER value ran"
+    expect_open "$page"
+    unset BROWSER
+    exit 0
+}
+
 # --- hostile file names -----------------------------------------------------
 
 case_file_name_hostile() {
@@ -499,6 +534,170 @@ case_file_name_hostile() {
     md --no-open --out "$page" -dash.md
     [ "$rc" = 0 ] || bad "exit $rc for a name that starts with -"
     no_pwned
+    exit 0
+}
+
+# --- the page ---------------------------------------------------------------
+
+# line_of TEXT: sets ln to the number of the one line of the page that holds TEXT.
+line_of() {
+    ln=$(grep -n -F -- "$1" "$page" | cut -d: -f1)
+    [ "$(printf '%s\n' "$ln" | grep -c .)" = 1 ] || bad "want one line with [$1]"
+}
+
+# style_block_is ID FILE: the style element that starts with ID holds FILE, byte for byte at its start.
+style_block_is() {
+    sed -n -e "/^<style id=\"$1\"/,/^<\/style>\$/p" "$page" | sed -e '1d' -e '$d' > "$d/block" || return 1
+    n=$(wc -c < "$2" | tr -d ' ')
+    [ "$(wc -c < "$d/block" | tr -d ' ')" -ge "$n" ] || return 1
+    head -c "$n" "$d/block" | cmp -s - "$2"
+}
+
+case_page_has_github_css() {
+    fresh
+    md --no-open --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc"
+    for pair in gh-light:github-markdown-light.css gh-dark:github-markdown-dark.css \
+                hl-light:hljs-github.min.css hl-dark:hljs-github-dark.min.css; do
+        id=${pair%%:*}
+        f=${pair#*:}
+        [ "$(grep -c -F "<style id=\"$id\"" "$page")" = 1 ] || bad "want one <style id=\"$id\">"
+        style_block_is "$id" "$vendor/$f" || bad "style $id does not hold $f"
+    done
+    [ "$(grep -c -F '<style>' "$page")" = 0 ] || bad "the old bare style element is still there"
+    grep -qF '<style id="page">' "$page" || bad "no style for the page's own rules"
+    line_of '<style id="gh-light"'; a=$ln
+    line_of '<style id="gh-dark"'; b=$ln
+    line_of '<style id="hl-light"'; c=$ln
+    line_of '<style id="hl-dark"'; e=$ln
+    line_of '<style id="page">'; f=$ln
+    [ "$a" -lt "$b" ] && [ "$b" -lt "$c" ] && [ "$c" -lt "$e" ] && [ "$e" -lt "$f" ] \
+        || bad "style blocks are not in the order gh-light, gh-dark, hl-light, hl-dark, page"
+    grep -qF '<body class="markdown-body">' "$page" || bad "body has no markdown-body class"
+    grep -qF '<main id="content" class="markdown-body">' "$page" || bad "#content has no markdown-body class"
+    # A missing vendored file stops the run with exit 3 and no page.
+    for f in github-markdown-light.css github-markdown-dark.css hljs-github.min.css \
+             hljs-github-dark.min.css highlight.min.js; do
+        rm -rf "$d/missing"
+        mkdir "$d/missing" || bad "mkdir"
+        cp "$md_open" "$d/missing/md-open.sh" || bad "cp script"
+        for g in marked.min.js github-markdown-light.css github-markdown-dark.css \
+                 hljs-github.min.css hljs-github-dark.min.css highlight.min.js; do
+            [ "$g" = "$f" ] || cp "$vendor/$g" "$d/missing/" || bad "cp $g"
+        done
+        rm -f "$page"
+        sh "$d/missing/md-open.sh" --no-open --out "$page" "$sample" > "$d/out" 2> "$d/err"
+        rc=$?
+        [ "$rc" = 3 ] || bad "exit $rc without $f, want 3"
+        [ "$(cat "$d/err")" = "md-open: cannot find $f" ] || bad "stderr without $f: $(cat "$d/err")"
+        [ ! -e "$page" ] || bad "a page was written without $f"
+    done
+    exit 0
+}
+
+case_page_width_rules() {
+    fresh
+    md --no-open --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc"
+    for w in 60 70 80; do
+        grep -qF "html[data-width=\"$w\"] #content { width: $w% }" "$page" \
+            || bad "no width rule for $w"
+    done
+    grep -qF '#content { max-width: none; margin: 0 auto; box-sizing: border-box }' "$page" \
+        || bad "no #content rule for max-width, margin and box-sizing"
+    exit 0
+}
+
+case_page_start_values() {
+    fresh
+    md --no-open --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc"
+    expect_tag 70 auto 0
+    grep -qxF '<meta name="far2l-md-key" content="w=70;t=auto;f=0">' "$page" \
+        || bad "no page key for the defaults"
+    rm -f "$page"
+    md --width 60 --theme light --no-open --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc for a flag run"
+    expect_tag 60 light 1
+    grep -qxF '<meta name="far2l-md-key" content="w=60;t=light;f=1">' "$page" \
+        || bad "no page key for a forced run"
+    rm -f "$page"
+    write_ini '[View]' 'width=80' 'theme=dark'
+    md --no-open --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc with ini"
+    expect_tag 80 dark 0
+    grep -qxF '<meta name="far2l-md-key" content="w=80;t=dark;f=0">' "$page" \
+        || bad "no page key from the ini file"
+    grep -qF "getAttribute('data-start-width')" "$page" || bad "the page script does not read data-start-width"
+    grep -qF "getAttribute('data-start-theme')" "$page" || bad "the page script does not read data-start-theme"
+    exit 0
+}
+
+case_page_policy_unchanged() {
+    fresh
+    md --no-open --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc"
+    grep -qxF "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline'; img-src data: file:\">" "$page" \
+        || bad "the page policy changed"
+    [ "$(grep -c -F 'Content-Security-Policy' "$page")" = 1 ] || bad "want one policy"
+    [ "$(grep -c -F 'unsafe-eval' "$page")" = 0 ] || bad "the page allows eval"
+    [ "$(grep -c -F '<link' "$page")" = 0 ] || bad "the page has a link element"
+    [ "$(grep -c -i -F '<script src' "$page")" = 0 ] || bad "the page has a script with src"
+    grep -qF "var MERMAID_URL = 'https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.min.js';" "$page" \
+        || bad "the mermaid URL changed"
+    grep -qF "var MERMAID_SRI = 'sha384-HHW54r639fK42Ip0coGF3mz8oSiGn0eEoWNTLs75X7H63pLSDBa0Tqs0RwGmLlXE';" "$page" \
+        || bad "the mermaid SRI hash changed"
+    exit 0
+}
+
+case_page_narrow_rule() {
+    fresh
+    md --no-open --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc"
+    line_of 'html[data-width="80"] #content { width: 80% }'; w80=$ln
+    line_of '@media (max-width: 699px) {'; media=$ln
+    line_of 'html[data-width] #content { width: 100% }'; narrow=$ln
+    [ "$media" -gt "$w80" ] && [ "$narrow" -gt "$media" ] \
+        || bad "the narrow rule is not after the width rules"
+    exit 0
+}
+
+case_page_hljs_after_marked() {
+    fresh
+    md --no-open --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc"
+    line_of '<script type="text/markdown" id="md">'; l_md=$ln
+    line_of 'marked v18.1.3'; l_marked=$ln
+    line_of 'Highlight.js v11.11.1'; l_hl=$ln
+    line_of "  var MERMAID_URL = 'https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.min.js';"; l_page=$ln
+    [ "$l_md" -lt "$l_marked" ] && [ "$l_marked" -lt "$l_hl" ] && [ "$l_hl" -lt "$l_page" ] \
+        || bad "the scripts are not in the order text, marked, highlight, page"
+    line_of 'content.innerHTML = marked.parse(src);'; l_parse=$ln
+    line_of 'hljs.highlightElement(code)'; l_hlel=$ln
+    [ "$l_parse" -lt "$l_hlel" ] || bad "highlight runs before marked renders the text"
+    exit 0
+}
+
+case_page_mermaid_theme_hook() {
+    fresh
+    md --no-open --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc"
+    for s in \
+        'function usedTheme() {' \
+        'function applyTheme() {' \
+        'function drawDiagrams(list) {' \
+        'function redraw(list) {' \
+        "theme: usedTheme() === 'dark' ? 'dark' : 'default'" \
+        "matchMedia('(prefers-color-scheme: dark)')" \
+        "securityLevel: 'strict'" \
+        "it.pre.removeAttribute('data-processed');" \
+        'it.pre.textContent = it.src;' \
+        'mermaid.run(' \
+        "themeQuery.addEventListener('change', onSystemTheme);" \
+        "if (themeSetting() === 'auto') applyTheme();" \
+        'if (mermaidReady) redraw(items);'; do
+        grep -qF -- "$s" "$page" || bad "no [$s] in the page"
+    done
     exit 0
 }
 
@@ -546,9 +745,11 @@ case_vendor_sha384() {
 }
 
 for c in flags_ok flag_width_bad flag_theme_bad flag_width_missing \
-         ini_valid ini_hostile ini_missing ini_browser_bad \
+         ini_valid ini_hostile ini_missing ini_browser_bad ini_browser_app_dir \
          init_config_writes init_config_keeps print_association_ok \
-         browser_no_shell file_name_hostile \
+         browser_no_shell browser_env_dash file_name_hostile \
+         page_has_github_css page_width_rules page_start_values page_policy_unchanged \
+         page_narrow_rule page_hljs_after_marked page_mermaid_theme_hook \
          vendor_no_close_tag vendor_sha384; do
     run "$c"
 done

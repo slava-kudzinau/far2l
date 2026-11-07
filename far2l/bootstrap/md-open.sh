@@ -14,7 +14,8 @@
 # Writes one page (the Markdown text and marked inline; mermaid from a pinned
 # CDN script with an SRI hash) and opens it with the system opener. The page
 # goes to ${TMPDIR:-/tmp}/far2l-md-<pid>.html unless --out names another file.
-# marked.min.js is read from this script's folder, or from MARKED_JS.
+# marked.min.js is read from this script's folder, or from MARKED_JS. The GitHub
+# CSS and the highlight.js files are read from this script's folder too.
 #
 # Defaults come from ${XDG_CONFIG_HOME:-$HOME/.config}/far2l/settings/md-view.ini,
 # section [View], keys width, theme and browser. A flag beats the file. No value
@@ -237,7 +238,7 @@ open_page() {
     # auto: a single-word $BROWSER, then open, then xdg-open.
     if [ -n "${BROWSER:-}" ]; then
         case $BROWSER in
-            *[!A-Za-z0-9_./+-]*)
+            -*|*[!A-Za-z0-9_./+-]*)
                 echo 'md-open: BROWSER is not a single command name, ignored' >&2 ;;
             *)
                 if command -v "$BROWSER" >/dev/null 2>&1; then
@@ -368,6 +369,14 @@ if [ ! -r "$marked_js" ]; then
     echo 'md-open: cannot find marked.min.js' >&2
     exit 3
 fi
+# The page inlines these vendored files, so each must be there before a page is written.
+for f in github-markdown-light.css github-markdown-dark.css hljs-github.min.css \
+         hljs-github-dark.min.css highlight.min.js; do
+    if [ ! -f "$self_dir/$f" ] || [ ! -r "$self_dir/$f" ]; then
+        echo "md-open: cannot find $f" >&2
+        exit 3
+    fi
+done
 
 # Folder of the Markdown file as a file:// URL for <base href>.
 dir=$(cd "$(dirname -- "$file")" && pwd) || exit 2
@@ -389,29 +398,38 @@ bom=$(printf '\357\273\277')
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline'; img-src data: file:">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 HTML
+    printf '<meta name="far2l-md-key" content="w=%s;t=%s;f=%s">\n' "$width" "$theme" "$forced"
     printf '<base href="%s">\n' "$base_url"
     printf '<title>%s</title>\n' "$title"
+    # The vendored files go in as they are. Each pair is switched by its media
+    # attribute; the page script sets it, and the values here are the start.
+    printf '<style id="gh-light" media="all">\n'
+    cat "$self_dir/github-markdown-light.css"
+    printf '\n</style>\n<style id="gh-dark" media="not all">\n'
+    cat "$self_dir/github-markdown-dark.css"
+    printf '\n</style>\n<style id="hl-light" media="all">\n'
+    cat "$self_dir/hljs-github.min.css"
+    printf '\n</style>\n<style id="hl-dark" media="not all">\n'
+    cat "$self_dir/hljs-github-dark.min.css"
+    printf '\n</style>\n'
     cat <<'HTML'
-<style>
-:root { color-scheme: light dark; }
-body { max-width: 50em; margin: 2em auto; padding: 0 1em; font: 16px/1.5 system-ui, -apple-system, "Helvetica Neue", sans-serif; }
-pre { overflow-x: auto; padding: 0.75em; border-radius: 6px; background: #f2f2f2; }
-pre.mermaid[data-processed] { background: none; text-align: center; }
-code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; }
-.mermaid-error { color: #b00020; font-size: 0.85em; text-align: left; }
-table { border-collapse: collapse; }
-th, td { border: 1px solid #bbb; padding: 0.3em 0.6em; text-align: left; }
-@media (prefers-color-scheme: dark) {
-  body { background: #1e1e1e; color: #e4e4e4; }
-  pre { background: #2a2a2a; }
-  th, td { border-color: #555; }
-  a { color: #7ab8ff; }
-  .mermaid-error { color: #ff8a8a; }
+<style id="page">
+body { margin: 0; padding: 2em 16px; }
+#content { max-width: none; margin: 0 auto; box-sizing: border-box }
+html[data-width="60"] #content { width: 60% }
+html[data-width="70"] #content { width: 70% }
+html[data-width="80"] #content { width: 80% }
+@media (max-width: 699px) {
+  html[data-width] #content { width: 100% }
 }
+pre.mermaid { background: none; }
+pre.mermaid[data-processed] { text-align: center; overflow-x: auto; }
+.mermaid-error { color: #cf222e; color: light-dark(#cf222e, #ff7b72); font-size: 0.85em; text-align: left; }
+.markdown-body pre code.hljs { padding: 0; background: transparent; }
 </style>
 </head>
-<body>
-<main id="content"></main>
+<body class="markdown-body">
+<main id="content" class="markdown-body"></main>
 <script type="text/markdown" id="md">
 HTML
     # The text cannot end its script element or open a comment there. Backslashes
@@ -421,11 +439,17 @@ HTML
     printf '\n</script>\n<script>\n'
     cat "$marked_js"
     printf '\n</script>\n<script>\n'
+    cat "$self_dir/highlight.min.js"
+    printf '\n</script>\n<script>\n'
     cat <<'JS'
 (function () {
   'use strict';
   var MERMAID_URL = 'https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.min.js';
   var MERMAID_SRI = 'sha384-HHW54r639fK42Ip0coGF3mz8oSiGn0eEoWNTLs75X7H63pLSDBa0Tqs0RwGmLlXE';
+  var root = document.documentElement;
+  var themeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  var items = [];
+  var mermaidReady = false;
   function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -435,6 +459,46 @@ HTML
     .split('<\\!--').join('<!--')
     .split('<\\/').join('</')
     .split('\\\\').join('\\');
+  // A start value is used only if it is an accepted word.
+  function accepted(v, words, dflt) {
+    return words.indexOf(v) >= 0 ? v : dflt;
+  }
+  root.setAttribute('data-width', accepted(root.getAttribute('data-start-width'), ['60', '70', '80'], '70'));
+  root.setAttribute('data-theme', accepted(root.getAttribute('data-start-theme'), ['light', 'dark', 'auto'], 'auto'));
+  // The choice in data-theme: light, dark or auto.
+  function themeSetting() {
+    var t = root.getAttribute('data-theme');
+    return t === 'light' || t === 'dark' ? t : 'auto';
+  }
+  // The theme in use, dark or light. Auto follows the system.
+  function usedTheme() {
+    var t = themeSetting();
+    if (t === 'auto') return themeQuery.matches ? 'dark' : 'light';
+    return t;
+  }
+  function setMedia(id, value) {
+    var el = document.getElementById(id);
+    if (el) el.setAttribute('media', value);
+  }
+  // Enables the GitHub style and the highlight theme of the used theme, sets
+  // color-scheme, and draws the diagrams again in that theme.
+  function applyTheme() {
+    var dark = usedTheme() === 'dark';
+    setMedia('gh-light', dark ? 'not all' : 'all');
+    setMedia('gh-dark', dark ? 'all' : 'not all');
+    setMedia('hl-light', dark ? 'not all' : 'all');
+    setMedia('hl-dark', dark ? 'all' : 'not all');
+    root.style.colorScheme = dark ? 'dark' : 'light';
+    if (mermaidReady) redraw(items);
+  }
+  function onSystemTheme() {
+    if (themeSetting() === 'auto') applyTheme();
+  }
+  if (themeQuery.addEventListener) {
+    themeQuery.addEventListener('change', onSystemTheme);
+  } else if (themeQuery.addListener) {
+    themeQuery.addListener(onSystemTheme);
+  }
   marked.use({
     renderer: {
       // Raw HTML in the file is shown as text, never as markup.
@@ -455,13 +519,25 @@ HTML
       a.removeAttribute('href');
     }
   });
+  // Code with a known language gets highlight.js. A block with no language, with
+  // an unknown one, or a mermaid block stays plain. An error leaves it plain.
+  Array.prototype.forEach.call(content.querySelectorAll('pre > code'), function (code) {
+    var m = /(?:^|\s)language-(\S+)/.exec(code.className || '');
+    if (!m || m[1] === 'mermaid') return;
+    try {
+      if (window.hljs && hljs.getLanguage(m[1])) hljs.highlightElement(code);
+    } catch (e) {
+      // The plain block stays.
+    }
+  });
 
   // The text is shown now. Mermaid is added by a script element created here, so
   // a slow or blocked CDN cannot hide the text. Its load or its error decides how
   // the diagrams are shown.
-  var items = Array.prototype.map.call(content.querySelectorAll('pre.mermaid'), function (pre) {
+  items = Array.prototype.map.call(content.querySelectorAll('pre.mermaid'), function (pre) {
     return { pre: pre, src: pre.textContent };
   });
+  applyTheme();
   if (!items.length) return;
   var s = document.createElement('script');
   s.src = MERMAID_URL;
@@ -471,6 +547,7 @@ HTML
     if (typeof mermaid === 'undefined') {
       items.forEach(function (it) { showCode(it.pre, it.src, null); });
     } else {
+      mermaidReady = true;
       drawDiagrams(items);
     }
   };
@@ -497,8 +574,7 @@ HTML
   }
 
   function drawDiagrams(list) {
-    var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    mermaid.initialize({ startOnLoad: false, securityLevel:'strict', theme: dark ? 'dark' : 'default' });
+    mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: usedTheme() === 'dark' ? 'dark' : 'default' });
     // Each diagram is parsed alone first, so a broken one shows its error and the
     // others still draw.
     var parsed = list.map(function (it) {
@@ -517,6 +593,17 @@ HTML
         });
       });
     }).catch(function (e) { console.error(e); });
+  }
+
+  // Draws each diagram again in the used theme. The block gets its source text
+  // back and loses its earlier drawing, then drawDiagrams runs mermaid on it.
+  function redraw(list) {
+    list.forEach(function (it) {
+      it.pre.className = 'mermaid';
+      it.pre.removeAttribute('data-processed');
+      it.pre.textContent = it.src;
+    });
+    drawDiagrams(list);
   }
 })();
 JS
