@@ -1,46 +1,47 @@
 ---
-description: The viewer gets fence token classes from the Colorer plugin through a small C export, located by dlopen. No new link into the Colorer library.
+description: The core reaches the Colorer plugin through one C export and dlopen, not a link.
 status: accepted
 date: 2026-11-07
 ---
 
-# ADR-008: Colorer plugin export for fence tokens
+# ADR-008: The Colorer plugin export, not a link
 
 ## Context
 
-- Fenced code blocks show in one plain code color. The owner asked for syntax colors: keywords, strings, comments and numbers get their own colors, and the user can set them in `settings/markdown-colors.ini`.
-- The Colorer plugin already parses code with the HRC scheme catalog, and it is loaded by default. The viewer needs the token classes of a fence line, not the colors.
-- The Colorer library sits behind libxml2. Linking the core against it adds a second heavy dependency to `far2l` itself.
+- Fenced code blocks showed one flat color. The owner asked for keyword, string, comment and number colors, from the Colorer plugin syntax schemes.
+- The Colorer plugin owns the HRC schemes and the catalog. The core does not link the Colorer library today.
 
 ## Decision
 
-The core reaches Colorer through one C export and `dlfcn`, not a link. The core never links the Colorer library or libxml2.
+The core reaches the Colorer plugin through one C export and `dlopen`/`dlsym`.
 
-- The plugin exports `ColorerTokenizeV1(lang, lines, count, emit, ctx, deadline_ms)`. It parses the lines with the shared `FarEditorSet` and emits one event per region: `(line, start, end, token_class)`. A token class is `Keyword`, `String`, `Comment` or `Number`, mapped from the region by the region parents. The export reads no colors.
-- `MdColorer` in `far2l/src/markdown/` finds the loaded module by the exact path far2l passed to its own `dlopen` (the `PluginManager` answers with `GetModuleName`), then reopens it with `RTLD_NOLOAD` and resolves the export. The module stays the one the process already loaded: one catalog copy, no second parser.
-- `MdTokenSource` (in `MdColorer.hpp`) is the interface the render uses: `Tokenize(lang, lines, budget_ms, out)` and `Ready()`. A test source replaces it through `MdSetTokenSourceForTest`, and `MdGetTokenSource` prefers it when one is set; the plugin source is the default.
-- When no plugin is loaded, `Tokenize` returns false and the fence keeps the plain code role. The viewer never blocks on the plugin.
+- The plugin exports `ColorerTokenizeV1` (`plugins/colorer/src/pcolorer2/ColorerExport.cpp`): a language name, wide-character lines, and a deadline in microseconds. It emits cells: `start` and `end` (1-based, inclusive) and a `class` number. The return is 0, -1 (no plugin), -2 (unknown language), -3 (fatal parse).
+- The core loads it in `MdColorer` (`far2l/src/markdown/MdColorer.cpp`): `dlopen` on the first fence, `dlsym` one time. No new link library.
+
+The four token classes map to the roles keyword, string, comment and number (`MdRoleForTokenClass` in `far2l/src/markdown/MdPalette.cpp`). Every other class keeps the plain code role.
 
 ## Consequences
 
-- No new third-party link in the core. `plugins/colorer/CMakeLists.txt` adds one source file.
-- The first parse of a language pays the scheme file load (tens of ms). `Ready()` warms the spec's languages before the render budget starts.
-- The four new roles (`keyword`, `string`, `comment`, `number`) have ini keys and RGB defaults in `MdPalette.cpp`. Cells past the last token of a group keep the code role.
+- No new link to the Colorer library and to libxml2: the core keeps its load-time shape.
+- One catalog copy: the plugin ships the schemes, and the viewer reads them through the plugin.
+- No hidden editor: the viewer does not build an editor for the fence.
+- Fallback: with no plugin, every fence shows the plain code role.
+- The export is a data contract (see [markdown data](../features/markdown/markdown.data.md)). A signature change needs a new version name.
 
 ## Rejected alternatives
 
-### Link Colorer into the core
+### Link the Colorer library to the core
 
-**Why rejected:** it adds the Colorer library and libxml2 to every far2l binary, even when no Markdown file is open.
+**Why rejected:** the core gains a second heavy link (the Colorer library and libxml2), and every package must carry both.
 
-### Open a hidden editor per fence
+### A hidden editor
 
-**Why rejected:** one editor per fence is heavy, and the editor's own draw path is not what the viewer needs.
+**Why rejected:** `FarEditor::init` builds a full editor, with menu and file read, for every file view.
 
 ### A helper process
 
-**Why rejected:** one more process to start, feed and keep alive, for data the already-loaded plugin can answer in one call.
+**Why rejected:** one process per view, a startup cost, and a wide-character IPC protocol.
 
 ### HRC data with a new tokenizer
 
-**Why rejected:** a second tokenizer over the catalog duplicates Colorer's parser for a smaller result.
+**Why rejected:** the core would parse the catalog and the scheme XML, and the result differs from the plugin colors.
