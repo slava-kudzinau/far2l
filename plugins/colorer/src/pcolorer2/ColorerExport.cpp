@@ -366,10 +366,10 @@ class CellHandler : public RegionHandler
 	std::chrono::steady_clock::time_point _deadline;
 	TextParser* _parser;
 	bool _stopped;
-	// One open block scheme: the cell it opened (index into _cells, -1 when
-	// the capacity was spent), so leaveScheme can close the span.
-	struct Frame { int cell; };
-	std::vector<Frame> _frames;
+	// One open block scheme per entry: the cell it opened (index into
+	// _cells, -1 when the capacity was spent), so leaveScheme can close
+	// the span.
+	std::vector<int> _frames;
 
 	void CheckDeadline()
 	{
@@ -445,16 +445,16 @@ public:
 		if (cell >= 0) {
 			WriteCell(region, start, end);
 		}
-		_frames.push_back({cell});
+		_frames.push_back(cell);
 		CheckDeadline();
 	}
 
 	void leaveScheme(size_t, UnicodeString*, int, int end, const Region*, const Scheme*) override
 	{
 		if (!_frames.empty()) {
-			const Frame& f = _frames.back();
-			if (f.cell >= 0) {
-				_cells[static_cast<size_t>(f.cell) * V2_WORDS + 1] =
+			const int cell = _frames.back();
+			if (cell >= 0) {
+				_cells[static_cast<size_t>(cell) * V2_WORDS + 1] =
 					static_cast<uint64_t>(end); // the block closed at `end`
 			}
 			_frames.pop_back();
@@ -481,9 +481,10 @@ SHAREDSYMBOL int ColorerTokenizeV2(int abi, const wchar_t* language, const wchar
 		return -2; // a larger abi answers -2 (the shape is fixed, ADR-008 precedent)
 	}
 	// The plugin's viewer session lives on: it keeps the parser factory
-	// (the loaded catalog) alive between calls (R48).
+	// (the loaded catalog) alive between calls (R48).  The export never
+	// creates it: the first call answers a code (the look export's shape).
 	if (editorSet == nullptr) {
-		editorSet = new FarEditorSet();
+		return -1; // no FarEditorSet yet: no catalog
 	}
 	editorSet->viewerEvent(0, nullptr); // prime viewer
 	ParserFactory* factory = editorSet->GetParserFactory();

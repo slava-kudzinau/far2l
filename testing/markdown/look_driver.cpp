@@ -552,7 +552,7 @@ int look_bridge_real()
 // regions with no class (plain code role, spec States).
 const wchar_t* const kJsFence[] = {
 	L"function tailSum(a, b) {",
-	L"  const s = \"lit\" + 42 * true;",
+	L"  const s = \"\\lit\\n\" + 42 * true;",
 	L"  tailSum; // note",
 };
 constexpr int kJsFenceLines = 3;
@@ -591,7 +591,9 @@ V2Out CallV2(const wchar_t* const* lines, int n, int budget_ms = 5000, int capac
 }
 
 // One expectation: a cell covering `col` of the one-line call, its 24-bit
-// foreground, its 4-bit foreground, its style word.
+// foreground, its 4-bit foreground, its style word.  The look columns are the
+// active scheme's row: `fg`/`style` are far2l.hrd's (--rgb; the console
+// scheme's rows carry no style), `fg4` console default.hrd's (no --rgb).
 struct V2Want
 {
 	int line;
@@ -599,34 +601,30 @@ struct V2Want
 	const wchar_t* what;
 	uint64_t fg;   // the far2l.hrd row (--rgb)
 	uint64_t fg4;  // the console scheme's 4-bit row (no --rgb)
-	uint64_t style;
+	uint64_t style; // far2l.hrd's style word (the console rows carry none)
 };
 
-// One expectation, by index into the table below: the last cell covering
-// `col` of a one-line call carries the wanted 24-bit foreground, the
-// scheme's 4-bit foreground, the style word, and three zeros.  The active
-// scheme decides which side is measured: --rgb runs far2l.hrd (the table's
-// 24-bit column), without it console default.hrd (the table's 4-bit
-// column).  The companions are the same scheme through the palette's
-// quantize: far2l.hrd's 24-bit value under the 16-color scheme, the
-// console row expanded back to 24 bits under the rgb scheme.
-bool Expect(const V2Out& out, int idx, int col, const wchar_t* what)
+// One expectation, by a row of the table below: the last cell covering the
+// row's column of a one-line call carries the row's 24-bit foreground, the
+// scheme's 4-bit foreground, the row's style word, and three zeros.  The
+// active scheme decides which side is measured: --rgb runs far2l.hrd (the
+// row's 24-bit and style columns), without it console default.hrd (the row's
+// 4-bit column).  The companions are the same scheme through the palette's
+// quantize: far2l.hrd's 24-bit value under the 16-color scheme, the console
+// row expanded back to 24 bits under the rgb scheme, both indexed by row.
+bool Expect(const V2Out& out, int idx, const V2Want& want)
 {
-	// 0 keyword, 1 function, 2 keyword2, 3 string, 4 number, 5 operator,
-	// 6 constant, 7 comment (far2l.hrd rows, console default.hrd rows).
-	static const uint64_t s_rgb[] = {
-		0xffffff, 0x6060f0, 0xffffff, 0x88ee88, 0x00e020, 0xe0e0c0, 0xa030ff, 0x696989,
-	};
-	static const uint64_t s_rgb4[] = {15, 9, 15, 15, 10, 15, 13, 9};
-	static const uint64_t s_console4[] = {15, 11, 15, 14, 10, 15, 11, 3};
+	static const uint64_t s_rgb4[] = {15, 9, 15, 15, 14, 10, 15, 13, 9};
 	static const uint64_t s_console24[] = {
-		0xffffff, 0x55ffff, 0xffffff, 0xffff55, 0x55ff55, 0xffffff, 0x55ffff, 0x00aaaa,
+		0xffffff, 0x55ffff, 0xffffff, 0xffff55, 0x00aaaa, 0x55ff55, 0xffffff, 0x55ffff,
+		0x00aaaa,
 	};
-	const uint64_t want_fg = g_rgb ? s_rgb[idx] : s_console24[idx];
-	const uint64_t want_fg4 = g_rgb ? s_rgb4[idx] : s_console4[idx];
-	const uint64_t* cell = out.Cover(col);
+	const uint64_t want_fg = g_rgb ? want.fg : s_console24[idx];
+	const uint64_t want_fg4 = g_rgb ? s_rgb4[idx] : want.fg4;
+	const uint64_t want_style = g_rgb ? want.style : 0;
+	const uint64_t* cell = out.Cover(want.col);
 	if (cell == nullptr) {
-		printf("FAILED tokens_v2: %S: no cell covers col %d\n", what, col);
+		printf("FAILED tokens_v2: %S: no cell covers col %d\n", want.what, want.col);
 		for (int i = 0; i < out.Count(); ++i) {
 			const uint64_t* c = out.At(i);
 			printf("  cell %d: [%llu,%llu] 0x%llX/%llu style %llu\n", i,
@@ -636,17 +634,18 @@ bool Expect(const V2Out& out, int idx, int col, const wchar_t* what)
 		}
 		return false;
 	}
-	if (cell[2] != want_fg || cell[3] != want_fg4 || cell[4] != 0
+	if (cell[2] != want_fg || cell[3] != want_fg4 || cell[4] != want_style
 		|| cell[5] != 0 || cell[6] != 0 || cell[7] != 0) {
-		printf("FAILED tokens_v2: %S col %d is [0x%llX/%llu style %llu %llu,%llu,%llu], want [0x%llX/%llu style 0 0,0,0]\n",
-			what, col,
+		printf("FAILED tokens_v2: %S col %d is [0x%llX/%llu style %llu %llu,%llu,%llu], want [0x%llX/%llu style %llu 0,0,0]\n",
+			want.what, want.col,
 			(unsigned long long)cell[2], (unsigned long long)cell[3],
 			(unsigned long long)cell[4], (unsigned long long)cell[5],
 			(unsigned long long)cell[6], (unsigned long long)cell[7],
-			(unsigned long long)want_fg, (unsigned long long)want_fg4);
+			(unsigned long long)want_fg, (unsigned long long)want_fg4,
+			(unsigned long long)want_style);
 		return false;
 	}
-	printf("probe %S: [0x%llX/%llu style %llu] under %s\n", what,
+	printf("probe %S: [0x%llX/%llu style %llu] under %s\n", want.what,
 		(unsigned long long)cell[2], (unsigned long long)cell[3],
 		(unsigned long long)cell[4], g_rgb ? "far2l.hrd" : "console default.hrd");
 	return true;
@@ -666,18 +665,21 @@ int tokens_v2()
 	}
 	// The rows the two schemes give (far2l.hrd / console default.hrd).  The
 	// function name's console fg is def:Text's #B: def:Function's assign
-	// leaves the fore unset, the F4 chain falls to def:Text.
+	// leaves the fore unset, the F4 chain falls to def:Text.  The string's
+	// escape (`\n` in the literal) is the one row with a style word:
+	// far2l.hrd's def:StringContent writes style='1'.
 	static const V2Want s_want[] = {
 		{0, 4,  L"keyword",    0xffffff, 15, 0}, // def:Keyword
 		{0, 12, L"function",   0x6060f0, 11, 0}, // def:Function
 		{1, 5,  L"keyword2",   0xffffff, 15, 0}, // def:Keyword (const)
-		{1, 15, L"string",     0x88ee88, 14, 0}, // def:String (content)
-		{1, 21, L"number",     0x00e020, 10, 0}, // def:NumberDec -> def:Number (#A)
-		{1, 24, L"operator",   0xe0e0c0, 15, 0}, // def:Symbol (*)
-		{1, 27, L"constant",   0xa030ff, 11, 0}, // def:BooleanConstant
+		{1, 15, L"string",     0x88ee88, 14, 0}, // def:String (the whole literal)
+		{1, 18, L"escape",     0x999911,  3, 1}, // def:StringContent (\n)
+		{1, 24, L"number",     0x00e020, 10, 0}, // def:NumberDec -> def:Number (#A)
+		{1, 27, L"operator",   0xe0e0c0, 15, 0}, // def:Symbol (*)
+		{1, 30, L"constant",   0xa030ff, 11, 0}, // def:BooleanConstant
 		{2, 15, L"comment",    0x696989,  8, 0}, // def:Comment
 	};
-	for (int w = 0; w < 8; ++w) {
+	for (int w = 0; w < 9; ++w) {
 		const V2Want& want = s_want[w];
 		V2Out out = CallV2(&kJsFence[want.line], 1);
 		if (out.rc < 1) {
@@ -688,7 +690,7 @@ int tokens_v2()
 			printf("FAILED tokens_v2: generation=0 with a count\n");
 			return 1;
 		}
-		if (!Expect(out, w, want.col, want.what)) {
+		if (!Expect(out, w, want)) {
 			return 1;
 		}
 	}
@@ -708,7 +710,7 @@ int tokens_v2()
 				return 1;
 			}
 		}
-		if (!Expect(tail, 7, 15, L"comment")) {
+		if (!Expect(tail, 8, s_want[8])) {
 			return 1;
 		}
 		if (tail.Cover(4) != nullptr) {
