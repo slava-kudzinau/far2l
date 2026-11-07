@@ -49,6 +49,8 @@ md-open.sh --print-association
 | `--width 60\|70\|80` | The start width of the text column, in percent. A flag also makes the page ignore the saved page choice. |
 | `--theme light\|dark\|auto` | The start theme. Same rule for the saved page choice. |
 | `--browser B` | Replaces the `browser=` key for this run. `B` is `auto`, `firefox`, `chrome`, `safari`, or an absolute path to a program. A value that is not accepted gives one line on stderr, and the script uses `auto`. |
+| `--tree on\|off` | Tree mode for one run. `on` is the default. `off` gives the page of one file, with no scan. The same as the `tree=` key. |
+| `--list-tree <file.md>` | Prints the encoded root on line 1, then one line `<state> <ENC>` per tree file in tree order. `state` is `page`, `big` or `cut`. A last line `cap N` shows when the cap stopped the scan. Writes no page and opens nothing. Exit 0. In one-file mode it prints line 1 and `off`. |
 | `--no-cache` | Builds the page again, also if a current page exists. |
 | `--init-config` | Writes a commented sample `md-view.ini` if there is no file, and prints its path. An existing file, link or other entry is not changed. Exit 0. |
 | `--` | The next argument is the file name, also if it starts with `-`. |
@@ -73,6 +75,9 @@ The file is `${XDG_CONFIG_HOME:-$HOME/.config}/far2l/settings/md-view.ini`. It i
 
 - Only the section `[View]` is read. A line that starts with `#` or `;` is a comment. Spaces around `=` and a CR at the line end are ignored. The last valid line of a key wins.
 - `width=` is `60`, `70` or `80`. `theme=` is `light`, `dark` or `auto`. `browser=` is `auto`, `firefox`, `chrome`, `safari`, or an absolute path to a program (on macOS also a `.app` folder).
+- `tree=` is `on` (default) or `off`. `root=` is `dir` (default) or `repo`.
+- `root=dir` is the folder of the opened file. `root=repo` is the nearest folder upward with `.git`, else the folder of the file. The walk stops at `$HOME` or `/`.
+- `tree_depth=` is a number from 1 to 12, default 6. `tree_max_files=` is a number from 1 to 2000, default 500. A number over the ceiling gives the ceiling. A value that is not accepted is ignored.
 - A value that is not accepted is ignored, and the next source applies. A `browser=` value that is not accepted also gives one line on stderr.
 - The order of use is the saved page choice, then the file, then the built-in defaults: width 70, theme `auto`, browser `auto`. A flag replaces the file value for one run. The saved page choice does not apply to a page that a flag started (see "The page").
 - The script never runs a value from the file. A width or a theme reaches the page only if it equals an accepted word.
@@ -98,20 +103,42 @@ The script starts each command with `exec` in a subshell. The page path is one a
 
 The start values are the attributes `data-start-width` and `data-start-theme` of `html`. They can hold only an accepted word. A flag that sets the width or the theme adds `data-forced="1"`.
 
+### The tree page
+
+Tree mode is on by default. It shows the opened file and the other Markdown files under the root, in one page, with a file tree on the left.
+
+| Part | Rule |
+|---|---|
+| Scan | `find` runs from the root. It skips `.git`, `node_modules`, hidden folders and hidden files, does not follow symlinks, and stops at `tree_depth` and `tree_max_files`. Names with a control byte are skipped. Only `*.md` and `*.markdown` match, in any letter case. The opened file joins the scan even if it is a symlink. A scan failure exits 2 with one line. A root of `$HOME` or `/` gives the one-file page. The scan uses POSIX `sh`, `sed`, `awk`, `grep`, `find`, `ls`, `sort` and `cksum` only. |
+| Files in the page | Each tree file with state `page` goes in the page, in tree order. The opened file is first and counts last. A file over 1 MiB is `big`. A file that would take the Markdown text over 8 MiB is `cut`. A `big` or `cut` file stays in the tree only. |
+| Page contents | `<script type="text/markdown" id="md">` for the opened file. One `<script type="text/markdown" class="md-file" data-path="ENC">` per other file. A `<script type="text/plain" id="md-tree">` holds one `<state> <ENC>` line per tree file. |
+| Attributes on `html` | `data-tree="on"`, `data-root`, `data-files`, `data-cap`, `data-panel="open\|closed"`. The page uses a number only if it matches `^[0-9]+$`, and an `ENC` only if it matches `^[A-Za-z0-9._~/%-]*$`. |
+| Route | The page URL without a hash is the page. `#/ENC` shows that file. `#/ENC#FRAG` also scrolls to the anchor. Back and Forward move in the browser history. |
+| Links | The page script reads each link of the rendered text. A relative target is resolved against the file of the link. `%XX` is decoded once before the check. A target is in the root if no `..` segment leaves the root and it stays under the root as a real path. A target outside the root, an absolute path or a `file:` target shows as text with the note `not in this tree`. A link to a page file gets `href` = page URL `#/ENC` and the note is not added. A link to a `big` or `cut` file goes there, and that file shows its limit note. |
+| Raw HTML | Raw HTML shows as text in tree mode, as in one-file mode. |
+| Panel | Fixed on the left, full height, 260 px wide, own scroll. The root name at the top. Folders are `details` with the name in `summary`. Files are links. The folders on the path of the shown file are open. The shown file has `aria-current="page"` and the panel scrolls it into view. A `big` or `cut` file has a low-contrast style. At the cap the last line is `Showing the first N files.`. |
+| Toggle | One button at the top-left, at the right edge of the panel when open, at the left edge when closed. `aria-expanded` and `aria-controls`. The key `b` does the same, and follows the rule of the other keys. |
+| Saved state | `localStorage` key `far2l-md-tree` with `open` or `closed`, inside `try/catch`. No saved value gives `open`. `tree=off` removes the panel, and a saved value cannot bring it back. |
+| Width | `html` has `data-panel`. When the panel is open, `body` gets `padding-left` of 260 px and the gutter. The text column takes the width setting of the space that is left. |
+| Narrow window | Below 700 px the panel and its toggle are hidden, and `b` does nothing. |
+| Focus | After a click in the tree or on a link, the focus goes to `#content`. |
+| Print | The panel and its toggle are hidden. |
+| One-file mode | `tree=off` or `--tree off`, or a root of `$HOME` or `/`, gives the page of one file: no scan, no panel markup and no panel CSS. `html` has `data-tree="off"` and `data-tree-why="ini\|flag\|home\|slash"`. The popover shows why. |
+
 ### The page: look, gear and keys
 
 | Part | Rule |
 |---|---|
 | Look | The body has the class `markdown-body`. The page holds one light and one dark GitHub style, and one light and one dark highlight theme. The page script enables one of each pair with the `media` attribute. |
-| Width | `html` has `data-width` with 60, 70 or 80. The column is centered and has that width in percent. |
-| Narrow window | Below 700 px the column has the full width, and the gear is hidden. The keys still work, so `?` still opens the popover. |
+| Width | `html` has `data-width` with 60, 70 or 80. The column is centered and has that width in percent. With the tree panel open, the percent applies to the space on its right. |
+| Narrow window | Below 700 px the column has the full width, and the gear and the tree panel are hidden. The keys still work, so `?` still opens the popover. |
 | Theme | `html` has `data-theme` with `light`, `dark` or `auto`. `auto` follows `prefers-color-scheme` and changes with it. |
 | Gear | One low-contrast button, fixed in the top-right corner. It takes no layout space. It opens a popover. |
 | Popover | Width buttons 60, 70, 80. Theme buttons light, dark, auto. The keys. A line to paste into `md-view.ini`. A Reset button. A click outside or Esc closes it. |
-| Keys | `t` changes the theme in the order light, dark, auto. `w` changes the width in the order 60, 70, 80. `?` opens the popover. The page ignores a key with Ctrl, Alt or Meta held, and when a form field has the focus. |
-| Saved choice | The page saves the choice in `localStorage`, keys `far2l-md-width` and `far2l-md-theme`. Order of use: the saved choice (unless `data-forced`), then the start value. Reset removes the saved choice and applies the start values with no reload. |
+| Keys | `t` changes the theme in the order light, dark, auto. `w` changes the width in the order 60, 70, 80. `b` opens or closes the tree panel. `?` opens the popover. The page ignores a key with Ctrl, Alt or Meta held, and when a form field has the focus. |
+| Saved choice | The page saves the choice in `localStorage`, keys `far2l-md-width`, `far2l-md-theme` and `far2l-md-tree`. Order of use: the saved choice (unless `data-forced`), then the start value. Reset removes the saved choice and applies the start values with no reload. |
 | Storage blocked | If a read or write throws, the page still works. The popover then shows a notice and the lines to paste: `[View]`, `width=N`, `theme=T`, with the current values. |
-| Print | The gear and the popover are hidden. |
+| Print | The gear, the popover, the tree panel and its toggle are hidden. |
 | Offline | Text, style and highlight show with no network. A mermaid block shows its source. |
 
 ### How diagrams render
@@ -140,6 +167,12 @@ A fence is a diagram when the first word of its language is `mermaid`. This matc
 | Literal `<\/` and `<\!--` | `escapes.md` | They come back as written. |
 | CDN blocked or integrity failure | none | Each diagram shows as a code block, with no error line. |
 | CDN stalled | none | The text and the diagram source show while the script waits. |
+| Tree with a hostile name | a file named `\"><script>.md` | The name shows as text in the tree. No element is made. |
+| Link out of the root | `../outside.md`, `/etc/x.md`, `file:` URL, `%2e%2e/x.md` | Text, with the note `not in this tree`. |
+| Link to a page file | two files in one root | The other file shows in the same page, and Back returns. |
+| Link to a `big` or `cut` file | a file over 1 MiB | The file shows its note, `This file is too large for the page.` or `This file is over the page limit.` |
+| Tree over the cap | `tree_max_files=5` | Five files and the line `Showing the first 5 files.` |
+| `tree=off`, `--tree off`, root `$HOME` or `/` | none | The page of one file, and the popover says why. |
 
 The fixtures are in the folder of story markdown-browser-view.
 
@@ -154,8 +187,8 @@ The policy is `default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdeli
 | Fallback | If the folder cannot be made or used, the script prints one line on stderr and writes `${TMPDIR:-/tmp}/far2l-md-<pid>.html`. |
 | Write | The script writes a temporary file next to the page, then moves it over the page. A reader never sees a half page. The temporary file goes on an error or a signal. `--out` keeps the direct write. |
 | Reuse | The script opens the old page and writes nothing if three things hold. The page exists. No input is newer than the page. The head of the page has the key of this run and the state of `md-view.ini`. |
-| Inputs | The Markdown file (by modification time only), `md-open.sh`, `marked.min.js`, the five other vendored files, and `md-view.ini`. |
-| Key | `<meta name="far2l-md-key" content="w=<width>;t=<theme>;f=<0 or 1>">`. A comment `far2l-md-ini` holds the size and the time of `md-view.ini`, or `none`. The script reads both from the head of the page only, so the Markdown text cannot fake them. |
+| Inputs | The Markdown file (by modification time only), `md-open.sh`, `marked.min.js`, the five other vendored files, and `md-view.ini`. In tree mode also the scan: the page holds a line with the tree of this scan, and a newer tree file rebuilds the page. |
+| Key | `<meta name="far2l-md-key" content="w=<width>;t=<theme>;f=<0 or 1>;tr=<on or off>;r=<root mode>;d=<depth>;n=<max files>">`, and a `far2l-md-tree` line with the state of this scan in tree mode. A comment `far2l-md-ini` holds the size and the time of `md-view.ini`, or `none`. The script reads both from the head of the page only, so the Markdown text cannot fake them. |
 | No reuse | `--no-cache` and `--out` always build. The fallback page is never reused. |
 | Cleanup | The script never deletes a page. The operating system cleans the temporary folder. The cache folder grows with the files that the user opens. |
 
@@ -163,7 +196,7 @@ The policy is `default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdeli
 
 | Need | Detail |
 |---|---|
-| Shell tools | POSIX `sh`, `sed`, `cat`, `basename`, `dirname`, `cksum`, `cut`, `find`, `grep`, `ls`, `mv`, `mkdir`, `chmod` |
+| Shell tools | POSIX `sh`, `awk`, `sed`, `cat`, `basename`, `dirname`, `cksum`, `cut`, `find`, `grep`, `ls`, `mv`, `mkdir`, `chmod`, `sort` |
 | Opener | `open`, else `xdg-open`. If both are missing, the script prints the page path and exits 0. |
 | Browser | Any browser that the opener starts. Chrome is tested. Firefox is a manual check. |
 | Network | `cdn.jsdelivr.net` for a page with a diagram. No other network use. |

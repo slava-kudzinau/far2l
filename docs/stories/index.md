@@ -21,7 +21,7 @@ The proof of concept `mermaid-image-poc` (status `approved`) is not in this fold
 
 ## Planned
 
-Epic [markdown-browser-reading-epic](markdown-browser-reading-epic.md) groups `markdown-browser-github-look` and `markdown-browser-linked-files`. They run in series.
+Epic [markdown-browser-reading-epic](markdown-browser-reading-epic.md) groups `markdown-browser-github-look` and `markdown-browser-tree-panel`. They run in series.
 
 Build these stories in this order. Each one changes `MarkdownRender.cpp` and the test `0007-view-file-markdown`, so they do not run in parallel.
 
@@ -33,7 +33,7 @@ Build these stories in this order. Each one changes `MarkdownRender.cpp` and the
 | [markdown-colorer-fences](markdown-colorer-fences/story.md) | done | M | Fenced code with the exact F4 token colors, through the V2 export and the generation-keyed cache. Merged in PR #14, `52ad4d440` (2026-11-07). | markdown-colorer-look | `feat/markdown-colorer-fences` |
 | [markdown-code-tint](markdown-code-tint/story.md) | done | S | A full-width background tint on code blocks, gated on true color and 3:1. Merged in PR #15, `2a032e3f8` (2026-11-07). | markdown-colorer-fences | `feat/markdown-code-tint` |
 | [markdown-browser-github-look](markdown-browser-github-look/story.md) | in-review | M | The Alt-F3 browser page gets the GitHub look, code highlight, a 60/70/80 width and a light/dark theme, set in a defaults file or by flags. It edits only the script and the page, so it can run in parallel with the F3 stories above. | markdown-browser-view | `feat/markdown-browser-github-look` |
-| [markdown-browser-linked-files](markdown-browser-linked-files/story.md) | planned | M | A link to another local Markdown file in the Alt-F3 page opens that file, rendered, in the same page. It runs after the story above, because both edit the script and the page. | markdown-browser-github-look | `feat/markdown-browser-linked-files` |
+| [markdown-browser-tree-panel](markdown-browser-tree-panel/story.md) | in-review | M | A file-tree panel on the left of the Alt-F3 page. A click on a tree file or on a local link shows that file in the same page, and Back returns. | markdown-browser-github-look | `feat/markdown-browser-tree-panel`, draft PR #16 |
 
 Story [markdown-theme-colors](markdown-theme-colors/story.md) is superseded. The owner replaced it with markdown-palette and markdown-code-tint on 2026-11-06.
 

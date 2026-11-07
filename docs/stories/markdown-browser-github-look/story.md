@@ -87,7 +87,7 @@ M. One script, one page template, about five vendored files, one install change,
 - Owner decisions, 2026-11-07: settings in a defaults file with run flags, and a small page control with a saved choice. Owner words: "the bar should not obscure text and occupe visual area" "the reading layout is not something we change often", and "CLI is hard to find, how to have a minimal control on the page, may be a hint or help too, the settings should be persistent". `highlight.js` vendored in the repo; mermaid stays on the CDN and follows the theme. Owner words: "use github markdown renderer with mermaid and code highlighting for the alt-f3 mode, the content should occupy 60/70/80% of width and use light/dark schemas these settings should be easily configurable somewhere".
 - Branch `feat/markdown-browser-github-look`, base `next/2.9.1-ovr.1`. The brief is not committed until this branch exists.
 - Budget/hard stop: M $15/$20.
-- Out of this story: following links to other local `.md` files. Story `markdown-browser-linked-files` takes it and runs after this one, because both edit the script and the page.
+- Out of this story: following links to other local `.md` files. Story `markdown-browser-tree-panel` takes it and runs after this one, because both edit the script and the page.
 - Assumed (owner can overturn): the gear, popover and keys as written above.
 - Assumed: the owner has not named the browser yet. The storage spike tests Firefox first, then Chrome. The owner's default is Firefox, but it may be Chrome.
 
