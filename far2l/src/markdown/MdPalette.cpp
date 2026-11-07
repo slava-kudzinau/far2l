@@ -47,23 +47,24 @@ constexpr uint64_t kBackBits = 0xf0 | BACKGROUND_TRUECOLOR | (uint64_t(0xffffff)
 struct RoleDefault
 {
 	uint32_t rgb;        // the spec value, written as 0xRRGGBB
+	uint32_t def256;     // the RGB of the spec's 256 index: what a terminal without RGB shows (R52)
 	uint64_t fallback16; // the 4-bit foreground: the color without RGB, and the index under RGB
 };
 
 constexpr std::array<RoleDefault, MD_ROLE_COUNT - 1> kRoleDefaults {{
-	{0xffff5f, F_YELLOW},        // h1
-	{0xffaf5f, F_LIGHTRED},      // h2
-	{0x87afff, F_LIGHTGRAY},     // h3
-	{0xffffff, F_WHITE},         // strong
-	{0x87ff87, F_LIGHTGREEN},    // link
-	{0xff87ff, F_LIGHTMAGENTA},  // code
-	{0xafafd7, F_CYAN},          // quote
-	{0x8787af, F_CYAN},          // rule
-	{0, 0},                      // art: never reads this row (special-cased above)
-	{0x87afff, F_LIGHTGRAY},     // token keyword (spec: 256 index 111)
-	{0x87ff87, F_LIGHTGREEN},    // token string (spec: 256 index 120)
-	{0x8787af, F_CYAN},          // token comment (spec: 256 index 103)
-	{0xffaf5f, F_LIGHTRED},      // token number (spec: 256 index 215)
+	{0xffff5f, 0xffff5f, F_YELLOW},          // h1 (256 index 227)
+	{0xffaf5f, 0xffaf5f, F_LIGHTRED},        // h2, token number (256 index 215)
+	{0x87afff, 0x87afff, F_LIGHTGRAY},       // h3, token keyword (256 index 111)
+	{0xffffff, 0xffffff, F_WHITE},           // strong (256 index 231)
+	{0x87ff87, 0x87ff87, F_LIGHTGREEN},      // link, token string (256 index 120)
+	{0xff87ff, 0xd7d7af, F_LIGHTMAGENTA},    // code (256 index 213)
+	{0xafafd7, 0xafafd7, F_CYAN},            // quote (256 index 147)
+	{0x8787af, 0x8787af, F_CYAN},            // rule, token comment (256 index 103)
+	{0, 0, 0},                               // art: never reads this row (special-cased above)
+	{0x87afff, 0x87afff, F_LIGHTGRAY},       // token keyword (256 index 111)
+	{0x87ff87, 0x87ff87, F_LIGHTGREEN},      // token string (256 index 120)
+	{0x8787af, 0x8787af, F_CYAN},            // token comment (256 index 103)
+	{0xffaf5f, 0xffaf5f, F_LIGHTRED},        // token number (256 index 215)
 }};
 
 // The user file key of each role, in MdRole order.
@@ -359,8 +360,22 @@ uint64_t MdRunColor(uint64_t role)
 		if (WINPORT(GetConsoleColorPalette)(NULL) >= 8)
 			entry = FarColorToReal(TodayLookEntry(role));
 		else
-			entry = def.fallback16;
+			entry = RgbRealColor(RoleDefault{def.def256, 0, def.fallback16});   // the 256-color look of the spec table, with the 16-color index in the low bits (R52)
 	}
 
 	return (entry & ~kBackBits) | (body & kBackBits);
+}
+
+// The 256-color look of a role, in the attribute form of the truecolor bits; the low index
+// of the 16-color path, for a terminal that ignores RGB.
+uint64_t MdRoleColor256(uint64_t role)
+{
+	if (role >= MD_ROLE_COUNT)
+		return 0;
+	if (role == MD_ROLE_BODY)
+		return 0;
+	if (role == MD_ROLE_ART)
+		return 0;
+	const RoleDefault &def = kRoleDefaults[role - 1];
+	return RgbRealColor(RoleDefault{def.def256, 0, def.fallback16});
 }

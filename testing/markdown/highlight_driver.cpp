@@ -815,21 +815,24 @@ int print_contrast_fail()
 int print_norgb()
 {
 	struct Want { uint64_t role; uint64_t fg; };
-	const Want wants[] = {   // the same column, checked without truecolor
-		{MD_ROLE_TOKEN_KEYWORD, 7},
-		{MD_ROLE_TOKEN_STRING, 10},
-		{MD_ROLE_TOKEN_COMMENT, 3},
-		{MD_ROLE_TOKEN_NUMBER, 12},
+	struct Want256 { uint64_t role; uint32_t rgb; uint64_t fg; };
+	const Want256 wants[] = {   // the spec table: the 256-index color and the 16-color index
+		{MD_ROLE_TOKEN_KEYWORD, 0x87afff, 7},   // 256 index 111
+		{MD_ROLE_TOKEN_STRING, 0x87ff87, 10},   // 256 index 120
+		{MD_ROLE_TOKEN_COMMENT, 0x8787af, 3},   // 256 index 103
+		{MD_ROLE_TOKEN_NUMBER, 0xffaf5f, 12},   // 256 index 215
 	};
-	for (const Want &w : wants) {
+	for (const Want256 &w : wants) {
 		const uint64_t color = MdRunColor(w.role);
-		if ((color & 0xf) != w.fg || (color & (uint64_t)FOREGROUND_TRUECOLOR)) {
-			printf("FAILED print_norgb: role %llu color 0x%llx, want fg %llu\n",
-				(unsigned long long)w.role, (unsigned long long)color, (unsigned long long)w.fg);
+		const uint64_t bgr = ((uint64_t(w.rgb) & 0xff) << 16) | (uint64_t(w.rgb) & 0xff00) | ((uint64_t(w.rgb) >> 16) & 0xff);   // the attribute holds 0xBBGGRR (R52)
+		const uint64_t want = (bgr << 16) | 0x100 | w.fg;   // the spec RGB in the truecolor bits, the index in the low bits
+		if (color != want) {
+			printf("FAILED print_norgb: role %llu color 0x%llx, want 0x%llx\n",
+				(unsigned long long)w.role, (unsigned long long)color, (unsigned long long)want);
 			return 1;
 		}
 	}
-	printf("probe: --norgb shows the 16-color fallbacks of the spec table\n");
+	printf("probe: --norgb shows the 256-color look of the spec table, with the 16-color index in the low bits\n");
 	return 0;
 }
 
