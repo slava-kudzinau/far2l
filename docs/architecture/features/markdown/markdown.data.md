@@ -34,12 +34,13 @@ flowchart LR
 | Element | Contents | Written by | Lifetime |
 |---|---|---|---|
 | Screen line, `MdLine` | Runs and `nFilePos` | `Builder`, `MarkdownDoc::Render` | Until the next render |
-| Color run, `MdRun` | Text and an `MdRole` (body, h1, h2, h3, strong, link, code, quote, rule, art), never a color | `Builder` | With its line |
+| Color run, `MdRun` | Text and an `MdRole` (body, h1, h2, h3, strong, em, link, code, quote, listmark, rule, art, and the four fence token roles), never a color | `Builder` | With its line |
 | Source offset, `nFilePos` | Byte offset of the start of the source line that holds the first source text of the row | `cb_text`, `Builder::flush` | With its line |
 | Top row, `m_md_top` | Index into `Lines()`. `m_md_top_pos` is the `FilePos` of the last sync. | `SetMarkdownTop` | While the file is open |
 | Screen rows, `m_md_screen`, `Strings` | The rows on screen. `Strings` holds the joined text for length and link scans. | `ReadStringMarkdown` | One redraw |
 | Mermaid cache, `m_mermaid_cache` | Art rows, keyed by source hash and width. An empty entry is a failed fence. | `MarkdownDoc::Render` | One render pass |
 | Token cache, `m_token_cache` | Fence tokens, keyed by the normalized language and a hash of the fence source. Survives `Invalidate(width)` and a resize. | `MarkdownDoc::Render` | The viewer window's `MarkdownDoc`, across file switches |
+| Colorer look cache | The ten `MdRegionLook` rows of one scheme generation, plus the 3:1 batch verdict keyed on (viewer background, generation) | `MdPalette.cpp`, mutex-guarded; refresh on a generation change, probed with a count-0 export call | The process, across file switches |
 | JS runtime, `g_engine` | One quickjs-ng runtime and context | `build_engine` | The process, or until a timeout |
 
 **Offset rules.** Offsets never decrease down the doc. A row with no source text takes the offset of the row before it: the table separator, blank rows. All art rows of a fence take the fence offset. The hint row takes the offset of the last code row.
@@ -52,7 +53,7 @@ flowchart LR
 | `Param[3]` | 0 follows the rule, 1 is Markdown, 2 is plain | `MarkdownCacheParam` | `MarkdownStartMode` |
 | `[Viewer] Markdown_Auto` | Default 1. Setting of the rule. | The settings dialog | `MarkdownRuleMode` |
 | `[Viewer] Markdown` | Default 0. The last Shift-F4 mode. | `ProcessMarkdownMode` | Nothing |
-| `settings/markdown-colors.ini`, section `[markdown]` | One key per role: `body`, `heading1`, `heading2`, `heading3`, `strong`, `link`, `code`, `quote`, `rule`, `art`, plus the four fence roles `token-keyword`, `token-string`, `token-comment`, `token-number`. A value is `foreground:#rrggbb`, `#rrggbb`, `#rgb`, `F_*`, or `@Name`. | The user, by hand. far2l never writes it. | `MdRunColor` in `far2l/src/markdown/`, re-read when the file mtime changes |
+| `settings/markdown-colors.ini`, section `[markdown]` | One key per role: `body`, `heading1`, `heading2`, `heading3`, `strong`, `em`, `link`, `code`, `quote`, `listmark`, `rule`, `art`, plus the four fence roles `token-keyword`, `token-string`, `token-comment`, `token-number`. A value is `foreground:#rrggbb`, `#rrggbb`, `#rgb`, `F_*`, or `@Name`. | The user, by hand. far2l never writes it. | `MdRunColor` in `far2l/src/markdown/`, re-read when the file mtime changes |
 | `settings/md-view.ini`, section `[View]` | `width` (60, 70 or 80), `theme` (light, dark or auto), `browser` (auto, firefox, chrome, safari or an absolute path to a program). Defaults 70, auto, auto. | The user, by hand, or `md-open.sh --init-config` for a sample when there is no file. far2l never writes it. | `md-open.sh` |
 | Browser `localStorage`, keys `far2l-md-width` and `far2l-md-theme` | The width and the theme that the reader chose on the page. Only an accepted word is used. | The page script. It is in the browser profile, not in the repo or in `~/.config`. | The page script. A page that a flag started ignores it. |
 
@@ -79,6 +80,7 @@ Order of use in the browser view: the saved page choice, then `md-view.ini`, the
 | `far2l/bootstrap/highlight.min.js` | highlight.js 11.11.1 | Committed copy. License in `highlight.LICENSE.md`. | `md-open.sh`, inlined |
 | `far2l/bootstrap/hljs-github.min.css`, `hljs-github-dark.min.css` | highlight.js 11.11.1, themes `github` and `github-dark` | Committed copies | `md-open.sh`, inlined |
 | mermaid | 12.3.0 | `cdn.jsdelivr.net`, with a `sha384` hash (SRI) and `crossorigin="anonymous"`, never in the repo | The browser page |
+| Colorer plugin exports | `ColorerTokenizeV1` (fence tokens), `ColorerRegionLookV1` (scheme colors and style for ten region names, plus a scheme generation) | The bundled Colorer plugin, module `colorer.far-plug-wide`, loaded with `FindPlugin` and `dlopen(RTLD_LAZY\|RTLD_NOLOAD)` | `MdColorer.{hpp,cpp}` |
 
 The script inlines every vendored file, so the page policy has no new source. The script and these files install to one folder (see the browser spec).
 

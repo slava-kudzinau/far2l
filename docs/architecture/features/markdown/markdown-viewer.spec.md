@@ -104,7 +104,7 @@ Other viewer functions act on the source file:
 | Fenced or indented code | 4 cells of indent after the lead. Blank lines of the code stay. |
 | HTML block | Verbatim, as code. Nothing runs. |
 | Horizontal rule | A row of `─`. This is the only full-width line. A `---` line under a paragraph makes a heading, not a rule. |
-| Emphasis, strikethrough, underline | The markers go and the text stays. No italic, bold or underline attribute shows. |
+| Emphasis, strikethrough, underline | The markers go and the text stays. Emphasis text takes the `em` role. No italic, bold or strikeout attribute shows. Underline shows when the Colorer look carries it: heading and link in the default scheme. |
 | Link | The label shows. The target is dropped. |
 | Image | The alt text shows. The target is dropped. |
 
@@ -129,34 +129,39 @@ A run holds an `MdRole`. `MarkdownRunColor` calls `MdRunColor` in `far2l/src/mar
 
 | Role | Elements |
 |---|---|
-| body | Body text, lists, emphasis, table body cells, the hint row |
+| body | Body text, lists, table body cells, the hint row |
 | h1, h2, h3 | Heading text by level. H3 covers H3 to H6. |
 | strong | Bold text, table header text |
+| em | Emphasis text, `_text_` and `*text*` |
 | link | Link text, autolinks (see the open item on autolinks) |
 | code | Code spans, code fences, HTML blocks |
 | quote | Quote text, quote bars |
+| listmark | The bullet `• `, the number `1. `, the task box `[ ] ` |
 | rule | Horizontal rules, table borders |
 | art | Mermaid art |
 
-Precedence for a run: code, link, strong, heading level, quote, body. A heading in a quote keeps the heading role. A code span in a table header keeps the code role.
+Precedence for a run: code, link, strong, heading level, quote, emphasis, body. A heading in
+a quote keeps the heading role. A code span in a table header keeps the code role. Emphasis in
+a quote keeps the quote role.
 
 The resolver order:
 
 1. A value in `settings/markdown-colors.ini`, section `[markdown]`. Each role has one key. The keys are:
      - `body`, `heading1`, `heading2`, `heading3`
-     - `strong`, `link`, `code`, `quote`
-     - `rule`, `art`
+     - `strong`, `em`, `link`, `code`, `quote`
+     - `listmark`, `rule`, `art`
 
    far2l reads this file and never writes it. A value is `foreground:<value>` or `<value>`. A `<value>` is `#rrggbb`, `#rgb`, an `F_*` color name, or `@Name`. The names are `@Viewer.Text`, `@Help.Topic`, `@Help.Text.Highlight` and `@Panel.Text.Highlight`. A bad value, an unknown name or key, or a missing file leaves the role default.
-2. Today's look, when the contrast rule fails. The entries are:
+2. The Colorer look, when the Colorer plugin answers and the Colorer batch passes the contrast rule. The foreground is the scheme's color for the role's region. The underline bit is set when the scheme's style carries underline. See [ADR-009](../../decisions/adr-009-colorer-look-step.md).
+3. The fork's RGB default, when `GetConsoleColorPalette` reports 8 bits or more.
+4. Today's look. The entries are:
    - `COL_HELPTOPIC` for h1, h2, h3 and strong
    - `COL_HELPHIGHLIGHTTEXT` for code
-   - `COL_VIEWERTEXT` for quote and for rule (horizontal rules and table borders)
+   - `COL_VIEWERTEXT` for quote, for rule (horizontal rules and table borders), and for em and listmark
    - `COL_PANELHIGHLIGHTTEXT` for art
-3. The fork's RGB default, when `GetConsoleColorPalette` reports 8 bits or more.
-4. The fork's 16-color fallback.
+5. The fork's 16-color fallback.
 
-The contrast rule is all or none. Each RGB default needs 3:1 or more against the real viewer background (`wcagComputeContrast`), or all defaults use step 2. An override has no contrast check. The defaults are in `far2l/src/markdown/MdPalette.cpp`.
+The contrast rule is all or none. Each RGB default needs 3:1 or more against the real viewer background (`wcagComputeContrast`), or all defaults use step 4. The Colorer look has its own batch verdict, the same way. Each scheme color it offers needs 3:1, or every role takes the steps below. The Colorer verdict is keyed on the pair (viewer background, scheme generation): a theme change and a Colorer scheme change both recompute it. An override has no contrast check. The defaults are in `far2l/src/markdown/MdPalette.cpp`.
 
 ### Tables
 
@@ -236,6 +241,8 @@ Each failure writes one stderr line, `AsciiMermaid: render failed: <err>`, and s
 | Art and hint row in the viewer | `testing/tests/0007-view-file-markdown` with `sample.md` |
 | Bundle output, size limit (300 KB), no `elkjs` | `sh testing/markdown/ascii-golden.sh` |
 | `AsciiMermaid` failures, deadline, speed | `sh testing/markdown/ascii-driver.sh` |
+| Fence token colors, the token cache | `testing/tests/000c-view-md-highlight`, `sh testing/markdown/highlight-driver.sh` |
+| Colorer look, underline, F4/F6 parity, scheme change | `testing/tests/000d-view-md-look`, `sh testing/markdown/look-driver.sh --rgb` |
 
 No test covers these parts:
 
