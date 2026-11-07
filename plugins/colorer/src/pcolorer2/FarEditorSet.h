@@ -159,9 +159,16 @@ class FarEditorSet
   UnicodeString* GetCatalogPath() { return &Opt.catalogPath; }
   UnicodeString* GetUserHrdPath() { return &Opt.userHrdPath; }
   bool GetPluginStatus() { return Opt.rEnabled; }
+  bool GetSyntaxDraw() { return Opt.drawSyntax; }
 
   /** Returns the loaded ParserFactory, or null when the plugin is disabled. */
   ParserFactory* GetParserFactory() { return parserFactory.get(); }
+
+  /** Returns the active scheme's region mapper, or null when the plugin is disabled. */
+  StyledHRDMapper* GetRegionMapper() { return regionMapper.get(); }
+
+  /** Scheme reload counter: changes in ReloadBase; 0 before the first load. */
+  unsigned int GetBaseGeneration() const { return m_baseGeneration; }
 
   bool SetBgEditor() const;
 
@@ -243,6 +250,8 @@ class FarEditorSet
   std::unordered_map<intptr_t, std::unique_ptr<FarEditor>> farEditorInstances;
   std::unordered_map<intptr_t, std::unique_ptr<FarViewer>> farViewerInstances;
   std::unique_ptr<ParserFactory> parserFactory;
+  unsigned int m_baseGeneration = 0;
+
   std::unique_ptr<StyledHRDMapper> regionMapper;
 
   /**current value*/

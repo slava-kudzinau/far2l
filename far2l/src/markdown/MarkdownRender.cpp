@@ -178,6 +178,7 @@ struct Builder {
     std::wstring link_label;      // label text captured while the link is open
     int span_code = 0;            // open code spans
     int span_strong = 0;          // open strong spans
+    int span_em = 0;              // open emphasis spans (story markdown-colorer-look)
     int span_link = 0;            // open links
 
     // mermaid fences: the placeholder line range (in `out`) plus the fence body and the lead of
@@ -218,12 +219,16 @@ struct Builder {
         cur_pos_set = false;      // set by the line's first source text, see append()
         cur_started = true;
         std::wstring lead = row_lead();
-        if (li_prefix_pending) {
-            lead += li_prefix;
-            li_prefix_pending = false;
-        }
         if (!lead.empty())
             cur.push_back(MdRun{lead, lead_role()});
+        // The list-item prefix (the bullet, `1. `, the task box) is its own run: the scheme
+        // paints it with markdown:ListMark (story markdown-colorer-look).  It shares the line's
+        // source line with the lead above, as the merged lead run did.
+        if (li_prefix_pending) {
+            li_prefix_pending = false;
+            if (!li_prefix.empty())
+                cur.push_back(MdRun{li_prefix, MD_ROLE_LISTMARK});
+        }
     }
 
     void set_line_pos(int64_t p)
@@ -242,6 +247,8 @@ struct Builder {
             return MD_ROLE_LINK;
         if (span_strong > 0)
             return MD_ROLE_STRONG;
+        if (span_em > 0)
+            return MD_ROLE_EM;
         if (heading_level == 1)
             return MD_ROLE_H1;
         if (heading_level == 2)
@@ -732,6 +739,7 @@ int cb_enter_span(MD_SPANTYPE type, void *detail, void *userdata)
             break;
         }
         case MD_SPAN_STRONG: b.span_strong++; break;
+        case MD_SPAN_EM: b.span_em++; break;
         case MD_SPAN_CODE: b.span_code++; break;
         default: break;
     }
@@ -755,6 +763,7 @@ int cb_leave_span(MD_SPANTYPE type, void *detail, void *userdata)
             b.link_label.clear();
             break;
         case MD_SPAN_STRONG: if (b.span_strong > 0) b.span_strong--; break;
+        case MD_SPAN_EM: if (b.span_em > 0) b.span_em--; break;
         case MD_SPAN_CODE: if (b.span_code > 0) b.span_code--; break;
         default: break;
     }
