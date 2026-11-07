@@ -661,10 +661,11 @@ case_page_policy_unchanged() {
 
 case_page_narrow_rule() {
     fresh
-    md --no-open --out "$page" "$sample"
+    md --tree off --no-open --out "$page" "$sample"
     [ "$rc" = 0 ] || bad "exit $rc"
     line_of 'html[data-width="80"] #content { width: 80% }'; w80=$ln
-    line_of '@media (max-width: 699px) {'; media=$ln
+    # The CSS block, not the matchMedia call in the page script.
+    media=$(grep -n -x -F '@media (max-width: 699px) {' "$page" | cut -d: -f1)
     line_of 'html[data-width] #content { width: 100% }'; narrow=$ln
     [ "$media" -gt "$w80" ] && [ "$narrow" -gt "$media" ] \
         || bad "the narrow rule is not after the width rules"
@@ -764,7 +765,7 @@ case_page_gear_markup() {
 
 case_page_print_hidden() {
     fresh
-    md --no-open --out "$page" "$sample"
+    md --tree off --no-open --out "$page" "$sample"
     [ "$rc" = 0 ] || bad "exit $rc"
     sed -n '/^<style id="page">$/,/^<\/style>$/p' "$page" > "$d/page-style" || bad "sed"
     grep -qxF '@media print { #md-gear, #md-pop { display: none !important } }' "$d/page-style" \
@@ -775,7 +776,7 @@ case_page_print_hidden() {
 # The saved choice: localStorage only inside try, the two keys, the accepted words and the notice.
 case_page_storage_try_catch() {
     fresh
-    md --no-open --out "$page" "$sample"
+    md --tree off --no-open --out "$page" "$sample"
     [ "$rc" = 0 ] || bad "exit $rc"
     iife > "$d/script" || bad "no script"
     for k in far2l-md-width far2l-md-theme; do
@@ -805,7 +806,7 @@ case_page_storage_try_catch() {
 # The keys: the modifier and field guards come before the keys, and a click outside closes the popover.
 case_page_keys_guard() {
     fresh
-    md --no-open --out "$page" "$sample"
+    md --tree off --no-open --out "$page" "$sample"
     [ "$rc" = 0 ] || bad "exit $rc"
     [ "$(grep -c -F "addEventListener('keydown'" "$page")" = 1 ] || bad "want one keydown listener"
     grep -qF "addEventListener('keyup'" "$page" && bad "the keys do not use keydown"
@@ -826,7 +827,7 @@ case_page_keys_guard() {
 # The paste block: three lines built as text, with the notice above it and the Reset button.
 case_page_paste_line() {
     fresh
-    md --no-open --out "$page" "$sample"
+    md --tree off --no-open --out "$page" "$sample"
     [ "$rc" = 0 ] || bad "exit $rc"
     line_of "return ['[View]', 'width=' + root.getAttribute('data-width'), 'theme=' + themeSetting()].join('\\n');"
     line_of 'paste.textContent = pasteText();'
@@ -2441,6 +2442,69 @@ case_cache_tree_no_cache() {
     exit 0
 }
 
+# --- tree page rules ---------------------------------------------------------
+
+case_page_tree_key_guard() {
+    fresh
+    mkdir proj || bad "mkdir"
+    printf '# A\n' > proj/o.md || bad "write"
+    tpage proj/o.md
+    [ "$(grep -c -F "addEventListener('keydown'" "$page")" = 1 ] || bad "want one keydown listener"
+    line_of 'if (e.ctrlKey || e.altKey || e.metaKey) return;'; g_mod=$ln
+    line_of "if (tag === 'input' || tag === 'textarea' || tag === 'select' || (tg && tg.isContentEditable)) return;"; g_tag=$ln
+    line_of "else if (e.key === 'b') toggleTree();"; k_b=$ln
+    [ "$g_mod" -lt "$g_tag" ] && [ "$g_tag" -lt "$k_b" ] \
+        || bad "the key guards do not come before the b key"
+    # The b key does nothing in a narrow window.
+    iife > "$d/script" || bad "no script"
+    awk '/function toggleTree\(\) \{/,/^  \}/' "$d/script" > "$d/toggle"
+    grep -qF 'if (!treeMode || narrow.matches) return;' "$d/toggle" \
+        || bad "b is not ignored in a narrow window or on a one-file page"
+    exit 0
+}
+
+case_page_tree_storage_try() {
+    fresh
+    mkdir proj || bad "mkdir"
+    printf '# A\n' > proj/o.md || bad "write"
+    tpage proj/o.md
+    iife > "$d/script" || bad "no script"
+    grep -qF 'far2l-md-tree' "$d/script" || bad "no saved key far2l-md-tree"
+    n=$(grep -c -F 'localStorage' "$d/script")
+    [ "$n" -ge 3 ] || bad "want localStorage read, write and remove, got $n lines"
+    bare=$(grep -F 'localStorage' "$d/script" | grep -v -F 'try {')
+    [ -z "$bare" ] || bad "localStorage outside try: $bare"
+    grep -qF "setTree(storageGet(KEY_TREE) !== 'closed', false);" "$d/script" \
+        || bad "the saved state does not give open for no value"
+    grep -qF "save(KEY_TREE, open ? 'open' : 'closed');" "$d/script" \
+        || bad "the state is not saved as open or closed"
+    exit 0
+}
+
+case_page_tree_print_hidden() {
+    fresh
+    mkdir proj || bad "mkdir"
+    printf '# A\n' > proj/o.md || bad "write"
+    tpage proj/o.md
+    sed -n '/^<style id="page">$/,/^<\/style>$/p' "$page" > "$d/page-style" || bad "sed"
+    grep -qxF '@media print { #md-gear, #md-pop, #md-tree-panel, #md-tree-toggle { display: none !important } }' "$d/page-style" \
+        || bad "no print rule that hides the panel and the toggle"
+    exit 0
+}
+
+case_page_tree_narrow_rule() {
+    fresh
+    mkdir proj || bad "mkdir"
+    printf '# A\n' > proj/o.md || bad "write"
+    tpage proj/o.md
+    nb=$(sed -n '/^@media (max-width: 699px) {$/,/^}$/p' "$page")
+    printf '%s\n' "$nb" | grep -qxF '  html[data-panel] body { padding-left: 16px }' \
+        || bad "the panel padding is not removed under 700 px"
+    printf '%s\n' "$nb" | grep -qxF '  #md-tree-panel, #md-tree-toggle { display: none }' \
+        || bad "the panel and the toggle are not hidden under 700 px"
+    exit 0
+}
+
 for c in flags_ok flag_width_bad flag_theme_bad flag_width_missing \
          ini_valid ini_hostile ini_missing ini_browser_bad ini_browser_app_dir \
          init_config_writes init_config_keeps print_association_ok \
@@ -2459,7 +2523,8 @@ for c in flags_ok flag_width_bad flag_theme_bad flag_width_missing \
          tree_page_markup tree_page_index tree_page_attrs tree_page_cut tree_page_names_hostile \
          tree_off_same_page tree_key_line cache_tree_reuse cache_tree_changed_file \
          cache_tree_added_file cache_tree_deleted_file cache_tree_head_only cache_tree_no_cache \
-         cache_tree_renamed_file tree_page_long_lines; do
+         cache_tree_renamed_file tree_page_long_lines \
+         page_tree_key_guard page_tree_storage_try page_tree_print_hidden page_tree_narrow_rule; do
     run "$c"
 done
 

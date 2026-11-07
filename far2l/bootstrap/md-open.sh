@@ -921,14 +921,47 @@ pre.mermaid[data-processed] { text-align: center; overflow-x: auto; }
 #md-pop button[aria-pressed="true"] { border-width: 2px; font-weight: 600 }
 #md-pop .md-notice { color: #cf222e; color: light-dark(#cf222e, #ff7b72) }
 #md-pop pre.md-paste { margin: 4px 0 8px; padding: 6px; border: 1px solid GrayText; border-radius: 4px; background: none; font: 12px/1.4 ui-monospace, Menlo, monospace; white-space: pre; overflow-x: auto }
+HTML
+    # The panel CSS and markup are in tree mode only. In one-file mode the page
+    # stays the page of story 1.
+    if [ "$tree_mode" = 1 ]; then
+        cat <<'CSS'
+html[data-panel="open"] body { padding-left: calc(260px + 16px) }
+#md-tree-panel { position: fixed; top: 0; left: 0; bottom: 0; z-index: 10; box-sizing: border-box; width: 260px; padding: 8px; overflow: auto; border-right: 1px solid GrayText; background: Canvas; color: CanvasText; font: 13px/1.4 sans-serif }
+html[data-panel="closed"] #md-tree-panel { display: none }
+#md-tree-toggle { position: fixed; top: 8px; left: 268px; z-index: 20; box-sizing: border-box; width: 28px; height: 28px; margin: 0; padding: 0; border: 1px solid GrayText; border-radius: 6px; background: Canvas; color: CanvasText; font: 14px/1 sans-serif; cursor: pointer }
+html[data-panel="closed"] #md-tree-toggle { left: 8px }
+#md-tree-panel .md-root { margin: 0 0 6px; font-weight: 600; overflow-wrap: anywhere }
+#md-tree-panel details { margin: 0 }
+#md-tree-panel summary { cursor: pointer }
+#md-tree-panel a { display: block; padding-left: 12px; color: inherit; text-decoration: none; overflow-wrap: anywhere }
+#md-tree-panel a:hover, #md-tree-panel a:focus { text-decoration: underline }
+#md-tree-panel a[aria-current="page"] { font-weight: 600; background: Highlight; color: HighlightText }
+#md-tree-panel a.md-off { opacity: .5 }
+#md-tree-panel .md-cap { margin-top: 6px; font-style: italic; opacity: .7 }
+@media (max-width: 699px) {
+  html[data-panel] body { padding-left: 16px }
+  #md-tree-panel, #md-tree-toggle { display: none }
+}
+@media print { #md-gear, #md-pop, #md-tree-panel, #md-tree-toggle { display: none !important } }
+CSS
+    else
+        cat <<'CSS'
 @media print { #md-gear, #md-pop { display: none !important } }
+CSS
+    fi
+    cat <<'HTML'
 </style>
 </head>
 <body class="markdown-body">
 <button id="md-gear" type="button" aria-label="Page settings" aria-expanded="false" aria-controls="md-pop">&#9881;</button>
 <div id="md-pop" hidden></div>
-<main id="content" class="markdown-body"></main>
 HTML
+    if [ "$tree_mode" = 1 ]; then
+        printf '<button id="md-tree-toggle" type="button" aria-label="Files" aria-controls="md-tree-panel" aria-expanded="true">&#9776;</button>\n'
+        printf '<nav id="md-tree-panel" aria-label="Files"></nav>\n'
+    fi
+    printf '<main id="content" class="markdown-body"></main>\n'
     # The text cannot end its script element or open a comment there. Backslashes
     # are doubled first, then "</" becomes "<\/" and "<!--" becomes "<\!--"; the
     # page undoes the steps in reverse order. A BOM and CRs go too.
@@ -967,6 +1000,12 @@ HTML
   var THEMES = ['light', 'dark', 'auto'];
   var KEY_WIDTH = 'far2l-md-width';
   var KEY_THEME = 'far2l-md-theme';
+  var KEY_TREE = 'far2l-md-tree';
+  var narrow = window.matchMedia('(max-width: 699px)');
+  var treePanel = document.getElementById('md-tree-panel');
+  var treeToggle = document.getElementById('md-tree-toggle');
+  var treeLinks = Object.create(null);
+  var treeFolders = Object.create(null);
   var gear = document.getElementById('md-gear');
   var pop = document.getElementById('md-pop');
   var widthButtons = {};
@@ -1025,6 +1064,99 @@ HTML
   function decName(enc) {
     var parts = enc.split('/');
     return decodeText(parts[parts.length - 1] || '');
+  }
+  // The page URL without its hash: the target of a tree link, then #/ENC.
+  function pageUrl() {
+    return window.location.href.split('#')[0];
+  }
+  // buildTree makes the panel from the tree index: the root name, one details
+  // element per folder, one link per file, in tree order. Every name goes in
+  // with textContent, so a name cannot make an element.
+  function buildTree() {
+    if (!treeMode || !treePanel) return;
+    treePanel.textContent = '';
+    var head = document.createElement('div');
+    head.className = 'md-root';
+    head.textContent = decodeText(root.getAttribute('data-root') || '');
+    treePanel.appendChild(head);
+    var body = document.createElement('div');
+    treePanel.appendChild(body);
+    var boxes = Object.create(null);
+    boxes[''] = body;
+    order.forEach(function (enc) {
+      var parts = enc.split('/');
+      var key = '';
+      for (var i = 0; i < parts.length - 1; i++) {
+        var next = key ? key + '/' + parts[i] : parts[i];
+        if (!boxes[next]) {
+          var det = document.createElement('details');
+          var sum = document.createElement('summary');
+          sum.textContent = decodeText(parts[i]);
+          det.appendChild(sum);
+          var box = document.createElement('div');
+          det.appendChild(box);
+          boxes[key].appendChild(det);
+          boxes[next] = box;
+          treeFolders[next] = det;
+        }
+        key = next;
+      }
+      var a = document.createElement('a');
+      a.setAttribute('href', pageUrl() + '#/' + enc);
+      a.textContent = decName(enc);
+      if (tree[enc] !== 'page') a.className = 'md-off';
+      boxes[key].appendChild(a);
+      treeLinks[enc] = a;
+    });
+    if (root.getAttribute('data-cap') === '1') {
+      var cap = document.createElement('div');
+      cap.className = 'md-cap';
+      cap.textContent = 'Showing the first ' + root.getAttribute('data-files') + ' files.';
+      body.appendChild(cap);
+    }
+  }
+  // markTree marks the shown file and opens its folders. A folder that the
+  // reader opened stays open.
+  function markTree(enc) {
+    if (!treeMode || !treePanel) return;
+    var parts = enc.split('/');
+    var key = '';
+    for (var i = 0; i < parts.length - 1; i++) {
+      key = key ? key + '/' + parts[i] : parts[i];
+      if (treeFolders[key]) treeFolders[key].open = true;
+    }
+    Object.keys(treeLinks).forEach(function (e) {
+      var a = treeLinks[e];
+      if (e === enc) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    });
+    var cur = treeLinks[enc];
+    if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
+  }
+  // treeOpen: the panel is open unless data-panel says closed.
+  function treeOpen() {
+    return root.getAttribute('data-panel') !== 'closed';
+  }
+  function setTree(open, keep) {
+    root.setAttribute('data-panel', open ? 'open' : 'closed');
+    if (treeToggle) treeToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (keep) save(KEY_TREE, open ? 'open' : 'closed');
+  }
+  // The narrow window hides the panel, and b does nothing there.
+  function toggleTree() {
+    if (!treeMode || narrow.matches) return;
+    setTree(!treeOpen(), true);
+  }
+  // The saved state, else open. tree=off makes no panel, so no state is read.
+  function loadTree() {
+    if (!treeMode) return;
+    setTree(storageGet(KEY_TREE) !== 'closed', false);
+  }
+  // The focus goes to the reading pane after a click in the tree or on a link.
+  function focusContent() {
+    if (!content) return;
+    content.setAttribute('tabindex', '-1');
+    try { content.focus({ preventScroll: true }); } catch (e) { content.focus(); }
   }
   // The encoded form of a tree path: each part is encoded, and each byte
   // outside A-Za-z0-9._~- becomes %XX in upper case. "/" stays.
@@ -1199,6 +1331,7 @@ HTML
       shownEnc = enc;
       showLimitNote(state);
       document.title = decName(enc);
+      markTree(enc);
       return;
     }
     if (typeof files[enc] !== 'string') {
@@ -1239,6 +1372,7 @@ HTML
     }
     shownEnc = enc;
     if (treeMode) document.title = decName(enc);
+    markTree(enc);
     scrollToFrag(frag);
   }
   // A start value is used only if it is an accepted word.
@@ -1368,6 +1502,8 @@ HTML
   }
   applyTheme();
   buildPopover();
+  buildTree();
+  loadTree();
   wireControls();
   start();
   // A new route renders its file. The same file scrolls to its anchor only.
@@ -1530,13 +1666,19 @@ HTML
     pop.appendChild(makeRow('Width', WIDTHS.map(function (v) { return widthButtons[v]; })));
     pop.appendChild(makeRow('Theme', THEMES.map(function (v) { return themeButtons[v]; })));
     var help = document.createElement('p');
-    help.textContent = 'Keys: t theme, w width, ? help';
+    help.textContent = treeMode ? 'Keys: t theme, w width, b tree, ? help' : 'Keys: t theme, w width, ? help';
     pop.appendChild(help);
     notice = document.createElement('p');
     notice.className = 'md-notice';
     notice.textContent = 'Storage is blocked. Your choice is not kept.';
     notice.hidden = true;
     pop.appendChild(notice);
+    if (!treeMode) {
+      var off = document.createElement('p');
+      off.className = 'md-notice';
+      off.textContent = treeOffText();
+      pop.appendChild(off);
+    }
     var label = document.createElement('p');
     label.textContent = 'Paste into md-view.ini:';
     pop.appendChild(label);
@@ -1546,9 +1688,26 @@ HTML
     pop.appendChild(makeButton('Reset', resetChoice));
     refresh();
   }
+  // The notice of a one-file page, from data-tree-why.
+  function treeOffText() {
+    var why = root.getAttribute('data-tree-why');
+    if (why === 'flag') return 'File tree: off (--tree off)';
+    if (why === 'home') return 'File tree: off (the root is the home folder)';
+    if (why === 'slash') return 'File tree: off (the root is /)';
+    return 'File tree: off (tree=off in md-view.ini)';
+  }
   // The gear, a click outside the popover, and the keys.
   function wireControls() {
     gear.addEventListener('click', togglePop);
+    if (treeToggle) treeToggle.addEventListener('click', toggleTree);
+    // A click in the tree, or on a link, leaves the focus in the reading pane.
+    document.addEventListener('click', function (e) {
+      var t = e.target;
+      while (t && t !== document) {
+        if (t.nodeName && String(t.nodeName).toLowerCase() === 'a') { focusContent(); return; }
+        t = t.parentNode;
+      }
+    });
     document.addEventListener('click', function (e) {
       if (pop.hidden || pop.contains(e.target) || gear.contains(e.target)) return;
       closePop();
@@ -1564,6 +1723,7 @@ HTML
       }
       else if (e.key === 't') setTheme(nextWord(THEMES, themeSetting()));
       else if (e.key === 'w') setWidth(nextWord(WIDTHS, root.getAttribute('data-width')));
+      else if (e.key === 'b') toggleTree();
       else if (e.key === '?') openPop();
     });
   }
