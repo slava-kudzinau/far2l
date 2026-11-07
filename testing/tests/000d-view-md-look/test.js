@@ -23,6 +23,18 @@ function CheckLook(name, x, y, tc, underlined) {
 	}
 }
 
+// A cell of the code block's tint (story markdown-code-tint): the fill's
+// blended background rides the row - one eighth of the code role's magenta in
+// the viewer's blue (0x8f101f, the driver's BlendEighth of the same pair).
+// The scheme's 4-bit index rides along under the truecolor field.
+function CheckTint(name, x, y) {
+	var cell = ReadCell(x, y)
+	if (cell.BackTC != 0x8f101f || cell.Back != 1 || !cell.IsBackTC) {
+		Log(name + ": back " + cell.Back + " tc " + cell.IsBackTC + " " + cell.BackTC.toString(16))
+		Panic(name + " shows the wrong tint background")
+	}
+}
+
 // A fresh profile shows the help screen on start; a reused one would not.
 // The white Viewer.Text keeps the ten scheme rows above 3:1 (spec, Resolver
 // order): the scheme look, not the fork table, paints the screen.
@@ -61,10 +73,27 @@ var q = ExpectString("quote text")
 CheckLook("quote", q.X, q.Y, 0xd7afaf, true)
 var it = ExpectString("item one")
 // The bullet of a list item sits two cells left of the text (spec, New roles).
-CheckLook("listmark", it.X - 2, it.Y, 0xffff00, true)
+CheckLook("listmark", it.X - 2, it.Y, 0xaf8787, true)
 CheckLook("body", it.X, it.Y, 0xffff00, true)
 var bd = ExpectString("───┼───")
 CheckLook("rule", bd.X, bd.Y, 0xaf8787, true)
+
+// The javascript fence's code row (story markdown-code-tint): the block's tint
+// fills the whole row - the code cell, the cell past the end of the text and
+// the right edge alike (the fill reaches the edge).  The fence follows the
+// heading: its code row sits two rows below the heading row; the code text
+// starts four cells in (spec, layout) and ends at the ';' on column 15.
+var fence_y = h.Y + 2
+CheckTint("code cell", 4, fence_y)
+CheckTint("past the text", 16, fence_y)
+CheckTint("right edge", 79, fence_y)
+// The row after the block is plain: the viewer's own blue background, as on
+// the rows outside the block.
+var plain = ReadCell(2, fence_y + 2)
+if (plain.BackTC != 0x800000 || plain.Back != 1 || !plain.IsBackTC) {
+	Log("plain back " + plain.Back + " tc " + plain.IsBackTC + " " + plain.BackTC.toString(16))
+	Panic("the row after the fence lost the viewer background")
+}
 
 // Session 2: F4 opens the editor on the same file (the F4/F6 parity of the
 // goal), Escape returns, and the reopen shows the same look (the cache, spec
@@ -88,4 +117,36 @@ TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
 TypeEnter()
 ExpectAppExit(0);
+
+// --- Second run: --norgb shows the plain code background. ---
+StartAppWithSize(["--tty", "--nodetect", "--norgb", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 28);
+if (Exists(profile + "/.config/history/viewer.pos"))
+	Remove(profile + "/.config/history/viewer.pos")
+TypeDown(1)
+TypeFKey(3)
+ExpectString("left/fixture.md")
+// --norgb gates the tint (spec, Contrast): the fence's code row keeps the
+// plain code look - the scheme's code foreground (console.hrd's Code on the
+// 4-bit index 7) on the viewer's own blue background, and so is the row past
+// the end of the text (the fill's area without the blend).
+var n_code = ExpectString("const z")
+var ncell = ReadCell(n_code.X, n_code.Y)
+if (ncell.ForeTC != 0xffaf87 || ncell.Fore != 7) {
+	Log("norgb fore " + ncell.Fore + " ftc " + ncell.ForeTC.toString(16))
+	Panic("--norgb code cell lost the scheme's code foreground")
+}
+if (ncell.BackTC != 0x800000 || ncell.Back != 1 || !ncell.IsBackTC) {
+	Log("norgb back " + ncell.Back + " tc " + ncell.IsBackTC + " " + ncell.BackTC.toString(16))
+	Panic("--norgb code cell shows a tinted background")
+}
+var n_tail = ReadCell(n_code.X + 12, n_code.Y)
+if (n_tail.BackTC != 0x800000 || n_tail.Back != 1 || !n_tail.IsBackTC) {
+	Log("norgb tail back " + n_tail.Back + " tc " + n_tail.IsBackTC + " " + n_tail.BackTC.toString(16))
+	Panic("--norgb shows a tint past the text")
+}
+TypeEscape()
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0)
 0;
