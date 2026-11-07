@@ -666,6 +666,12 @@ case_page_narrow_rule() {
     line_of 'html[data-width] #content { width: 100% }'; narrow=$ln
     [ "$media" -gt "$w80" ] && [ "$narrow" -gt "$media" ] \
         || bad "the narrow rule is not after the width rules"
+    # The gear is hidden by a rule inside the narrow block, between its @media line
+    # and its closing brace. The popover is not hidden below 700 px.
+    nb=$(sed -n '/^@media (max-width: 699px) {$/,/^}$/p' "$page")
+    printf '%s\n' "$nb" | grep -q 'md-pop' && bad "the popover is hidden under 700 px"
+    printf '%s\n' "$nb" | grep -qxF '  #md-gear { display: none }' \
+        || bad "the gear is not hidden under 700 px, inside the narrow block"
     exit 0
 }
 
@@ -692,7 +698,7 @@ case_page_mermaid_theme_hook() {
     for s in \
         'function usedTheme() {' \
         'function applyTheme() {' \
-        'function drawDiagrams(list) {' \
+        'function drawDiagrams(list, batch) {' \
         'function redraw(list) {' \
         "theme: usedTheme() === 'dark' ? 'dark' : 'default'" \
         "matchMedia('(prefers-color-scheme: dark)')" \
@@ -702,7 +708,17 @@ case_page_mermaid_theme_hook() {
         'mermaid.run(' \
         "themeQuery.addEventListener('change', onSystemTheme);" \
         "if (themeSetting() === 'auto') applyTheme();" \
-        'if (mermaidReady) redraw(items);'; do
+        'if (mermaidReady && usedTheme() !== drawnTheme) redraw(items);' \
+        'var drawChain = Promise.resolve();' \
+        'var drawQueued = false;' \
+        'drawChain = drawChain.then(function () {' \
+        'if (drawQueued) return;' \
+        'drawQueued = false;' \
+        'var drawnTheme = null;' \
+        'drawnTheme = usedTheme();' \
+        'function withTimeout(p, ms, onTimeout) {' \
+        'var MERMAID_TIMEOUT = 10000;' \
+        'if (!good.length || batch.cancelled) return;'; do
         grep -qF -- "$s" "$page" || bad "no [$s] in the page"
     done
     exit 0
@@ -737,10 +753,6 @@ case_page_gear_markup() {
     pop=$(grep '^#md-pop {' "$page")
     [ "$(printf '%s\n' "$pop" | grep -c .)" = 1 ] || bad "want one #md-pop rule"
     printf '%s\n' "$pop" | grep -qF 'position: fixed' || bad "the popover is not fixed"
-    # Under 700 px the gear and the popover are hidden, inside the narrow block.
-    line_of '@media (max-width: 699px) {'; m=$ln
-    line_of '  #md-gear, #md-pop { display: none }'; hide=$ln
-    [ "$hide" -gt "$m" ] || bad "the gear is not hidden under 700 px"
     # Values reach the page through textContent. The one innerHTML is the marked output.
     [ "$(iife | grep -c -F 'innerHTML')" = 1 ] || bad "innerHTML is used for more than the marked output"
     iife | grep -qF 'content.innerHTML = marked.parse(src);' || bad "the marked output does not use innerHTML"
@@ -779,6 +791,8 @@ case_page_storage_try_catch() {
         || bad "data-forced does not switch off the saved choice"
     grep -qF 'storageRemove(KEY_WIDTH);' "$d/script" || bad "Reset does not remove the saved width"
     grep -qF 'storageRemove(KEY_THEME);' "$d/script" || bad "Reset does not remove the saved theme"
+    grep -qF 'function save(key, value) {' "$d/script" || bad "no save(key, value) wrapper"
+    grep -qF 'function load() {' "$d/script" || bad "no load() function"
     [ "$(grep -c -F 'Storage is blocked. Your choice is not kept.' "$page")" = 1 ] || bad "want one storage notice"
     grep -qF 'notice.hidden = !storageBlocked;' "$d/script" \
         || bad "the notice is not shown only when storage is blocked"
@@ -800,7 +814,9 @@ case_page_keys_guard() {
     line_of "else if (e.key === '?')"; k_q=$ln
     [ "$g_mod" -lt "$g_tag" ] && [ "$g_tag" -lt "$k_t" ] && [ "$k_t" -lt "$k_w" ] && [ "$k_w" -lt "$k_q" ] \
         || bad "the key guards do not come before the keys"
-    grep -qF "if (e.key === 'Escape') closePop();" "$page" || bad "Esc does not close the popover"
+    grep -qF "if (!pop.hidden) { closePop(); gear.focus(); }" "$page" \
+        || bad "Esc does not close the popover and return focus to the gear"
+    grep -qF "else if (e.key === '?') openPop();" "$page" || bad "? does not open the popover"
     exit 0
 }
 

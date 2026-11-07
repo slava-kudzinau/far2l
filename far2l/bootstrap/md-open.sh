@@ -421,7 +421,7 @@ html[data-width="70"] #content { width: 70% }
 html[data-width="80"] #content { width: 80% }
 @media (max-width: 699px) {
   html[data-width] #content { width: 100% }
-  #md-gear, #md-pop { display: none }
+  #md-gear { display: none }
 }
 pre.mermaid { background: none; }
 pre.mermaid[data-processed] { text-align: center; overflow-x: auto; }
@@ -466,8 +466,12 @@ HTML
   var mermaidReady = false;
   // Mermaid draws one batch at a time. drawChain runs the batches in order, and
   // drawQueued is set while a batch waits and has not read the theme yet.
+  // drawnTheme is the theme of the last batch that started. A batch that does not
+  // settle in MERMAID_TIMEOUT ms shows its source, and the chain goes on.
   var drawChain = Promise.resolve();
   var drawQueued = false;
+  var drawnTheme = null;
+  var MERMAID_TIMEOUT = 10000;
   var storageBlocked = false;
   var forced = root.getAttribute('data-forced') === '1';
   var WIDTHS = ['60', '70', '80'];
@@ -498,7 +502,7 @@ HTML
   function storageGet(key) {
     try { return window.localStorage.getItem(key); } catch (e) { storageBlocked = true; return null; }
   }
-  function storageSet(key, value) {
+  function save(key, value) {
     try { window.localStorage.setItem(key, value); } catch (e) { storageBlocked = true; }
   }
   function storageRemove(key) {
@@ -543,7 +547,7 @@ HTML
     setMedia('hl-light', dark ? 'not all' : 'all');
     setMedia('hl-dark', dark ? 'all' : 'not all');
     root.style.colorScheme = dark ? 'dark' : 'light';
-    if (mermaidReady) redraw(items);
+    if (mermaidReady && usedTheme() !== drawnTheme) redraw(items);
   }
   function onSystemTheme() {
     if (themeSetting() === 'auto') applyTheme();
@@ -629,7 +633,7 @@ HTML
     }
   }
 
-  function drawDiagrams(list) {
+  function drawDiagrams(list, batch) {
     mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: usedTheme() === 'dark' ? 'dark' : 'default' });
     // Each diagram is parsed alone first, so a broken one shows its error and the
     // others still draw.
@@ -641,7 +645,7 @@ HTML
     });
     return Promise.all(parsed).then(function (results) {
       var good = results.filter(Boolean);
-      if (!good.length) return;
+      if (!good.length || batch.cancelled) return;
       return mermaid.run({ nodes: good.map(function (it) { return it.pre; }) }).catch(function (e) {
         console.error(e);
         good.forEach(function (it) {
@@ -665,8 +669,30 @@ HTML
         it.pre.removeAttribute('data-processed');
         it.pre.textContent = it.src;
       });
-      return drawDiagrams(list);
+      drawnTheme = usedTheme();
+      var batch = { cancelled: false };
+      return withTimeout(drawDiagrams(list, batch), MERMAID_TIMEOUT, function () {
+        // A batch that is late does not draw any more; its source is shown.
+        batch.cancelled = true;
+        list.forEach(function (it) {
+          showCode(it.pre, it.src, new Error('it did not draw in ' + (MERMAID_TIMEOUT / 1000) + ' s'));
+        });
+      });
     }).catch(function (e) { console.error(e); });
+  }
+  // Resolves with p, or calls onTimeout and resolves after ms when p has not settled.
+  function withTimeout(p, ms, onTimeout) {
+    var timer = null;
+    var late = new Promise(function (resolve) {
+      timer = setTimeout(function () { onTimeout(); resolve(); }, ms);
+    });
+    return Promise.race([p, late]).then(function (v) {
+      clearTimeout(timer);
+      return v;
+    }, function (e) {
+      clearTimeout(timer);
+      throw e;
+    });
   }
 
   // The popover is made with DOM calls, and its text is set with textContent.
@@ -701,12 +727,12 @@ HTML
   }
   function setWidth(w) {
     root.setAttribute('data-width', w);
-    storageSet(KEY_WIDTH, w);
+    save(KEY_WIDTH, w);
     refresh();
   }
   function setTheme(t) {
     root.setAttribute('data-theme', t);
-    storageSet(KEY_THEME, t);
+    save(KEY_THEME, t);
     applyTheme();
     refresh();
   }
@@ -769,10 +795,12 @@ HTML
       var tg = e.target;
       var tag = tg && tg.nodeName ? String(tg.nodeName).toLowerCase() : '';
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || (tg && tg.isContentEditable)) return;
-      if (e.key === 'Escape') closePop();
+      if (e.key === 'Escape') {
+        if (!pop.hidden) { closePop(); gear.focus(); }
+      }
       else if (e.key === 't') setTheme(nextWord(THEMES, themeSetting()));
       else if (e.key === 'w') setWidth(nextWord(WIDTHS, root.getAttribute('data-width')));
-      else if (e.key === '?') togglePop();
+      else if (e.key === '?') openPop();
     });
   }
 })();
