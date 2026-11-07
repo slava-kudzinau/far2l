@@ -30,6 +30,8 @@ export LC_ALL
 self_dir=$(cd "$(dirname -- "$0")" && pwd) || exit 2
 ini=${XDG_CONFIG_HOME:-$HOME/.config}/far2l/settings/md-view.ini
 cr=$(printf '\r')
+# The umask of the caller. The cache page is made under 077; the browser gets this one.
+old_umask=$(umask)
 
 usage() {
     echo 'usage: md-open.sh [--out <page.html>] [--no-open] [--width 60|70|80]' >&2
@@ -378,7 +380,7 @@ else
             /*) ;;
             *) file_dir=./$file_dir ;;
         esac
-        real_dir=$(cd "$file_dir" && pwd -P) || exit 2
+        real_dir=$(cd "$file_dir" && pwd -P) || { echo "md-open: cannot read $file" >&2; exit 2; }
         file_name=$(basename -- "$file")
         real=${real_dir%/}/$file_name
         crc=$(printf '%s' "$real" | cksum | sed 's/ .*//')
@@ -457,20 +459,27 @@ page_fresh() {
 }
 
 if [ "$cached" = 1 ] && [ "$no_cache" = 0 ] && page_fresh; then
+    umask "$old_umask"
     if [ "$do_open" = 1 ]; then
         open_page "$page"
     fi
     exit 0
 fi
 
-# The page is written to a temporary file in its folder, then moved over the
-# page, so a reader never sees a half page. The file goes on error or a signal.
-# noclobber: the shell does not write through a file or link made at that path.
-tmpf=$page.tmp.$$
-trap 'rm -f "$tmpf"' EXIT
-trap 'exit 1' INT TERM HUP
-rm -f "$tmpf"
-set -C
+# The cache page and the temporary page are written to a temporary file in their
+# folder, then moved over the page, so a reader never sees a half page. The file
+# goes on error or a signal. noclobber: the shell does not write through a file
+# or link made at that path. --out keeps the old direct write to its path.
+tmpf=
+dest=$page
+if [ -z "$out" ]; then
+    tmpf=$page.tmp.$$
+    trap 'rm -f "$tmpf"' EXIT
+    trap 'exit 1' INT TERM HUP
+    rm -f "$tmpf"
+    set -C
+    dest=$tmpf
+fi
 
 # Folder of the Markdown file as a file:// URL for <base href>.
 dir=$(cd "$(dirname -- "$file")" && pwd) || exit 2
@@ -900,10 +909,13 @@ HTML
 })();
 JS
     printf '</script>\n</body>\n</html>\n'
-} > "$tmpf" || { echo "md-open: cannot write $page" >&2; exit 1; }
-set +C
-mv -f "$tmpf" "$page" || { echo "md-open: cannot write $page" >&2; exit 1; }
-trap - EXIT
+} > "$dest" || { echo "md-open: cannot write $page" >&2; exit 1; }
+if [ -n "$tmpf" ]; then
+    set +C
+    mv -f "$tmpf" "$page" || { echo "md-open: cannot write $page" >&2; exit 1; }
+    trap - EXIT
+fi
+umask "$old_umask"
 
 if [ "$do_open" = 1 ]; then
     open_page "$page"

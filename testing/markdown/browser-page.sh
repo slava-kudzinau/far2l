@@ -1286,6 +1286,87 @@ case_cache_name_safe() {
     exit 0
 }
 
+# --out keeps the old direct write: an existing file keeps its mode, a link is
+# written through, and a device works. No temporary file is made.
+case_out_direct_write() {
+    fresh
+    cp "$sample" s.md || bad "cp"
+    printf 'old\n' > "$page" || bad "write"
+    chmod 640 "$page" || bad "chmod"
+    md --no-open --out "$page" s.md
+    [ "$rc" = 0 ] || bad "exit $rc for an existing file: $(cat "$d/err")"
+    grep -qF '<meta name="far2l-md-key"' "$page" || bad "the existing file was not written"
+    case $(ls -l "$page") in
+        -rw-r-----*) ;;
+        *) bad "the existing file lost its mode: $(ls -l "$page")" ;;
+    esac
+    rm -f "$page"
+    : > "$d/target"
+    ln -s "$d/target" "$page" || bad "ln"
+    md --no-open --out "$page" s.md
+    [ "$rc" = 0 ] || bad "exit $rc for a link: $(cat "$d/err")"
+    [ -L "$page" ] || bad "the --out link was replaced"
+    grep -qF '<meta name="far2l-md-key"' "$d/target" || bad "the page was not written through the link"
+    md --no-open --out /dev/stdout s.md
+    [ "$rc" = 0 ] || bad "exit $rc for --out /dev/stdout: $(cat "$d/err")"
+    grep -qF '<meta name="far2l-md-key"' "$d/out" || bad "--out /dev/stdout printed no page"
+    [ ! -d "$XDG_CACHE_HOME/far2l" ] || bad "--out made the cache folder"
+    no_tmp
+    exit 0
+}
+
+# The browser gets the umask of the caller, after a build and after a reuse.
+case_cache_umask_restored() {
+    fresh
+    umask 022
+    cp "$sample" s.md || bad "cp"
+    old s.md
+    mkdir "$d/bin" || bad "mkdir"
+    printf '#!/bin/sh\numask > "%s"\n' "$d/umask" > "$d/bin/um" || bad "write"
+    chmod 755 "$d/bin/um" || bad "chmod"
+    for step in build reuse; do
+        rm -f "$d/umask"
+        md --browser "$d/bin/um" s.md
+        [ "$rc" = 0 ] || bad "exit $rc on $step: $(cat "$d/err")"
+        [ -f "$d/umask" ] || bad "the browser did not run on $step"
+        [ "$(cat "$d/umask")" = 0022 ] || bad "the browser got umask $(cat "$d/umask") on $step, want 0022"
+    done
+    cache_page s.md
+    case $(ls -l "$cpage") in
+        -rw-------*) ;;
+        *) bad "page mode: $(ls -l "$cpage")" ;;
+    esac
+    exit 0
+}
+
+# A build that stops after its temporary file is open (a TERM while marked.min.js
+# is read from a fifo) leaves no temporary file and no page, and exits 1.
+case_cache_tmp_removed_on_error() {
+    fresh
+    cp "$sample" s.md || bad "cp"
+    cache_page s.md
+    mkfifo "$d/fifo" || bad "mkfifo"
+    MARKED_JS=$d/fifo sh "$md_open" --no-open s.md > "$d/out" 2> "$d/err" &
+    pid=$!
+    i=0
+    while [ -z "$(find "$d/cache" -name '*.tmp.*' 2>/dev/null)" ]; do
+        i=$((i + 1))
+        [ "$i" -le 20 ] || { kill -9 "$pid" 2>/dev/null; bad "no temporary file was made"; }
+        sleep 1
+    done
+    kill -TERM "$pid" || bad "kill"
+    # Open the fifo for writing, so that the reader gets end of file and the shell runs its trap.
+    ( : > "$d/fifo" ) &
+    w=$!
+    wait "$pid"
+    rc=$?
+    kill "$w" 2>/dev/null
+    [ "$rc" = 1 ] || bad "exit $rc after TERM, want 1"
+    [ ! -e "$cpage" ] || bad "a page was made"
+    no_tmp
+    exit 0
+}
+
 for c in flags_ok flag_width_bad flag_theme_bad flag_width_missing \
          ini_valid ini_hostile ini_missing ini_browser_bad ini_browser_app_dir \
          init_config_writes init_config_keeps print_association_ok \
@@ -1295,7 +1376,8 @@ for c in flags_ok flag_width_bad flag_theme_bad flag_width_missing \
          page_gear_markup page_print_hidden page_storage_try_catch page_keys_guard page_paste_line \
          vendor_no_close_tag vendor_sha384 \
          cache_path_stable cache_two_files cache_reuse cache_rebuild_on_edit cache_rebuild_on_flag \
-         cache_rebuild_on_ini cache_no_cache_flag cache_dir_mode cache_dir_fallback cache_name_safe; do
+         cache_rebuild_on_ini cache_no_cache_flag cache_dir_mode cache_dir_fallback cache_name_safe \
+         out_direct_write cache_umask_restored cache_tmp_removed_on_error; do
     run "$c"
 done
 
