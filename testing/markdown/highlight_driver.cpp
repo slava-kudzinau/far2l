@@ -842,6 +842,50 @@ struct Case
 	int (*fn)();
 };
 
+// Owner probe 2026-11-07: print the export return code for every fence slug.
+int slug_probe()
+{
+	std::string why;
+	if (!LoadModules(why) || !CreateEditorSet(why)) {
+		printf("FAILED slug_probe: %s\n", why.c_str());
+		return 1;
+	}
+	static const char* s_slugs[] = {
+		"javascript", "js", "typescript", "ts", "jsx", "tsx", "html", "css",
+		"scss", "sass", "python", "py", "java", "csharp", "cs", "cpp", "c++",
+		"c", "go", "golang", "rust", "rs", "php", "ruby", "rb", "kotlin", "kt",
+		"swift", "json", "yaml", "yml", "xml", "ini", "toml", "bash", "sh",
+		"shell", "zsh", "powershell", "ps1", "dockerfile", "docker", "sql",
+		"markdown", "md", "diff", "tex", "latex", "text", "plaintext",
+		"graphql", "r", "perl", "pl", "lua", "matlab", "dart", "elixir", "ex",
+		"erlang", "erl", "clojure", "clj", "haskell", "hs", "scala", "julia",
+		"jl", "groovy", "objectivec", "objc", "obj-c", "fsharp", "fs", "vbnet",
+		"vb", "assembly", "asm", "zig", "nim", "pascal", "pas", "fortran", "f",
+		"lisp", "scheme", "prolog", "actionscript", "as", "applescript",
+		"nginx", "apache", "apacheconf", "makefile", "make", "cmake", "ignore",
+		"gitignore", "properties", "http", "vue", "svelte", "twig", "liquid",
+		"handlebars", "hbs", "blade", "ejs", "less", "stylus", "brainfuck",
+		"bf", "mermaid", "dot", "graphviz", "hcl", "terraform", "proto",
+		"m", "pas", "ignore", "hbs", "vb", "fs", "ex", "erl", "hs", "jl",
+		"kt", "cs", "ps1", "pl", "f", "asm", "tex", "text", "makefile", "apache",
+		"clj", "nim", "scm", "pro", "as", "apple", "njs", "conf", "properties",
+		"liquid", "hbs", "styl", "brainfuck", "bf", "mermaid", "dot", "hcl",
+		"nginx", "clojure", "scheme", "prolog", "applescript", "graphql", nullptr};
+	const wchar_t* line = L"int a = \"s\"; // c\n";
+	const wchar_t* lines[1] = {line};
+	for (int i = 0; s_slugs[i] != nullptr; ++i) {
+		wchar_t w[64];
+		int n = 0;
+		for (; s_slugs[i][n] != '\0' && n < 62; ++n) {
+			w[n] = static_cast<wchar_t>(static_cast<unsigned char>(s_slugs[i][n]));
+		}
+		w[n] = 0;
+		std::vector<Span> spans;
+		printf("SLUG %s %d\n", s_slugs[i], g_tokenize(w, lines, 1, Collect, &spans, 2000));
+	}
+	return 0;
+}
+
 const Case s_cases[] = {
 	{"alias_maps_cpp", alias_maps_cpp},
 	{"alias_maps_zsh", alias_maps_zsh},
@@ -858,7 +902,7 @@ const Case s_cases[] = {
 	{"long_line_rest_stays_code", long_line_rest_stays_code},
 	{"scroll_keeps_token_colors", scroll_keeps_token_colors},
 	{"layout_unchanged", layout_unchanged},
-	{"print_keyword", print_keyword},
+	{"slug_probe", slug_probe},
 	{"print_string", print_string},
 	{"print_comment", print_comment},
 	{"print_number", print_number},
