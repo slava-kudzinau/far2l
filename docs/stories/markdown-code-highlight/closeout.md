@@ -1,8 +1,11 @@
+---
+description: Close-out record for markdown-code-highlight: what shipped, the lasting rulings, and the final review round.
+---
 # Close-out: markdown-code-highlight
 
-Branch `feat/markdown-code-highlight` (base `origin/next/2.9.1-ovr.1`), 24 commits,
-`b17a5034c..8f4d4faf0`. Check: golden + ascii + fence driver + four smoke tests, exit 0.
-Full tier, tier kept (no promotions, no demotions).
+Branch `feat/markdown-code-highlight` (base `origin/next/2.9.1-ovr.1` at `54bd9cc79`),
+35 commits, `8e452d972..75e5f4b7f`. Check: golden + ascii + fence driver + four smoke tests,
+exit 0, rerun green at `75e5f4b7f`. Full tier, tier kept (no promotions, no demotions).
 
 ## What the story built
 
@@ -52,3 +55,22 @@ T5 (the last two on test expectations, not code). No model change is needed.
 - Manual look check in macOS Terminal and ghostty: the owner reviews the fence colors in
   both terminals (truecolor and 256-color), then sets the story status.
 - Docs: ADR-008, viewer spec, data and invariants pages are updated by T6 (8f4d4faf0).
+
+## Final review round
+
+Reviewer (opus, full-branch diff): correct, no blockers; two P2 findings and nits, all
+fixed in `8ec336614` and `75e5f4b7f`:
+
+- Four bridge alias rows sent `ignore`, `conf`, `hbs`, `bf` to the export; the catalog
+  resolves `gitignore`, `apache`, `twig`, `lisp`. `gitignore`, `handlebars` and
+  `brainfuck` fences showed the plain code role. The bridge rows now send the export
+  targets, and the new driver case `alias_probe` pins all four end to end.
+- Test gaps closed: `000c` asserts the horizontal-scroll row (F2 unwrap, Right, token
+  colors of the visible slice); `slug_probe` now carries the eleven no-scheme slugs
+  (`matlab` resolves by type name, the rest keep the code role).
+- Nits: dead global and dead null-check in the export, stale comments, `print_len` by
+  reference (tail pad now fills only the remaining cells), duplicate driver rows,
+  `MdRoleColor256` now used by the `print_norgb` case, doc drift in spec and story
+  (38-row tables, `editorSet` created on demand, `ClassForName`, `--norgb` attribute).
+- `.build/` scaffolding and the `testing/tests/*/workdir` run state left the tracked set;
+  `.gitignore` covers both.
