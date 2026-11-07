@@ -163,6 +163,12 @@ class FarEditorSet
   /** Returns the loaded ParserFactory, or null when the plugin is disabled. */
   ParserFactory* GetParserFactory() { return parserFactory.get(); }
 
+  /** Returns the active scheme's region mapper, or null when the plugin is disabled. */
+  StyledHRDMapper* GetRegionMapper() { return regionMapper.get(); }
+
+  /** Scheme reload counter: changes in ReloadBase; 0 before the first load. */
+  unsigned int GetBaseGeneration() const { return m_baseGeneration; }
+
   bool SetBgEditor() const;
 
   std::unique_ptr<UnicodeString> sTempHrdName;
@@ -243,6 +249,8 @@ class FarEditorSet
   std::unordered_map<intptr_t, std::unique_ptr<FarEditor>> farEditorInstances;
   std::unordered_map<intptr_t, std::unique_ptr<FarViewer>> farViewerInstances;
   std::unique_ptr<ParserFactory> parserFactory;
+  unsigned int m_baseGeneration = 0;
+
   std::unique_ptr<StyledHRDMapper> regionMapper;
 
   /**current value*/
