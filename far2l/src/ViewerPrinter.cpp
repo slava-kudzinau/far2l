@@ -183,7 +183,6 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 	// gates it (spec, States).  The selection overlay rides its own plain background.
 	int64_t tint = (line && line->tint >= 0 && !_selection)
 		? MdCodeTint(FarColorToReal(COL_VIEWERTEXT)) : -1;
-
 	int pos = 0;   // cell coordinate in the row, counted over all runs
 	if (line) {
 		for (const MdRun &run : line->runs) {
@@ -240,6 +239,7 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 			}
 		}
 	}
+
 	// Blank cells (past the line end, or an empty line) take the viewer text
 	// color, not whatever color the last run or the arrows left behind.  A row
 	// with a token group pads with the code role (spec.md, Token roles); a tinted
