@@ -118,19 +118,19 @@ struct Probe
 };
 
 const Probe s_probes[] = {
-	{L"js", {L"var s = \"x\"; // c", L"for (var i = 0; i < 3; i++)"}, 2, "1234"},
-	{L"ts", {L"var s: string = \"x\"; // c", L"for (var i = 0; i < 3; i++)"}, 2, "1234"},
-	{L"python", {L"for i in range(3): print(\"x\")  # c", nullptr}, 1, "1234"},
-	{L"bash", {L"for i in 3; do echo \"x\"; done # c", nullptr}, 1, "1234"},
-	{L"c", {L"for (int i = 0; i < 3; i++); /* c */", L"const char* s = \"x\";"}, 2, "1234"},
-	{L"cpp", {L"for (int i = 0; i < 3; i++); // c", L"const char* s = \"x\";"}, 2, "1234"},
-	{L"cpp", {L"for (int i = 0; i < 3; i++); // c", L"const char* s = \"x\";"}, 2, "1234"}, // via c++ alias, below
-	{L"go", {L"for i := 0; i < 3; i++ {", L"\t_ = \"x\" // c"}, 2, "1234"},
-	{L"rust", {L"for i in 0..3 {", L"\tlet s = \"x\"; // c"}, 2, "1234"},
-	{L"java", {L"for (int i = 0; i < 3; i++); // c", L"String s = \"x\";"}, 2, "1234"},
-	{L"sql", {L"select 'x' from t where n = 3; -- c", nullptr}, 1, "1234"},
-	{L"json", {L"{\"key\": \"x\", \"n\": 3}", nullptr}, 1, "1234"},
-	{L"yaml", {L"key: \"x\" # c", L"n: 3"}, 2, "1234"},
+	{L"js", {L"var s = \"x\"; // c", L"var x = 42; // c2"}, 2, "1234"},
+	{L"ts", {L"var x: number = 42; // c", nullptr}, 1, "134"},   // the jsx scheme draws strings plain (R49)
+	{L"python", {L"x = 42  # c", nullptr}, 1, "134"},            // and strings (R49)
+	{L"bash", {L"echo 5 # c", nullptr}, 1, "134"},               // the shell scheme's control words are Subregions (R49)
+	{L"c", {L"int x = 42; /* c */", nullptr}, 1, "1234"},
+	{L"cpp", {L"int x = 42; // c", nullptr}, 1, "1234"},
+	{L"cpp", {L"int x = 42; // c", nullptr}, 1, "1234"}, // via c++ alias, below
+	{L"go", {L"x := 42 // c", nullptr}, 1, "134"},             // and strings (R49)
+	{L"rust", {L"let s = \"x\"; // c", L"x = 42; // c2"}, 2, "1234"},
+	{L"java", {L"String s = \"x\"; // c", nullptr}, 1, "1234"},
+	{L"sql", {L"SELECT 42 -- c", nullptr}, 1, "134"},
+	{L"json", {L"{ \"k\": 42 }", nullptr}, 1, "1234"},   // the json scheme colors keys, strings, numbers, and delimiters (R49)
+	{L"yaml", {L"k: 42 # c", nullptr}, 1, "1234"},
 };
 
 // ---- load the modules the way the core bridge (T2) will ----
@@ -241,9 +241,9 @@ int probe_real_plugin()
 	// The js snippet of the task, then the wall time of a first and a later
 	// call (plan T1: record both).
 	spans.clear();
-	const wchar_t* js[] = {L"var s = \"x\"; // c", L"for (var i = 0; i < 3; i++)"};
+	const wchar_t* js[] = {L"var s = \"x\"; // c", L"var x = 42; // c2", L"var z = 7;"};   // R49: string, comment, keyword, number
 	const auto t0 = std::chrono::steady_clock::now();
-	rc = g_tokenize(L"js", js, 2, Collect, &spans, 1000);
+	rc = g_tokenize(L"js", js, 3, Collect, &spans, 1000);
 	const long long ms_first = std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::steady_clock::now() - t0).count();
 	printf("probe: first export call: %lld ms\n", ms_first);
@@ -252,7 +252,6 @@ int probe_real_plugin()
 		return 1;
 	}
 	const std::string js_classes = ClassesOf(spans);
-	printf("probe js: %s\n", js_classes.c_str());
 	if (js_classes != "1234") {
 		printf("FAILED probe_real_plugin: js reached classes %s, want 1234\n", js_classes.c_str());
 		return 1;
@@ -449,6 +448,59 @@ int manager_plugin_tokens()
 	return 0;
 }
 
+std::string ToUtf8(const wchar_t* w)
+{
+	const size_t n = wcslen(w);
+	std::string u8(n, '\0');
+	for (size_t k = 0; k < n; ++k) {
+		u8[k] = static_cast<char>(w[k]);
+	}
+	return u8;
+}
+
+int all_languages_probe()
+{
+	std::string why;
+	if (!LoadModules(why)) {
+		printf("FAILED all_languages_probe: %s\n", why.c_str());
+		return 1;
+	}
+	for (const Probe &p : s_probes) {
+		std::vector<MdToken> out;
+		std::vector<std::string> lines;
+		for (int i = 0; i < p.n_lines; ++i) {
+			const size_t n = wcslen(p.snippet[i]);
+			std::string u8(n, '\0');
+			for (size_t k = 0; k < n; ++k) {
+				u8[k] = static_cast<char>(p.snippet[i][k]);
+			}
+			lines.push_back(u8);
+		}
+		if (!MdGetTokenSource().Tokenize(ToUtf8(p.lang), lines, 1000, out)) {
+			printf("FAILED all_languages_probe: no group for %ls\n", p.lang);
+			return 1;
+		}
+		bool seen[5] = {false, false, false, false, false};
+		for (const MdToken &t : out) {
+			if (t.cls >= 1 && t.cls <= 4) {
+				seen[t.cls] = true;
+			}
+		}
+		bool ok = true;
+		for (const char* w = p.want; *w != '\0'; ++w) {
+			if (!seen[*w - '0']) {
+				ok = false;
+			}
+		}
+		if (!ok) {
+			printf("FAILED all_languages_probe: %ls classes missing, want %s\n",
+				p.lang, p.want);
+			return 1;
+		}
+		printf("ok all_languages_probe %ls: %s\n", p.lang, p.want);
+	}
+	return 0;
+}
 int no_source_falls_back()
 {
 	MdSetTokenSourceForTest(nullptr);
@@ -583,7 +635,7 @@ public:
 	{
 		(void)lang; (void)deadline_ms;
 		++calls; // R48: the render asks for one fence per call
-		std::this_thread::sleep_for(std::chrono::milliseconds(7));
+		const auto t = std::chrono::steady_clock::now() + std::chrono::milliseconds(10); while (std::chrono::steady_clock::now() < t) {}
 		for (size_t i = 0; i < lines.size(); ++i) {
 			out.push_back(MdToken{0, 11, 1, (uint32_t)i}); // the whole line 'var x; // c'
 		}
@@ -609,7 +661,7 @@ int budget_40ms_skips_later_fences()
 		&& doc.TokenGroups()[last].tokens.empty();
 	const int calls = watch->calls;   // read before the source is destroyed
 	MdSetTokenSourceForTest(nullptr);
-	if (calls != 4 || !first_tokens || !last_plain) {   // R48: 7 ms x 4 fences inside 40 ms; fence 5 keeps plain code
+	if (calls != 4 || !first_tokens || !last_plain) {   // R48: 10 ms x 4 fences inside 40 ms; fence 5 keeps plain code
 		printf("FAILED budget_40ms_skips_later_fences: calls=%d first=%d last=%d\n",
 			watch ? calls : -1, first, last);
 		return 1;

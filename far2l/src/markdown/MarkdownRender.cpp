@@ -413,6 +413,11 @@ void tokenize_fence(Builder &b, const std::string &lang, const std::wstring &fen
                     t.start += CODE_INDENT;
                     t.end += CODE_INDENT;
                 }
+                // Colorer closes nested regions inner-first; the printer walks tokens in cell order.
+                std::sort(g.tokens.begin(), g.tokens.end(),
+                    [](const MdToken &a, const MdToken &b) {
+                        return a.start < b.start || (a.start == b.start && a.end > b.end);
+                    });
             }
         }
         if (cacheable)

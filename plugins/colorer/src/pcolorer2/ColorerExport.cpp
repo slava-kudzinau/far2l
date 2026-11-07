@@ -93,15 +93,18 @@ int ClassForName(const UnicodeString& name)
 {
 	const wchar_t* base = wcsrchr(name.getBuffer(), L'.');
 	base = (base != nullptr) ? base + 1 : name.getBuffer();
+	const wchar_t* colon = wcsrchr(base, L':');
+	base = (colon != nullptr) ? colon + 1 : base;   // R49: 'jScript:Numbers' is a number
 	if (wcsncmp(base, L"def:", 4) == 0) {
 		base += 4;
 	}
-	if (wcsncmp(base, L"Keyword", 7) == 0) {
-		return 1;
+	if (wcsncmp(base, L"Key", 3) == 0 || wcsncmp(base, L"Command", 7) == 0
+		|| wcscmp(base, L"SymbolStrong") == 0) {
+		return 1;   // Keyword, KeyWord, CommandReserved (bash), SymbolStrong (bash)
 	}
-	if (wcsncmp(base, L"String", 6) == 0 || wcsncmp(base, L"Character", 9) == 0
+	if (wcsncmp(base, L"Str", 3) == 0 || wcsncmp(base, L"Character", 9) == 0
 		|| wcscmp(base, L"Subregion") == 0) {
-		return 2;
+		return 2;   // String, StrQuotes, Subregion: the gaps between scheme leaves
 	}
 	if (wcsncmp(base, L"Comment", 7) == 0) {
 		return 3;
@@ -109,8 +112,8 @@ int ClassForName(const UnicodeString& name)
 	if (wcscmp(base, L"PairStart") == 0 || wcscmp(base, L"PairEnd") == 0) {
 		return 3;  // the delimiters and continuation leaves of a comment block
 	}
-	if (wcsncmp(base, L"Number", 6) == 0) {
-		return 4;
+	if (wcsncmp(base, L"Num", 3) == 0) {
+		return 4;   // Number, NumberDec, Numbers
 	}
 	return 0;
 }
@@ -200,12 +203,10 @@ SHAREDSYMBOL int ColorerTokenizeV1(const wchar_t* lang, const wchar_t* const* li
 	}
 	editorSet->viewerEvent(0, nullptr);
 	if (editorSet == nullptr) {
-		fprintf(stderr, "[x] editorSet null\n");
 		return -1;
 	}
 	ParserFactory* factory = editorSet->GetParserFactory();
 	if (factory == nullptr) {
-		fprintf(stderr, "[x] factory null\n");
 		return -1; // a disabled plugin: ReloadBase returned early
 	}
 	if (deadline_ms <= 0) {
@@ -240,12 +241,20 @@ SHAREDSYMBOL int ColorerTokenizeV1(const wchar_t* lang, const wchar_t* const* li
 		handler.Attach(parser.get());
 		parser->setFileType(file_type);
 		parser->setRegionHandler(&handler);
-		// One export call per fence line (R48): one parse over the fence,
+		// One export call per fence (R48, R49): one parse over the fence,
 		// the parser cache tree carries the scheme state (an open block
-		// comment) from one line to the next.
-		const VectorSource source(lines, count);
+		// comment) from one line to the next.  A sentinel empty line closes
+		// the regions that are open at the fence's end (R49).
+		const wchar_t* sentinel = L"";
+		std::vector<const wchar_t*> all;
+		all.reserve(static_cast<size_t>(count) + 1);
+		for (int i = 0; i < count; ++i) {
+			all.push_back(lines[i]);
+		}
+		all.push_back(sentinel);
+		const VectorSource source(all.data(), count + 1);
 		parser->setLineSource(const_cast<VectorSource *>(&source));
-		parser->parse(0, count, TextParser::TextParseMode::TPM_CACHE_UPDATE);
+		parser->parse(0, count + 1, TextParser::TextParseMode::TPM_CACHE_UPDATE);
 		if (handler.Stopped()) {
 			return 1; // the budget spent; the lines after it keep plain code
 		}
