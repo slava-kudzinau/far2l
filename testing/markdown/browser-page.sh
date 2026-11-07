@@ -11,7 +11,8 @@
 # Each case runs in a subshell with a fresh HOME, XDG_CONFIG_HOME,
 # XDG_CACHE_HOME and TMPDIR under one temporary folder. Stub "open" and
 # "xdg-open" commands come first in PATH, so no real browser ever starts.
-# Prints "ok <case>" or "FAIL <case>" and exits 1 on any failure.
+# Prints "ok <case>", "skip <case>" (the case does not apply on this system) or
+# "FAIL <case>". It exits 1 on any failure. A skip does not fail the run.
 
 LC_ALL=C
 export LC_ALL
@@ -110,14 +111,21 @@ expect_usage() {
     [ ! -e "$page" ] || bad "page made for: $*"
 }
 
+# skip TEXT: the case does not apply on this system. Only called inside a case subshell.
+skip() {
+    echo "  $case_name: skipped, $*" >&2
+    exit 77
+}
+
 run() {
     case_name=$1
-    if ( "case_$1" ); then
-        echo "ok $1"
-    else
-        echo "FAIL $1"
-        fail=1
-    fi
+    ( "case_$1" )
+    st=$?
+    case $st in
+        0) echo "ok $1" ;;
+        77) echo "skip $1" ;;
+        *) echo "FAIL $1"; fail=1 ;;
+    esac
 }
 
 # --- flags ------------------------------------------------------------------
@@ -254,7 +262,7 @@ case_ini_hostile() {
     [ "$(stderr_lines)" = 1 ] || bad "want one stderr line, got: $(cat "$d/err")"
     no_pwned
     # A binary and very long file still gives the defaults.
-    head -c 4096 /dev/urandom > "$ini" 2>/dev/null || bad "random ini"
+    dd if=/dev/urandom of="$ini" bs=4096 count=1 2>/dev/null || bad "random ini"
     rm -f "$page"
     md --no-open --out "$page" "$sample"
     [ "$rc" = 0 ] || bad "exit $rc for a binary ini"
@@ -323,8 +331,7 @@ case_ini_browser_bad() {
 case_ini_browser_app_dir() {
     fresh
     if [ "$(uname -s)" != Darwin ]; then
-        echo "  ini_browser_app_dir: skipped, open -a is macOS only" >&2
-        exit 0
+        skip "open -a is macOS only"
     fi
     mkdir "$d/Tool.app" || bad "mkdir"
     write_ini '[View]' "browser=$d/Tool.app"
@@ -550,7 +557,7 @@ style_block_is() {
     sed -n -e "/^<style id=\"$1\"/,/^<\/style>\$/p" "$page" | sed -e '1d' -e '$d' > "$d/block" || return 1
     n=$(wc -c < "$2" | tr -d ' ')
     [ "$(wc -c < "$d/block" | tr -d ' ')" -ge "$n" ] || return 1
-    head -c "$n" "$d/block" | cmp -s - "$2"
+    dd if="$d/block" bs="$n" count=1 2>/dev/null | cmp -s - "$2"
 }
 
 case_page_has_github_css() {
@@ -701,6 +708,118 @@ case_page_mermaid_theme_hook() {
     exit 0
 }
 
+# iife: the page script, from its first line "(function () {" to the end of the page.
+iife() {
+    sed -n '/^(function () {$/,$p' "$page"
+}
+
+# The gear and the popover: the markup, the fixed position and the narrow rule.
+case_page_gear_markup() {
+    fresh
+    md --no-open --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc"
+    [ "$(grep -c -F '<button id="md-gear"' "$page")" = 1 ] || bad "want one gear button"
+    gear_tag=$(grep -F '<button id="md-gear"' "$page")
+    for s in 'type="button"' 'aria-label="Page settings"' 'aria-controls="md-pop"'; do
+        case $gear_tag in
+            *"$s"*) ;;
+            *) bad "gear button has no [$s]" ;;
+        esac
+    done
+    [ "$(grep -c -F '<div id="md-pop" hidden></div>' "$page")" = 1 ] || bad "want one hidden popover element"
+    gear=$(grep '^#md-gear {' "$page")
+    [ "$(printf '%s\n' "$gear" | grep -c .)" = 1 ] || bad "want one #md-gear rule"
+    for s in 'position: fixed' 'top: 8px' 'right: 8px' 'width: 28px' 'height: 28px' 'opacity: .45'; do
+        printf '%s\n' "$gear" | grep -qF "$s" || bad "gear rule has no [$s]"
+    done
+    grep -qxF '#md-gear:hover, #md-gear:focus { opacity: 1 }' "$page" \
+        || bad "the gear is not full opacity on hover or focus"
+    pop=$(grep '^#md-pop {' "$page")
+    [ "$(printf '%s\n' "$pop" | grep -c .)" = 1 ] || bad "want one #md-pop rule"
+    printf '%s\n' "$pop" | grep -qF 'position: fixed' || bad "the popover is not fixed"
+    # Under 700 px the gear and the popover are hidden, inside the narrow block.
+    line_of '@media (max-width: 699px) {'; m=$ln
+    line_of '  #md-gear, #md-pop { display: none }'; hide=$ln
+    [ "$hide" -gt "$m" ] || bad "the gear is not hidden under 700 px"
+    # Values reach the page through textContent. The one innerHTML is the marked output.
+    [ "$(iife | grep -c -F 'innerHTML')" = 1 ] || bad "innerHTML is used for more than the marked output"
+    iife | grep -qF 'content.innerHTML = marked.parse(src);' || bad "the marked output does not use innerHTML"
+    exit 0
+}
+
+case_page_print_hidden() {
+    fresh
+    md --no-open --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc"
+    sed -n '/^<style id="page">$/,/^<\/style>$/p' "$page" > "$d/page-style" || bad "sed"
+    grep -qxF '@media print { #md-gear, #md-pop { display: none !important } }' "$d/page-style" \
+        || bad "no print rule that hides the gear and the popover in the page style"
+    exit 0
+}
+
+# The saved choice: localStorage only inside try, the two keys, the accepted words and the notice.
+case_page_storage_try_catch() {
+    fresh
+    md --no-open --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc"
+    iife > "$d/script" || bad "no script"
+    for k in far2l-md-width far2l-md-theme; do
+        grep -qF "'$k'" "$d/script" || bad "no saved key [$k]"
+    done
+    n=$(grep -c -F 'localStorage' "$d/script")
+    [ "$n" -ge 3 ] || bad "want localStorage read, write and remove, got $n lines"
+    bare=$(grep -F 'localStorage' "$d/script" | grep -v -F 'try {')
+    [ -z "$bare" ] || bad "localStorage outside try: $bare"
+    [ "$(grep -c -F 'storageBlocked = true' "$d/script")" -ge 3 ] || bad "a catch block does not set the blocked flag"
+    grep -qF 'accepted(storageGet(KEY_WIDTH), WIDTHS, startWidth)' "$d/script" \
+        || bad "the saved width is not checked against the accepted words"
+    grep -qF 'accepted(storageGet(KEY_THEME), THEMES, startTheme)' "$d/script" \
+        || bad "the saved theme is not checked against the accepted words"
+    grep -qF "root.getAttribute('data-forced') === '1'" "$d/script" \
+        || bad "data-forced does not switch off the saved choice"
+    grep -qF 'storageRemove(KEY_WIDTH);' "$d/script" || bad "Reset does not remove the saved width"
+    grep -qF 'storageRemove(KEY_THEME);' "$d/script" || bad "Reset does not remove the saved theme"
+    [ "$(grep -c -F 'Storage is blocked. Your choice is not kept.' "$page")" = 1 ] || bad "want one storage notice"
+    grep -qF 'notice.hidden = !storageBlocked;' "$d/script" \
+        || bad "the notice is not shown only when storage is blocked"
+    exit 0
+}
+
+# The keys: the modifier and field guards come before the keys, and a click outside closes the popover.
+case_page_keys_guard() {
+    fresh
+    md --no-open --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc"
+    [ "$(grep -c -F "addEventListener('keydown'" "$page")" = 1 ] || bad "want one keydown listener"
+    grep -qF "addEventListener('keyup'" "$page" && bad "the keys do not use keydown"
+    grep -qF "document.addEventListener('click', function (e) {" "$page" || bad "no click outside handler"
+    line_of 'if (e.ctrlKey || e.altKey || e.metaKey) return;'; g_mod=$ln
+    line_of "if (tag === 'input' || tag === 'textarea' || tag === 'select' || (tg && tg.isContentEditable)) return;"; g_tag=$ln
+    line_of "if (e.key === 't')"; k_t=$ln
+    line_of "else if (e.key === 'w')"; k_w=$ln
+    line_of "else if (e.key === '?')"; k_q=$ln
+    [ "$g_mod" -lt "$g_tag" ] && [ "$g_tag" -lt "$k_t" ] && [ "$k_t" -lt "$k_w" ] && [ "$k_w" -lt "$k_q" ] \
+        || bad "the key guards do not come before the keys"
+    grep -qF "if (e.key === 'Escape') closePop();" "$page" || bad "Esc does not close the popover"
+    exit 0
+}
+
+# The paste block: three lines built as text, with the notice above it and the Reset button.
+case_page_paste_line() {
+    fresh
+    md --no-open --out "$page" "$sample"
+    [ "$rc" = 0 ] || bad "exit $rc"
+    line_of "return ['[View]', 'width=' + root.getAttribute('data-width'), 'theme=' + themeSetting()].join('\\n');"
+    line_of 'paste.textContent = pasteText();'
+    line_of 'notice.hidden = true;'
+    line_of 'pop.appendChild(notice);'; n1=$ln
+    line_of 'pop.appendChild(paste);'; n2=$ln
+    [ "$n1" -lt "$n2" ] || bad "the notice is not above the paste block"
+    line_of "makeButton('Reset', resetChoice)"
+    line_of "'Keys: t theme, w width, ? help'"
+    exit 0
+}
+
 # --- vendored files ---------------------------------------------------------
 
 vendored='github-markdown-light.css github-markdown-dark.css highlight.min.js hljs-github.min.css hljs-github-dark.min.css marked.min.js'
@@ -750,6 +869,7 @@ for c in flags_ok flag_width_bad flag_theme_bad flag_width_missing \
          browser_no_shell browser_env_dash file_name_hostile \
          page_has_github_css page_width_rules page_start_values page_policy_unchanged \
          page_narrow_rule page_hljs_after_marked page_mermaid_theme_hook \
+         page_gear_markup page_print_hidden page_storage_try_catch page_keys_guard page_paste_line \
          vendor_no_close_tag vendor_sha384; do
     run "$c"
 done

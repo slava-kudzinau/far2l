@@ -421,14 +421,28 @@ html[data-width="70"] #content { width: 70% }
 html[data-width="80"] #content { width: 80% }
 @media (max-width: 699px) {
   html[data-width] #content { width: 100% }
+  #md-gear, #md-pop { display: none }
 }
 pre.mermaid { background: none; }
 pre.mermaid[data-processed] { text-align: center; overflow-x: auto; }
 .mermaid-error { color: #cf222e; color: light-dark(#cf222e, #ff7b72); font-size: 0.85em; text-align: left; }
 .markdown-body pre code.hljs { padding: 0; background: transparent; }
+#md-gear { position: fixed; top: 8px; right: 8px; z-index: 20; box-sizing: border-box; width: 28px; height: 28px; margin: 0; padding: 0; border: 1px solid GrayText; border-radius: 6px; background: Canvas; color: CanvasText; font: 16px/1 sans-serif; cursor: pointer; opacity: .45 }
+#md-gear:hover, #md-gear:focus { opacity: 1 }
+#md-pop { position: fixed; top: 44px; right: 8px; z-index: 21; box-sizing: border-box; width: 264px; max-width: calc(100vw - 16px); padding: 10px; border: 1px solid GrayText; border-radius: 6px; background: Canvas; color: CanvasText; box-shadow: 0 4px 16px rgba(0,0,0,.25); font: 13px/1.4 sans-serif }
+#md-pop p { margin: 6px 0 }
+#md-pop .md-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 4px 0 }
+#md-pop .md-row > span { width: 48px }
+#md-pop button { font: inherit; min-width: 44px; padding: 2px 6px; border: 1px solid GrayText; border-radius: 4px; background: ButtonFace; color: ButtonText; cursor: pointer }
+#md-pop button[aria-pressed="true"] { border-width: 2px; font-weight: 600 }
+#md-pop .md-notice { color: #cf222e; color: light-dark(#cf222e, #ff7b72) }
+#md-pop pre.md-paste { margin: 4px 0 8px; padding: 6px; border: 1px solid GrayText; border-radius: 4px; background: none; font: 12px/1.4 ui-monospace, Menlo, monospace; white-space: pre; overflow-x: auto }
+@media print { #md-gear, #md-pop { display: none !important } }
 </style>
 </head>
 <body class="markdown-body">
+<button id="md-gear" type="button" aria-label="Page settings" aria-expanded="false" aria-controls="md-pop">&#9881;</button>
+<div id="md-pop" hidden></div>
 <main id="content" class="markdown-body"></main>
 <script type="text/markdown" id="md">
 HTML
@@ -450,6 +464,22 @@ HTML
   var themeQuery = window.matchMedia('(prefers-color-scheme: dark)');
   var items = [];
   var mermaidReady = false;
+  // Mermaid draws one batch at a time. drawChain runs the batches in order, and
+  // drawQueued is set while a batch waits and has not read the theme yet.
+  var drawChain = Promise.resolve();
+  var drawQueued = false;
+  var storageBlocked = false;
+  var forced = root.getAttribute('data-forced') === '1';
+  var WIDTHS = ['60', '70', '80'];
+  var THEMES = ['light', 'dark', 'auto'];
+  var KEY_WIDTH = 'far2l-md-width';
+  var KEY_THEME = 'far2l-md-theme';
+  var gear = document.getElementById('md-gear');
+  var pop = document.getElementById('md-pop');
+  var widthButtons = {};
+  var themeButtons = {};
+  var notice = null;
+  var paste = null;
   function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -463,8 +493,32 @@ HTML
   function accepted(v, words, dflt) {
     return words.indexOf(v) >= 0 ? v : dflt;
   }
-  root.setAttribute('data-width', accepted(root.getAttribute('data-start-width'), ['60', '70', '80'], '70'));
-  root.setAttribute('data-theme', accepted(root.getAttribute('data-start-theme'), ['light', 'dark', 'auto'], 'auto'));
+  // Each storage call is inside try. A failed read or write sets storageBlocked,
+  // and the popover then shows a notice. The page works without storage.
+  function storageGet(key) {
+    try { return window.localStorage.getItem(key); } catch (e) { storageBlocked = true; return null; }
+  }
+  function storageSet(key, value) {
+    try { window.localStorage.setItem(key, value); } catch (e) { storageBlocked = true; }
+  }
+  function storageRemove(key) {
+    try { window.localStorage.removeItem(key); } catch (e) { storageBlocked = true; }
+  }
+  // The start values come from md-view.ini or a flag. Each is used only if accepted.
+  var startWidth = accepted(root.getAttribute('data-start-width'), WIDTHS, '70');
+  var startTheme = accepted(root.getAttribute('data-start-theme'), THEMES, 'auto');
+  // Sets the used width and theme: the saved choice, unless data-forced is 1, then the start value.
+  function load() {
+    var w = startWidth;
+    var t = startTheme;
+    if (!forced) {
+      w = accepted(storageGet(KEY_WIDTH), WIDTHS, startWidth);
+      t = accepted(storageGet(KEY_THEME), THEMES, startTheme);
+    }
+    root.setAttribute('data-width', w);
+    root.setAttribute('data-theme', t);
+  }
+  load();
   // The choice in data-theme: light, dark or auto.
   function themeSetting() {
     var t = root.getAttribute('data-theme');
@@ -538,6 +592,8 @@ HTML
     return { pre: pre, src: pre.textContent };
   });
   applyTheme();
+  buildPopover();
+  wireControls();
   if (!items.length) return;
   var s = document.createElement('script');
   s.src = MERMAID_URL;
@@ -548,7 +604,7 @@ HTML
       items.forEach(function (it) { showCode(it.pre, it.src, null); });
     } else {
       mermaidReady = true;
-      drawDiagrams(items);
+      redraw(items);
     }
   };
   s.onerror = function () {
@@ -583,7 +639,7 @@ HTML
         return null;
       });
     });
-    Promise.all(parsed).then(function (results) {
+    return Promise.all(parsed).then(function (results) {
       var good = results.filter(Boolean);
       if (!good.length) return;
       return mermaid.run({ nodes: good.map(function (it) { return it.pre; }) }).catch(function (e) {
@@ -595,15 +651,129 @@ HTML
     }).catch(function (e) { console.error(e); });
   }
 
-  // Draws each diagram again in the used theme. The block gets its source text
-  // back and loses its earlier drawing, then drawDiagrams runs mermaid on it.
+  // Draws each diagram again in the used theme. The batches run one after the
+  // other, so a call that overlaps waits for the one before it. A batch that is
+  // waiting and has not started is not added again: it reads the theme when it
+  // runs. A batch gets the source text back and loses its earlier drawing.
   function redraw(list) {
-    list.forEach(function (it) {
-      it.pre.className = 'mermaid';
-      it.pre.removeAttribute('data-processed');
-      it.pre.textContent = it.src;
+    if (drawQueued) return;
+    drawQueued = true;
+    drawChain = drawChain.then(function () {
+      drawQueued = false;
+      list.forEach(function (it) {
+        it.pre.className = 'mermaid';
+        it.pre.removeAttribute('data-processed');
+        it.pre.textContent = it.src;
+      });
+      return drawDiagrams(list);
+    }).catch(function (e) { console.error(e); });
+  }
+
+  // The popover is made with DOM calls, and its text is set with textContent.
+  function makeButton(text, onClick) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = text;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+  function makeRow(name, buttons) {
+    var row = document.createElement('div');
+    row.className = 'md-row';
+    var label = document.createElement('span');
+    label.textContent = name;
+    row.appendChild(label);
+    buttons.forEach(function (b) { row.appendChild(b); });
+    return row;
+  }
+  // The three lines of md-view.ini for the current choice.
+  function pasteText() {
+    return ['[View]', 'width=' + root.getAttribute('data-width'), 'theme=' + themeSetting()].join('\n');
+  }
+  // Shows the current choice on the buttons, the notice and the paste block.
+  function refresh() {
+    var w = root.getAttribute('data-width');
+    var t = themeSetting();
+    WIDTHS.forEach(function (v) { widthButtons[v].setAttribute('aria-pressed', v === w ? 'true' : 'false'); });
+    THEMES.forEach(function (v) { themeButtons[v].setAttribute('aria-pressed', v === t ? 'true' : 'false'); });
+    notice.hidden = !storageBlocked;
+    paste.textContent = pasteText();
+  }
+  function setWidth(w) {
+    root.setAttribute('data-width', w);
+    storageSet(KEY_WIDTH, w);
+    refresh();
+  }
+  function setTheme(t) {
+    root.setAttribute('data-theme', t);
+    storageSet(KEY_THEME, t);
+    applyTheme();
+    refresh();
+  }
+  // Reset removes the saved choice and applies the start values, in place.
+  function resetChoice() {
+    storageRemove(KEY_WIDTH);
+    storageRemove(KEY_THEME);
+    root.setAttribute('data-width', startWidth);
+    root.setAttribute('data-theme', startTheme);
+    applyTheme();
+    refresh();
+  }
+  function nextWord(list, v) {
+    return list[(list.indexOf(v) + 1) % list.length];
+  }
+  function openPop() {
+    refresh();
+    pop.hidden = false;
+    gear.setAttribute('aria-expanded', 'true');
+  }
+  function closePop() {
+    pop.hidden = true;
+    gear.setAttribute('aria-expanded', 'false');
+  }
+  function togglePop() {
+    if (pop.hidden) openPop(); else closePop();
+  }
+  function buildPopover() {
+    WIDTHS.forEach(function (v) { widthButtons[v] = makeButton(v, function () { setWidth(v); }); });
+    THEMES.forEach(function (v) { themeButtons[v] = makeButton(v, function () { setTheme(v); }); });
+    pop.appendChild(makeRow('Width', WIDTHS.map(function (v) { return widthButtons[v]; })));
+    pop.appendChild(makeRow('Theme', THEMES.map(function (v) { return themeButtons[v]; })));
+    var help = document.createElement('p');
+    help.textContent = 'Keys: t theme, w width, ? help';
+    pop.appendChild(help);
+    notice = document.createElement('p');
+    notice.className = 'md-notice';
+    notice.textContent = 'Storage is blocked. Your choice is not kept.';
+    notice.hidden = true;
+    pop.appendChild(notice);
+    var label = document.createElement('p');
+    label.textContent = 'Paste into md-view.ini:';
+    pop.appendChild(label);
+    paste = document.createElement('pre');
+    paste.className = 'md-paste';
+    pop.appendChild(paste);
+    pop.appendChild(makeButton('Reset', resetChoice));
+    refresh();
+  }
+  // The gear, a click outside the popover, and the keys.
+  function wireControls() {
+    gear.addEventListener('click', togglePop);
+    document.addEventListener('click', function (e) {
+      if (pop.hidden || pop.contains(e.target) || gear.contains(e.target)) return;
+      closePop();
     });
-    drawDiagrams(list);
+    document.addEventListener('keydown', function (e) {
+      // Ctrl, Alt and Meta belong to the browser. Form fields keep their own keys.
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      var tg = e.target;
+      var tag = tg && tg.nodeName ? String(tg.nodeName).toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (tg && tg.isContentEditable)) return;
+      if (e.key === 'Escape') closePop();
+      else if (e.key === 't') setTheme(nextWord(THEMES, themeSetting()));
+      else if (e.key === 'w') setWidth(nextWord(WIDTHS, root.getAttribute('data-width')));
+      else if (e.key === '?') togglePop();
+    });
   }
 })();
 JS
