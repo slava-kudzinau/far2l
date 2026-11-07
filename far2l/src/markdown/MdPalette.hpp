@@ -25,3 +25,15 @@ inline MdRole MdRoleForTokenClass(uint8_t cls)
 		default: return MD_ROLE_CODE;
 	}
 }
+
+// The alias row of a Colorer token class (the V1 export's four classes): the
+// fork table's 24-bit default and its 4-bit foreground - the pair the bridge
+// puts into a range when the plugin has no ColorerTokenizeV2 (story
+// markdown-colorer-fences).  An unknown class takes the plain code row.
+void MdTokenClassLook(uint8_t cls, uint32_t *fg, uint32_t *fg4);
+
+// The far attribute of a cached fence range: the scheme's 24-bit foreground
+// under a truecolor-capable backend, the scheme's 4-bit foreground on the
+// 16-color path, over the viewer text background.  The underline bit is the
+// printer's to apply.
+uint64_t MdRangeColor(uint32_t fg, uint32_t fg4);

@@ -17,6 +17,26 @@ struct MdToken
 	uint32_t line = 0;   // 0-based index into the lines of the Tokenize call
 };
 
+// One token span carrying the scheme's look, not a class (story
+// markdown-colorer-fences, ADR-010): fg is the region's 0xRRGGBB foreground,
+// fg4 the scheme's 4-bit foreground (0..15), underline the style word's bit 4.
+// Coordinates are half-open [start, end), in cells of that line's code-run
+// text (the 4-cell code indent counted), like MdToken.
+struct MdTokenRange
+{
+	uint32_t start;
+	uint32_t end;
+	uint32_t fg;       // 0xRRGGBB
+	uint32_t fg4;      // 0..15
+	bool underline = false;
+	uint32_t line = 0; // 0-based index into the lines of the TokenizeV2 call
+};
+
+// The alias row of a Colorer token class: the fork table's 24-bit default
+// and its 4-bit foreground (MdPalette.cpp; the V1 fallback of TokenizeV2).
+void MdTokenClassLook(uint8_t cls, uint32_t *fg, uint32_t *fg4);
+
+
 // Token source for fence lines: the Colorer plugin export, or a fake for tests.
 class MdTokenSource
 {
@@ -29,6 +49,35 @@ public:
 	// caller then keeps the plain code role.
 	virtual bool Tokenize(const std::string &lang, const std::vector<std::string> &lines,
 		int budget_ms, std::vector<MdToken> &out) = 0;
+
+	// Tokenizes the lines of a fence named lang within budget_ms, in the
+	// scheme's colors: appends the ranges of all lines to out, in line order;
+	// a range's coordinates address its own line, and its `line` is the
+	// 0-based index into lines.  `generation` answers the scheme generation of
+	// the answer, 0 when no scheme backs it.  Returns false when no colors are
+	// available; the caller then keeps the plain code role.
+	// The plugin source calls ColorerTokenizeV2; a missing symbol (an old
+	// plugin binary) falls back to V1's classes through the alias table: the
+	// range keeps the class's four alias rows as the 24-bit and 4-bit pair.
+	virtual bool TokenizeV2(const std::string &lang, const std::vector<std::string> &lines,
+		int budget_ms, std::vector<MdTokenRange> &out, unsigned long long &generation)
+	{
+		// The V1 fallback of the color bridge (spec.md, The core bridge): the
+		// export's four classes, each carrying its alias row as the 24-bit and
+		// 4-bit pair.  The key's generation rides the answer: the alias rows
+		// are the fork's own table, stable under a scheme, so the cache stays
+		// warm across resizes.  Inline, like Ready: the drivers link the core.
+		std::vector<MdToken> flat;
+		if (!Tokenize(lang, lines, budget_ms, flat)) {
+			return false;
+		}
+		for (const MdToken &t : flat) {
+			MdTokenRange r{t.start, t.end, 0, 0, false, t.line};
+			MdTokenClassLook(t.cls, &r.fg, &r.fg4);
+			out.push_back(r);
+		}
+		return true;
+	}
 
 	// Loads the source's backing (the plugin), once, outside the render budget
 	// (R42).  True when tokens are available; the caller keeps the plain code role.
@@ -44,7 +93,6 @@ public:
 #else
 #define MD_COLORER_API
 #endif
-
 MD_COLORER_API std::string MdNormalizeLangName(const std::string &lang);
 
 // The plugin source, or the source installed for the test.

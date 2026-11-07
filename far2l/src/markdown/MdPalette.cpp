@@ -496,3 +496,29 @@ uint64_t MdRoleColor256(uint64_t role)
 	const RoleDefault &def = kRoleDefaults[role - 1];
 	return RgbRealColor(RoleDefault{def.def256, 0, def.fallback16});
 }
+
+// The alias row of a token class: the fork table's own defaults, the rows
+// MdRunColor answers with no Colorer (story markdown-colorer-fences, V1
+// fallback: the class rides as the 24-bit and 4-bit pair).
+void MdTokenClassLook(uint8_t cls, uint32_t *fg, uint32_t *fg4)
+{
+	if (fg == nullptr || fg4 == nullptr)
+		return;
+	const RoleDefault &def = kRoleDefaults[MdRoleForTokenClass(cls) - 1];
+	*fg = def.rgb;
+	*fg4 = def.fallback16 & 0x0f;
+}
+
+uint64_t MdRangeColor(uint32_t fg, uint32_t fg4)
+{
+	const uint64_t body = FarColorToReal(COL_VIEWERTEXT);
+	uint64_t entry = 0;
+	// The scheme's 24-bit foreground under a truecolor-capable backend, the
+	// scheme's 4-bit row on the 16-color path (spec.md, PrintCodeRuns).  The
+	// V2 colors come from the scheme itself: no contrast batch gates them.
+	if (WINPORT(GetConsoleColorPalette)(NULL) >= 8)
+		entry = TrueForeColor(fg) | fg4;
+	else
+		entry = fg4 & 0x0f;
+	return (entry & ~kBackBits) | (body & kBackBits);
+}

@@ -19,6 +19,7 @@
 #include "global.hpp"
 #include "ConsoleOutput.h"
 #include "markdown/MdColorer.hpp"
+#include "markdown/MarkdownRender.hpp"
 #include "cfg/config.hpp"
 #include "mix/pathmix.hpp"
 #include "farcolors.hpp"
@@ -1313,6 +1314,118 @@ struct Case
 	int (*fn)();
 };
 
+// T2: the render's token cache keyed on the scheme generation (spec.md,
+// Cache; story markdown-colorer-fences).  A fake look answers two
+// generations, a fake token source answers ranges; the second render
+// refetches every fence once, a resize does not.  The report prints the
+// fetch count.
+class FenceLookSource : public MdLookSource
+{
+public:
+	unsigned long long m_generation = 52;
+	unsigned long long Generation() override { return m_generation; }
+	unsigned long long Fetch(const char *const *names, int count, MdRegionLook *out) override
+	{
+		(void)names; (void)count; (void)out;
+		return m_generation;
+	}
+};
+
+// One range over each fence line, colored by the case's current fg.  The
+// generation rides the answer unchanged: the key of the entry equals the
+// generation the source answers (the real plugin answers its scheme's).
+class FenceTokenSource : public MdTokenSource
+{
+public:
+	int m_fetches = 0;
+	uint32_t m_fg = 0x00ff00;
+	bool Tokenize(const std::string &lang, const std::vector<std::string> &lines,
+		int budget_ms, std::vector<MdToken> &out) override
+	{
+		(void)lang; (void)budget_ms;
+		for (size_t i = 0; i < lines.size(); ++i) {
+			out.push_back(MdToken{0, 3, 1, static_cast<uint32_t>(i)});
+		}
+		return true;
+	}
+	bool TokenizeV2(const std::string &lang, const std::vector<std::string> &lines,
+		int budget_ms, std::vector<MdTokenRange> &out,
+		unsigned long long &generation) override
+	{
+		(void)lang; (void)budget_ms; (void)generation;
+		++m_fetches;
+		for (size_t i = 0; i < lines.size(); ++i) {
+			out.push_back(MdTokenRange{0, 3, m_fg, 7, false, static_cast<uint32_t>(i)});
+		}
+		return true;
+	}
+};
+
+// Two fences, one language: the render fetches each once (the shared 40 ms
+// budget answers within a millisecond of work).
+int look_fence_generation()
+{
+	auto look = std::make_unique<FenceLookSource>();
+	FenceLookSource *probe = look.get();
+	MdSetLookSourceForTest(std::move(look));
+	auto src = std::make_unique<FenceTokenSource>();
+	FenceTokenSource *fake = src.get();
+	MdSetTokenSourceForTest(std::move(src));
+	const wchar_t *const md = L"```js\nvar x;\n```\n\n```js\nlet y;\n```\n";
+
+	MarkdownDoc doc;
+	doc.Render(md, 80);
+	if (fake->m_fetches != 2) {
+		printf("FAILED look_fence_generation: first render fetched %d, want 2\n",
+			fake->m_fetches);
+		MdSetTokenSourceForTest(nullptr);
+		MdSetLookSourceForTest(nullptr);
+		return 1;
+	}
+
+	doc.Invalidate(72); // a resize: the cache survives, no refetch (R30)
+	if (fake->m_fetches != 2) {
+		printf("FAILED look_fence_generation: resize refetched (%d fetches)\n",
+			fake->m_fetches);
+		MdSetTokenSourceForTest(nullptr);
+		MdSetLookSourceForTest(nullptr);
+		return 1;
+	}
+
+	probe->m_generation = 0x12345678ULL; // a scheme change
+	fake->m_fg = 0x00ffff;               // the new scheme's rows
+	doc.Render(md, 80);
+	if (fake->m_fetches != 4) {
+		printf("FAILED look_fence_generation: scheme change fetched %d total, want 4\n",
+			fake->m_fetches);
+		MdSetTokenSourceForTest(nullptr);
+		MdSetLookSourceForTest(nullptr);
+		return 1;
+	}
+	if (doc.Lines().size() < 3) {
+		printf("FAILED look_fence_generation: %zu lines\n", doc.Lines().size());
+		MdSetTokenSourceForTest(nullptr);
+		MdSetLookSourceForTest(nullptr);
+		return 1;
+	}
+	const MdTokenGroup &g0 = doc.TokenGroups()[doc.Lines()[0].tokens];
+	const MdTokenGroup &g1 = doc.TokenGroups()[doc.Lines()[2].tokens];
+	if (g0.ranges.size() != 1 || g0.ranges[0].start != 4 || g0.ranges[0].end != 7
+		|| g0.ranges[0].fg != 0x00ffff || g0.ranges[0].fg4 != 7
+		|| g1.ranges.size() != 1 || g1.ranges[0].fg != 0x00ffff) {
+		printf("FAILED look_fence_generation: refetch kept the old color or lost the range\n");
+		MdSetTokenSourceForTest(nullptr);
+		MdSetLookSourceForTest(nullptr);
+		return 1;
+	}
+
+	printf("ok look_fence_generation: generation-keyed cache, fetches=%d\n",
+		fake->m_fetches);
+	MdSetTokenSourceForTest(nullptr);
+	MdSetLookSourceForTest(nullptr);
+	return 0;
+}
+
 const Case s_cases[] = {
 	{"look_first_call", look_first_call},
 	{"look_real_hrd", look_real_hrd},
@@ -1328,6 +1441,7 @@ const Case s_cases[] = {
 	{"tokens_v2", tokens_v2},
 	{"tokens_v2_limits", tokens_v2_limits},
 	{"tokens_v2_v1_callers", tokens_v2_v1_callers},
+	{"look_fence_generation", look_fence_generation},
 };
 } // namespace
 

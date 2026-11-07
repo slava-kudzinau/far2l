@@ -554,9 +554,9 @@ int fence_parsed_once()
 	const int gi = RowHasGroup(doc, 0);
 	if (fake == nullptr || fake->calls != 1 || gi < 0
 		|| (size_t)gi >= doc.TokenGroups().size()
-		|| doc.TokenGroups()[gi].tokens.size() != 1
-		|| doc.TokenGroups()[gi].tokens[0].start != 4
-		|| doc.TokenGroups()[gi].tokens[0].cls != 1) {
+		|| doc.TokenGroups()[gi].ranges.size() != 1
+		|| doc.TokenGroups()[gi].ranges[0].start != 4
+		|| doc.TokenGroups()[gi].ranges[0].fg != 0x87afff) {   // the keyword alias row (T2)
 		printf("FAILED fence_parsed_once: calls=%d group=%d\n",
 			fake ? fake->calls : -1, gi);
 		MdSetTokenSourceForTest(nullptr);
@@ -656,9 +656,9 @@ int budget_40ms_skips_later_fences()
 	const int first = RowHasGroup(doc, 0);
 	const int last = RowHasGroup(doc, doc.Lines().size() - 1);
 	const bool first_tokens = first >= 0 && (size_t)first < doc.TokenGroups().size()
-		&& !doc.TokenGroups()[first].tokens.empty();
+		&& !doc.TokenGroups()[first].ranges.empty();
 	const bool last_plain = last >= 0 && (size_t)last < doc.TokenGroups().size()
-		&& doc.TokenGroups()[last].tokens.empty();
+		&& doc.TokenGroups()[last].ranges.empty();
 	const int calls = watch->calls;   // read before the source is destroyed
 	MdSetTokenSourceForTest(nullptr);
 	if (calls != 4 || !first_tokens || !last_plain) {   // R48: 10 ms x 4 fences inside 40 ms; fence 5 keeps plain code
@@ -681,7 +681,7 @@ int long_line_rest_stays_code()
 	const int gi = RowHasGroup(doc, 0);   // FakeSource puts a keyword at cells 4..7
 	MdSetTokenSourceForTest(nullptr);
 	if (gi < 0 || (size_t)gi >= doc.TokenGroups().size()
-		|| doc.TokenGroups()[gi].tokens[0].end > 1004) {
+		|| doc.TokenGroups()[gi].ranges[0].end > 1004) {
 		printf("FAILED long_line_rest_stays_code: group %d, token past cell 1004\n", gi);
 		return 1;
 	}
@@ -699,8 +699,8 @@ int scroll_keeps_token_colors()
 	const int gi2 = RowHasGroup(doc, 0);
 	MdSetTokenSourceForTest(nullptr);
 	if (gi1 < 0 || gi2 < 0
-		|| doc.TokenGroups()[gi1].tokens[0].start != doc.TokenGroups()[gi2].tokens[0].start
-		|| doc.TokenGroups()[gi2].tokens[0].start != 4) {
+		|| doc.TokenGroups()[gi1].ranges[0].start != doc.TokenGroups()[gi2].ranges[0].start
+		|| doc.TokenGroups()[gi2].ranges[0].start != 4) {
 		printf("FAILED scroll_keeps_token_colors: cells moved on resize\n");
 		return 1;
 	}
@@ -767,11 +767,20 @@ int print_role(int cls, uint64_t want_role, const char *name)
 	const int gi = RowHasGroup(doc, 0);
 	MdSetTokenSourceForTest(nullptr);
 	if (gi < 0 || (size_t)gi >= doc.TokenGroups().size()
-		|| doc.TokenGroups()[gi].tokens[0].cls != cls) {
-		printf("FAILED %s: group %d carries the wrong class\n", name, gi);
+		|| doc.TokenGroups()[gi].ranges.empty()) {
+		printf("FAILED %s: group %d carries no range\n", name, gi);
 		return 1;
 	}
-	const uint64_t role = MdRoleForTokenClass(doc.TokenGroups()[gi].tokens[0].cls);
+	// The bridge's V1 fallback carries the class's alias row (story
+	// markdown-colorer-fences): the 24-bit of the spec table.
+	static const uint32_t kAliasFg[] = {0xff87ff, 0x87afff, 0x87ff87, 0x8787af, 0xffaf5f};
+	const uint32_t want_fg = kAliasFg[cls >= 1 && cls <= 4 ? cls : 0];
+	if (doc.TokenGroups()[gi].ranges[0].fg != want_fg) {
+		printf("FAILED %s: cls %d range fg 0x%06X, want 0x%06X\n",
+			name, cls, doc.TokenGroups()[gi].ranges[0].fg, want_fg);
+		return 1;
+	}
+	const uint64_t role = MdRoleForTokenClass(cls);
 	if (role != want_role) {
 		printf("FAILED %s: cls %d maps to role %llu, want %llu\n",
 			name, cls, (unsigned long long)role, (unsigned long long)want_role);

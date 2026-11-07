@@ -16,6 +16,7 @@
 #include <dlfcn.h>
 
 #include <cctype>
+#include <chrono>
 
 #include "WinPort.h"
 
@@ -59,6 +60,12 @@ std::string wide_to_utf8(const wchar_t *text)
 using TokenizeFn = int (*)(const wchar_t *lang, const wchar_t *const *lines, int count,
 	void (*emit)(void *ctx, int line, int start, int end, int token_class), void *ctx,
 	int deadline_ms);
+
+// V2 (story markdown-colorer-fences): the region's real look per token, in
+// 8-word cells; the return is the number of cells written, codes -1..-3,
+// *generation the scheme generation of the answer, 0 on a code.
+using TokenizeV2Fn = int (*)(int abi, const wchar_t *language, const wchar_t *const *lines,
+	int nLines, int budget_ms, uint64_t *cells, int capacity, uint64_t *generation);
 
 // A fence name Colorer's file-name lookup misses gets the name Colorer knows
 // (plan T1, R4; the same table the export applies, so it works without it).
@@ -170,6 +177,9 @@ void *PluginModuleHandle()
 class PluginTokenSource : public MdTokenSource
 {
 	TokenizeFn m_tokenize = nullptr;
+	// The V2 export, bound beside V1; null on an old plugin binary, whose
+	// cells keep V1's classes through the alias table.
+	TokenizeV2Fn m_tokenize_v2 = nullptr;
 	bool m_broken = false;
 
 	// Finds the loaded plugin module and its export, once.
@@ -179,8 +189,12 @@ class PluginTokenSource : public MdTokenSource
 		if (handle == nullptr) {
 			return false;
 		}
-		m_tokenize = reinterpret_cast<TokenizeFn>(dlsym(handle, "ColorerTokenizeV1"));
-		return m_tokenize != nullptr;
+	m_tokenize = reinterpret_cast<TokenizeFn>(dlsym(handle, "ColorerTokenizeV1"));
+	// One binding for both exports: the module answers V2 beside V1, once
+	// (spec.md, The core bridge; the binding loads lazily, on the first fence).
+	m_tokenize_v2 = reinterpret_cast<TokenizeV2Fn>(
+		dlsym(handle, "ColorerTokenizeV2"));
+	return m_tokenize != nullptr;
 	}
 
 public:
@@ -250,6 +264,64 @@ public:
 			return false;
 		}
 		return true; // 0 all lines, 1 stopped at the deadline (tokens so far stay)
+	}
+
+	// Tokenizes in the scheme's colors: one V2 export call per line (a cell
+	// carries no line word, so the call carries the line), all lines sharing
+	// one deadline.  The caps are the export's: 32 lines, 256 cells.  Without
+	// the V2 symbol, V1's classes fall through the alias table to the 24-bit
+	// and 4-bit pair (spec.md, The core bridge).
+	bool TokenizeV2(const std::string &lang, const std::vector<std::string> &lines,
+		int budget_ms, std::vector<MdTokenRange> &out, unsigned long long &generation) override
+	{
+		if (m_broken) {
+			return false;
+		}
+		if (m_tokenize == nullptr && !Open()) {
+			m_broken = true;
+			return false;
+		}
+		if (m_tokenize_v2 == nullptr) {
+			return MdTokenSource::TokenizeV2(lang, lines, budget_ms, out, generation);
+		}
+		const std::string name = MdNormalizeLangName(lang);
+		if (name.empty()) {
+			return true; // a name the catalog cannot map: plain code role
+		}
+		const std::wstring wide_lang = utf8_to_wide(name);
+		const size_t count = lines.size() < 32 ? lines.size() : 32; // the V2 line cap
+		const auto deadline = std::chrono::steady_clock::now()
+			+ std::chrono::milliseconds(budget_ms > 0 ? budget_ms : 1);
+		std::vector<uint64_t> cells(8 * 256);
+		for (size_t i = 0; i < count; ++i) {
+			const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
+				deadline - std::chrono::steady_clock::now()).count();
+			if (left <= 0) {
+				break; // a deadline stop: the partial group paints and caches as-is (R29)
+			}
+			const std::wstring wide_line = utf8_to_wide(lines[i]);
+			const wchar_t *one = wide_line.c_str();
+			uint64_t gen = 0;
+			const int rc = m_tokenize_v2(1, wide_lang.c_str(), &one, 1,
+				static_cast<int>(left), cells.data(), 256, &gen);
+			if (rc == -2) { // unknown language: the fence keeps the plain code role (R44)
+				return false;
+			}
+			if (rc < 0) { // -1 no editorSet, -3 a Colorer exception
+				m_broken = true;
+				return false;
+			}
+			generation = gen; // the scheme generation of the answer
+			for (int c = 0; c < rc; ++c) {
+				const uint64_t *cell = cells.data() + static_cast<size_t>(c) * 8;
+				// 1-based inclusive cells -> the group's half-open coordinates.
+				out.push_back(MdTokenRange{static_cast<uint32_t>(cell[0] - 1),
+					static_cast<uint32_t>(cell[1]), static_cast<uint32_t>(cell[2]),
+					static_cast<uint32_t>(cell[3]), (cell[4] & 4) != 0,
+					static_cast<uint32_t>(i)});
+			}
+		}
+		return true;
 	}
 };
 
