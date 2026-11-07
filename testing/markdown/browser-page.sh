@@ -2049,6 +2049,10 @@ case_tree_page_markup() {
     printf '# A\nx \\\\ y <\\/script> <\\!-- c -->\nend\n\n' > "$d/want"
     cmp -s "$d/want" "$d/got" || bad "text of a.md: [$(cat "$d/got")]"
     if grep -qF 'not markdown' "$page"; then bad "a file that is not Markdown is in the page"; fi
+    # The file elements and the index come before marked.
+    line_of '<script type="text/plain" id="md-tree">'; l_tree=$ln
+    line_of 'marked v18.1.3'; l_marked=$ln
+    [ "$l_tree" -lt "$l_marked" ] || bad "the tree index is not before marked"
     # A file that cannot be read gives an empty element, and the page is made.
     chmod 000 proj/z/b.md || bad "chmod"
     tpage proj/sub/o.md
@@ -2357,6 +2361,43 @@ case_cache_tree_deleted_file() {
     exit 0
 }
 
+case_cache_tree_renamed_file() {
+    fresh
+    tree_proj
+    md_wd --no-open proj/o.md
+    mark
+    mv proj/a.md proj/a2.md || bad "mv"
+    old proj/a2.md
+    md_wd --no-open proj/o.md
+    [ "$rc" = 0 ] || bad "exit $rc after the rename"
+    if marked; then bad "the page was not built again after a rename"; fi
+    grep -qF 'data-path="a2.md"' "$cpage" || bad "the renamed file is not in the page"
+    no_tmp
+    exit 0
+}
+
+# repeat TEXT N: TEXT N times on one line.
+repeat() {
+    awk -v t="$1" -v n="$2" 'BEGIN { for (i = 0; i < n; i++) printf "%s", t; printf "\n" }'
+}
+
+case_tree_page_long_lines() {
+    fresh
+    mkdir proj || bad "mkdir"
+    printf '# opened\n' > proj/o.md || bad "write"
+    # One line of 1000000 backslashes, and one of 500000 "</" (1000000 bytes).
+    repeat '\\' 1000000 > proj/bs.md || bad "write bs"
+    repeat '</' 500000 > proj/lt.md || bad "write lt"
+    tpage proj/o.md
+    { repeat '\\\\' 1000000; echo; } > "$d/want"
+    elem_text bs.md > "$d/got"
+    cmp -s "$d/want" "$d/got" || bad "text of bs.md is not exact"
+    { repeat '<\\/' 500000; echo; } > "$d/want"
+    elem_text lt.md > "$d/got"
+    cmp -s "$d/want" "$d/got" || bad "text of lt.md is not exact"
+    exit 0
+}
+
 case_cache_tree_head_only() {
     fresh
     tree_proj
@@ -2417,7 +2458,8 @@ for c in flags_ok flag_width_bad flag_theme_bad flag_width_missing \
          scan_order scan_names_hostile list_tree_flag root_newline \
          tree_page_markup tree_page_index tree_page_attrs tree_page_cut tree_page_names_hostile \
          tree_off_same_page tree_key_line cache_tree_reuse cache_tree_changed_file \
-         cache_tree_added_file cache_tree_deleted_file cache_tree_head_only cache_tree_no_cache; do
+         cache_tree_added_file cache_tree_deleted_file cache_tree_head_only cache_tree_no_cache \
+         cache_tree_renamed_file tree_page_long_lines; do
     run "$c"
 done
 

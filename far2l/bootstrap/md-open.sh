@@ -495,38 +495,28 @@ list_tree_text() {
 # script element of the class "md-file". Each has data-path, the encoded tree
 # path. Then the tree index "md-tree" has the "<state> <ENC>" lines of
 # list_tree_text, without the root line and the cap line. One awk pass reads
-# all files from the root, as "./<tree path>". The text gets the escapes of
-# the one-file page: a BOM on line 1 and a CR at a line end go, then "\" becomes
-# "\\", "</" becomes "<\/" and "<!--" becomes "<\!--". A file that cannot be
-# read gives an empty element.
+# all files from the root, as "./<tree path>", and removes a BOM on line 1 and
+# a CR at a line end. One sed pass then gives the text the escapes of the
+# one-file page: "\" becomes "\\", "</" becomes "<\/" and "<!--" becomes "<\!--".
+# A file that cannot be read gives an empty element.
 page_files() {
     (
         cd "$tree_root" || exit 1
         { [ -n "$tree_list" ] && printf '%s\n' "$tree_list"; } |
         MD_OPENED=$tree_opened awk "$enc_fn"'
-        # rep(s, a, b): s with each a replaced by b, as plain text.
-        function rep(s, a, b,    r, i) {
-            r = ""
-            while ((i = index(s, a)) > 0) {
-                r = r substr(s, 1, i - 1) b
-                s = substr(s, i + length(a))
-            }
-            return r s
-        }
+        # Each output line starts with a mark for the sed below: "T" for a tag
+        # line, "|" for a text line, which gets the escapes.
         function emit(p, attrs,    f, line, n) {
-            printf "<script type=\"text/markdown\" %s data-path=\"%s\">\n", attrs, enc(p)
+            printf "T<script type=\"text/markdown\" %s data-path=\"%s\">\n", attrs, enc(p)
             f = "./" p
             n = 0
             while ((getline line < f) > 0) {
                 if (n++ == 0 && substr(line, 1, 3) == "\357\273\277") line = substr(line, 4)
                 if (substr(line, length(line)) == "\r") line = substr(line, 1, length(line) - 1)
-                line = rep(line, "\\", "\\\\")
-                line = rep(line, "</", "<\\/")
-                line = rep(line, "<!--", "<\\!--")
-                print line
+                print "|" line
             }
             close(f)
-            printf "\n</script>\n"
+            printf "T\nT</script>\n"
         }
         BEGIN {
             opened = ENVIRON["MD_OPENED"]
@@ -535,7 +525,10 @@ page_files() {
         substr($0, 1, 5) == "page " {
             p = substr($0, 6)
             if (p != opened) emit(p, "class=\"md-file\"")
-        }'
+        }' |
+        # The escapes of the one-file page, with sed (linear in the line length).
+        sed -e '/^T/{' -e 's/^T//' -e b -e '}' -e 's/^|//' \
+            -e 's/\\/\\\\/g' -e 's|</|<\\/|g' -e 's|<!--|<\\!--|g'
     ) || return 1
     printf '<script type="text/plain" id="md-tree">\n'
     list_tree_text | sed -e 1d -e '/^cap /d'
