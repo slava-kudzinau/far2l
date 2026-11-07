@@ -33,6 +33,8 @@ export LC_ALL
 self_dir=$(cd "$(dirname -- "$0")" && pwd) || exit 2
 ini=${XDG_CONFIG_HOME:-$HOME/.config}/far2l/settings/md-view.ini
 cr=$(printf '\r')
+nl='
+'
 # The umask of the caller. The cache page is made under 077; the browser gets this one.
 old_umask=$(umask)
 
@@ -304,6 +306,14 @@ open_page() {
     fi
 }
 
+# real_of DIR: sets rp to the real path of DIR (cd -P, then pwd -P). The "x"
+# after pwd keeps a newline at the end of the path, which command substitution
+# would remove. DIR must be absolute or start with "./". Returns 1 on failure.
+real_of() {
+    rp=$(cd -P "$1" && pwd -P && echo x) || return 1
+    rp=${rp%"$nl"x}
+}
+
 # find_repo_root START: sets repo_root to the first folder from START upward
 # that has .git (a folder or a file). START is a real path. The walk checks
 # $HOME (its real path, in home_real) and stops there; it never checks /.
@@ -317,7 +327,8 @@ find_repo_root() {
             return 0
         fi
         [ -n "$home_real" ] && [ "$d" = "$home_real" ] && break
-        d=$(cd -P "$d/.." && pwd -P) || break
+        real_of "$d/.." || break
+        d=$rp
     done
     return 1
 }
@@ -345,9 +356,10 @@ function enc(s,    r, i, c, n) {
 }
 '
 
-# enc_path TEXT: prints TEXT encoded. A newline in TEXT becomes %0A.
+# enc_path TEXT: prints TEXT encoded. A newline in TEXT becomes %0A. The added
+# newline ends the last record, so a newline at the end of TEXT is kept too.
 enc_path() {
-    printf '%s' "$1" | awk "$enc_fn"'
+    printf '%s\n' "$1" | awk "$enc_fn"'
         { s = s (NR > 1 ? "%0A" : "") enc($0) }
         END { print s }'
 }
@@ -382,8 +394,6 @@ scan_find() {
 # first toward the page limit.
 scan_tree() {
     [ -d "$tree_root" ] || return 1
-    nl='
-'
     files=$(scan_find) || return 1
     big=$(scan_find -size +1048576c) || return 1
     # The opened file joins the scan unless its tree path has a byte below 0x20.
@@ -609,10 +619,11 @@ case $file_dir in
     *) file_dir=./$file_dir ;;
 esac
 file_name=${file##*/}
-real_dir=$(cd -P "$file_dir" && pwd -P) || { echo "md-open: cannot read $file" >&2; exit 2; }
+real_of "$file_dir" || { echo "md-open: cannot read $file" >&2; exit 2; }
+real_dir=$rp
 home_real=
 case ${HOME:-} in
-    /*) home_real=$(cd -P "$HOME" 2>/dev/null && pwd -P) || home_real= ;;
+    /*) real_of "$HOME" 2>/dev/null && home_real=$rp ;;
 esac
 
 # The root: the real folder of the opened file, or with root=repo the first

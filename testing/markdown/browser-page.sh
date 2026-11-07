@@ -1369,6 +1369,9 @@ case_cache_tmp_removed_on_error() {
 
 # --- tree settings, root and scan (story markdown-browser-tree-panel) --------
 
+tnl='
+'
+
 # md_wd ARGS...: md under a watchdog. A run that takes 20 s is killed, and the
 # case fails. The watchdog writes nothing to the test output.
 md_wd() {
@@ -1393,9 +1396,16 @@ lt() {
     [ ! -s "$d/err" ] || bad "--list-tree stderr: $(cat "$d/err")"
 }
 
-# real DIR: the real path of DIR.
+# real DIR: sets rpath to the real path of DIR. The "x" after pwd keeps a
+# newline at the end of the path, which command substitution would remove.
+# encreal DIR: prints the encoded real path of DIR.
 real() {
-    (cd -P "$1" && pwd -P) || bad "real $1"
+    rpath=$(cd -P "$1" && pwd -P && echo x) || bad "real $1"
+    rpath=${rpath%"$tnl"x}
+}
+encreal() {
+    real "$1"
+    enc "$rpath"
 }
 
 # enc TEXT: TEXT encoded as the spec says (each byte outside A-Za-z0-9._~/-
@@ -1464,7 +1474,7 @@ case_tree_ini_keys() {
     [ "$(body)" = off ] || bad "tree=off gave: $(cat "$d/out")"
     write_ini '[View]' 'root=repo'
     lt proj/sub/s.md
-    [ "$(line1)" = "$(enc "$(real proj)")" ] || bad "root=repo gave root [$(line1)]"
+    [ "$(line1)" = "$(encreal proj)" ] || bad "root=repo gave root [$(line1)]"
     has 'page a.md'
     write_ini '[View]' 'root=repo' 'tree_depth=2'
     lt proj/sub/s.md
@@ -1482,6 +1492,9 @@ case_tree_ini_keys() {
     write_ini '[Other]' 'tree=off' '[View]' 'tree_depth = 1 '
     lt proj/sub/s.md
     [ "$(body | sed -n 1p)" != off ] || bad "a key outside [View] was used"
+    # The value is trimmed and used: depth 1.
+    [ "$(deepest)" = 1 ] || bad "tree_depth = 1 gave depth $(deepest)"
+    [ "$(body)" = 'page s.md' ] || bad "tree_depth = 1 lists: $(body)"
     exit 0
 }
 
@@ -1508,12 +1521,14 @@ case_tree_ini_hostile() {
     fresh
     mkdir proj || bad "mkdir"
     chain proj 9
+    # A .git above proj: a bad root= value that fell back to repo would show.
+    mkdir .git || bad "mkdir .git"
     for v in '-1' '<scriptXQX>' '0' '000' '6x' ' ' '' '+3' '1e2' '$(touch PWNED)' '0x3'; do
         write_ini '[View]' "tree_depth=$v" "tree_max_files=$v" "tree=$v" "root=$v"
         lt proj/top.md
         [ "$(deepest)" = 6 ] || bad "tree_depth=[$v] gave depth $(deepest), want 6"
         hasnt '^cap'
-        [ "$(line1)" = "$(enc "$(real proj)")" ] || bad "root=[$v] gave root [$(line1)]"
+        [ "$(line1)" = "$(encreal proj)" ] || bad "root=[$v] gave root [$(line1)]"
     done
     # A leading zero is a decimal number.
     write_ini '[View]' 'tree_depth=007'
@@ -1564,7 +1579,8 @@ case_tree_off_no_scan() {
     FIND_LOG=$d/find.log
     export FIND_LOG
     PATH=$d/fstub:$PATH
-    rootr=$(real "$d/proj")
+    real "$d/proj"
+    rootr=$rpath
     # The stub logs a call when the tree is on.
     : > "$FIND_LOG"
     lt "$d/proj/a.md"
@@ -1606,20 +1622,52 @@ case_tree_off_no_scan() {
     exit 0
 }
 
+# A folder name that ends in a newline is not its sibling without the newline.
+case_root_newline() {
+    fresh
+    nlname='p
+'
+    mkdir p "$nlname" || bad "mkdir"
+    printf 'SIBLING\n' > p/a.md; : > p/other.md
+    printf 'REAL\n' > "${nlname}/a.md"
+    lt "${nlname}/a.md"
+    case $(line1) in
+        */p%0A) ;;
+        *) bad "line 1 does not end in p%0A: $(line1)" ;;
+    esac
+    [ "$(line1)" = "$(encreal "$nlname")" ] || bad "line 1 is [$(line1)]"
+    [ "$(body)" = 'page a.md' ] || bad "lists: $(body)"
+    hasnt 'other.md'
+    exit 0
+}
+
+# A file in / gives the root /: one-file mode. It needs a readable plain file in
+# /, which slash_file names (found before the cases run).
+case_root_slash_off() {
+    fresh
+    lt "$slash_file"
+    [ "$(line1)" = / ] || bad "line 1 is [$(line1)]"
+    [ "$(body)" = off ] || bad "a file in / gave: $(cat "$d/out")"
+    write_ini '[View]' 'root=repo'
+    lt "$slash_file"
+    [ "$(body)" = off ] || bad "root=repo for a file in / gave: $(cat "$d/out")"
+    exit 0
+}
+
 case_root_dir() {
     fresh
     mkdir -p "proj/.git" "proj/sub" || bad "mkdir"
     : > proj/sub/s.md; : > proj/top.md
     ln -s "$d/work/proj/sub" lnk || bad "ln"
     lt proj/sub/s.md
-    [ "$(line1)" = "$(enc "$(real proj/sub)")" ] || bad "root=dir root is [$(line1)]"
+    [ "$(line1)" = "$(encreal proj/sub)" ] || bad "root=dir root is [$(line1)]"
     [ "$(body)" = 'page s.md' ] || bad "root=dir lists: $(body)"
     # A path through a linked folder gives the real folder.
     lt lnk/s.md
-    [ "$(line1)" = "$(enc "$(real proj/sub)")" ] || bad "root through a link is [$(line1)]"
+    [ "$(line1)" = "$(encreal proj/sub)" ] || bad "root through a link is [$(line1)]"
     write_ini '[View]' 'root=dir'
     (cd proj/sub && lt s.md) || exit 1
-    [ "$(line1)" = "$(enc "$(real proj/sub)")" ] || bad "a relative file gave root [$(line1)]"
+    [ "$(line1)" = "$(encreal proj/sub)" ] || bad "a relative file gave root [$(line1)]"
     exit 0
 }
 
@@ -1631,18 +1679,18 @@ case_root_repo() {
     : > other/o.md; : > other/x/y/g.md
     write_ini '[View]' 'root=repo'
     lt proj/a/b/f.md
-    [ "$(line1)" = "$(enc "$(real proj)")" ] || bad ".git folder: root is [$(line1)]"
+    [ "$(line1)" = "$(encreal proj)" ] || bad ".git folder: root is [$(line1)]"
     has 'page top.md'
     has 'page a/b/f.md'
     # .git as a file is a match too.
     lt other/x/y/g.md
-    [ "$(line1)" = "$(enc "$(real other)")" ] || bad ".git file: root is [$(line1)]"
+    [ "$(line1)" = "$(encreal other)" ] || bad ".git file: root is [$(line1)]"
     has 'page o.md'
     has 'page x/y/g.md'
     # The first match upward wins.
     mkdir proj/a/.git || bad "mkdir inner .git"
     lt proj/a/b/f.md
-    [ "$(line1)" = "$(enc "$(real proj/a)")" ] || bad "inner .git: root is [$(line1)]"
+    [ "$(line1)" = "$(encreal proj/a)" ] || bad "inner .git: root is [$(line1)]"
     has 'page b/f.md'
     exit 0
 }
@@ -1654,14 +1702,14 @@ case_root_repo_none() {
     : > "$HOME/p/q/f.md"; : > "$HOME/p/up.md"
     write_ini '[View]' 'root=repo'
     lt "$HOME/p/q/f.md"
-    [ "$(line1)" = "$(enc "$(real "$HOME/p/q")")" ] || bad "no .git: root is [$(line1)]"
+    [ "$(line1)" = "$(encreal "$HOME/p/q")" ] || bad "no .git: root is [$(line1)]"
     [ "$(body)" = 'page f.md' ] || bad "no .git lists: $(body)"
     # A file outside HOME with no .git up to /: the root=dir folder.
     rmdir "$d/.git" || bad "rmdir"
     mkdir -p "$d/out1/r" || bad "mkdir"
     : > "$d/out1/r/g.md"
     lt "$d/out1/r/g.md"
-    [ "$(line1)" = "$(enc "$(real "$d/out1/r")")" ] || bad "outside HOME: root is [$(line1)]"
+    [ "$(line1)" = "$(encreal "$d/out1/r")" ] || bad "outside HOME: root is [$(line1)]"
     exit 0
 }
 
@@ -1670,7 +1718,7 @@ case_root_home_off() {
     HOME=$d/home
     : > "$HOME/notes.md"; : > "$HOME/other.md"
     lt "$HOME/notes.md"
-    [ "$(line1)" = "$(enc "$(real "$HOME")")" ] || bad "line 1 is [$(line1)]"
+    [ "$(line1)" = "$(encreal "$HOME")" ] || bad "line 1 is [$(line1)]"
     [ "$(body)" = off ] || bad "a file in HOME gave: $(cat "$d/out")"
     # root=repo from a folder under HOME with .git in HOME: the root is HOME.
     mkdir -p "$HOME/.git" "$HOME/p" || bad "mkdir"
@@ -1737,7 +1785,7 @@ case_scan_depth() {
     # The opened file is in the tree at any depth.
     write_ini '[View]' 'tree_depth=3'
     lt proj/c1/c2/c3/c4/c5/c6/c7/c8/d8.md
-    [ "$(line1)" = "$(enc "$(real proj/c1/c2/c3/c4/c5/c6/c7/c8)")" ] || bad "root=dir for a deep file"
+    [ "$(line1)" = "$(encreal proj/c1/c2/c3/c4/c5/c6/c7/c8)" ] || bad "root=dir for a deep file"
     write_ini '[View]' 'tree_depth=3' 'root=repo'
     mkdir proj/.git || bad "mkdir .git"
     lt proj/c1/c2/c3/c4/c5/c6/c7/c8/d8.md
@@ -1880,7 +1928,8 @@ case_list_tree_flag() {
     : > 'r[a]*? x/a.md'; : > 'r[a]*? x/sub/b.md'; : > 'r[a]*? x/other/c.md'; : > 'r[a]*? x/b.txt'
     : > ra.md
     lt 'r[a]*? x/a.md'
-    r=$(real 'r[a]*? x')
+    real 'r[a]*? x'
+    r=$rpath
     want="$(enc "$r")
 page a.md
 page other/c.md
@@ -1916,8 +1965,23 @@ for c in flags_ok flag_width_bad flag_theme_bad flag_width_missing \
          tree_ini_keys tree_ini_ceiling tree_ini_hostile tree_flag tree_off_no_scan \
          root_dir root_repo root_repo_none root_home_off \
          scan_skip_rules scan_symlinks scan_depth scan_cap scan_open_past_cap scan_big scan_cut \
-         scan_order scan_names_hostile list_tree_flag; do
+         scan_order scan_names_hostile list_tree_flag root_newline; do
     run "$c"
 done
+
+# root_slash_off runs only when / has a readable plain file. Else it is not run,
+# and a note goes to stderr (not a skip line, so the run stays skip-free).
+slash_file=
+for f in /.file /*; do
+    if [ -f "$f" ] && [ -r "$f" ]; then
+        slash_file=$f
+        break
+    fi
+done
+if [ -n "$slash_file" ]; then
+    run root_slash_off
+else
+    echo "  root_slash_off: not run, / has no readable plain file" >&2
+fi
 
 exit "$fail"
