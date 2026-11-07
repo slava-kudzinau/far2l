@@ -15,6 +15,8 @@ Regression copies that the acceptance criteria name:
 - With `find -L`, `browser-page.sh` fails `scan_symlinks`.
 - The T2 review put the old quadratic escape back, and the long-line case failed on time.
 
+The draft PR is #16 into `next/2.9.1-ovr.1`. The merge waits for the owner.
+
 ## Rulings
 
 1. One page holds every file of the tree as an inline `script` element. A `file://` page cannot read another file, and the page policy allows no `script src` from `file:`. The owner confirmed the mock.
