@@ -66,6 +66,16 @@ CheckLook("body", it.X, it.Y, 0xffff00, true)
 var bd = ExpectString("───┼───")
 CheckLook("rule", bd.X, bd.Y, 0xaf8787, true)
 
+// Session 2: F4 opens the editor on the same file (the F4/F6 parity of the
+// goal), Escape returns, and the reopen shows the same look (the cache, spec
+// "Cache").  A scheme change moving the look is the driver's `look_bridge_real`.
+TypeFKey(4)
+ExpectString("fixture.md")
+TypeEscape()
+TypeFKey(3)
+var h2 = ExpectString("Heading")
+CheckLook("heading after reopen", h2.X, h2.Y, 0xffff00, true)
+
 TypeFKey(4)
 ExpectString("fixture.md")
 TypeFKey(6)
