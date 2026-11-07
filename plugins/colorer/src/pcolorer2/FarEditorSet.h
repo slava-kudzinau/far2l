@@ -159,6 +159,7 @@ class FarEditorSet
   UnicodeString* GetCatalogPath() { return &Opt.catalogPath; }
   UnicodeString* GetUserHrdPath() { return &Opt.userHrdPath; }
   bool GetPluginStatus() { return Opt.rEnabled; }
+  bool GetSyntaxDraw() { return Opt.drawSyntax; }
 
   /** Returns the loaded ParserFactory, or null when the plugin is disabled. */
   ParserFactory* GetParserFactory() { return parserFactory.get(); }

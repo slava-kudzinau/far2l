@@ -1,0 +1,874 @@
+WinPortInitRegistry: OK 
+TestController: loop started, ipc_client='/var/folders/bq/sqxgy4fn1_x14_zbjx33c9v40000gn/T/far2l_1f5_0/test/14271'
+ConsoleBuffer: cursor defaulted at 0.0 screen 80.28 
+TestController: got command 1
+TTYCaps: GENERIC  pos= restrict={X11 Xi F2L APL KTY W32 EMJ }
+TestController: got command 1
+TestController: got command 3
+ttyPrinter: initialized
+argv[0]='/tmp/f.app/Contents/MacOS/far2l' g_strFarModuleName='/tmp/f.app/Contents/MacOS/far2l' translation_prefix='' temp='/var/folders/bq/sqxgy4fn1_x14_zbjx33c9v40000gn/T/far2l_1f5_0/' config='/Users/Viachaslau_Kudzinau/Projects/far2l/.worktrees/markdown-colorer-look/testing/tests/000d-view-md-look/workdir/profile/.config'
+ConfigLegacyUpgrade: ERROR=256 CMD='mv -f "/Users/Viachaslau_Kudzinau/Projects/far2l/.worktrees/markdown-colorer-look/testing/tests/000d-view-md-look/workdir/profile/.config/NetRocks" "/Users/Viachaslau_Kudzinau/Projects/far2l/.worktrees/markdown-colorer-look/testing/tests/000d-view-md-look/workdir/profile/.config/plugins/" >>"/Users/Viachaslau_Kudzinau/Projects/far2l/.worktrees/markdown-colorer-look/testing/tests/000d-view-md-look/workdir/profile/.cache/upgrade.sh.log" 2>&1 || cp -f -r "/Users/Viachaslau_Kudzinau/Projects/far2l/.worktrees/markdown-colorer-look/testing/tests/000d-view-md-look/workdir/profile/.config/NetRocks" "/Users/Viachaslau_Kudzinau/Projects/far2l/.worktrees/markdown-colorer-look/testing/tests/000d-view-md-look/workdir/profile/.config/plugins/" >>"/Users/Viachaslau_Kudzinau/Projects/far2l/.worktrees/markdown-colorer-look/testing/tests/000d-view-md-look/workdir/profile/.cache/upgrade.sh.log" 2>&1'
+void FarColors::InitFarColors( ) {
+Palette::InitFarPalette( )
+Palette::Load( )
+FarColors::ResetToDefaultRGB( )
+FarColors::AdjustContrastLevels()
+SetDefaultHighlighting
+Local edit settings count 1
+CommandLine::SaveBackground
+CommandLine::ShowBackground
+_SC_NPROCESSORS_ONLN=18
+FSNotify: watching 1 entries for '/Users/Viachaslau_Kudzinau/Projects/far2l/.worktrees/markdown-colorer-look/testing/tests/000d-view-md-look/workdir/left'
+FSNotify: watching 1 entries for '/Users/Viachaslau_Kudzinau'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/hexitor/plug/hexitor.far-plug-wide'
+Plugin 'hexitor.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'hexitor.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'ExitFARW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'CompareW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'GetMinFarVersionW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'hexitor.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/incsrch/plug/incsrch.far-plug-wide'
+Plugin 'incsrch.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'incsrch.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'ExitFARW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'CompareW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'GetMinFarVersionW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'incsrch.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/truncate/plug/truncate.far-plug-wide'
+Plugin 'truncate.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'truncate.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'truncate.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'truncate.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'truncate.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'truncate.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'truncate.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'truncate.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'truncate.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'truncate.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'truncate.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'truncate.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'truncate.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'truncate.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'truncate.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'truncate.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'truncate.far-plug-wide' doesn't export 'ConfigureW'
+Plugin 'truncate.far-plug-wide' doesn't export 'ExitFARW'
+Plugin 'truncate.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'truncate.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'truncate.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'truncate.far-plug-wide' doesn't export 'CompareW'
+Plugin 'truncate.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'truncate.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'truncate.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'truncate.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'truncate.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'truncate.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'truncate.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'truncate.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/transformer/plug/transformer.far-plug-wide'
+Plugin 'transformer.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'transformer.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'transformer.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'transformer.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'transformer.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'transformer.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'transformer.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'transformer.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'transformer.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'transformer.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'transformer.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'transformer.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'transformer.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'transformer.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'transformer.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'transformer.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'transformer.far-plug-wide' doesn't export 'ExitFARW'
+Plugin 'transformer.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'transformer.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'transformer.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'transformer.far-plug-wide' doesn't export 'CompareW'
+Plugin 'transformer.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'transformer.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'transformer.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'transformer.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'transformer.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'transformer.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'transformer.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'transformer.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/editcase/plug/editcase.far-plug-wide'
+Plugin 'editcase.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'editcase.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'editcase.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'editcase.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'editcase.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'editcase.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'editcase.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'editcase.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'editcase.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'editcase.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'editcase.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'editcase.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'editcase.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'editcase.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'editcase.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'editcase.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'editcase.far-plug-wide' doesn't export 'ConfigureW'
+Plugin 'editcase.far-plug-wide' doesn't export 'ExitFARW'
+Plugin 'editcase.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'editcase.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'editcase.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'editcase.far-plug-wide' doesn't export 'CompareW'
+Plugin 'editcase.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'editcase.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'editcase.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'editcase.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'editcase.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'editcase.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'editcase.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'editcase.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/tmppanel/plug/tmppanel.far-plug-wide'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'CompareW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'tmppanel.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/editorcomp/plug/editorcomp.far-plug-wide'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'CompareW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'GetMinFarVersionW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'editorcomp.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/inside/plug/inside.far-plug-mb'
+Plugin 'inside.far-plug-mb' doesn't export 'GetVirtualFindData'
+Plugin 'inside.far-plug-mb' doesn't export 'FreeVirtualFindData'
+Plugin 'inside.far-plug-mb' doesn't export 'MakeDirectory'
+Plugin 'inside.far-plug-mb' doesn't export 'SetFindList'
+Plugin 'inside.far-plug-mb' doesn't export 'MayExitFAR'
+Plugin 'inside.far-plug-mb' doesn't export 'ProcessEvent'
+Plugin 'inside.far-plug-mb' doesn't export 'Compare'
+Plugin 'inside.far-plug-mb' doesn't export 'ProcessEditorInput'
+Plugin 'inside.far-plug-mb' doesn't export 'ProcessEditorEvent'
+Plugin 'inside.far-plug-mb' doesn't export 'ProcessViewerEvent'
+Plugin 'inside.far-plug-mb' doesn't export 'ProcessDialogEvent'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/colorer/plug/colorer.far-plug-wide'
+Plugin 'colorer.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'colorer.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'colorer.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'colorer.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'colorer.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'colorer.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'colorer.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'colorer.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'colorer.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'colorer.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'colorer.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'colorer.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'colorer.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'colorer.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'colorer.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'colorer.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'colorer.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'colorer.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'colorer.far-plug-wide' doesn't export 'CompareW'
+Plugin 'colorer.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'colorer.far-plug-wide' doesn't export 'GetMinFarVersionW'
+Plugin 'colorer.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'colorer.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'colorer.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/calc/plug/calc.far-plug-wide'
+Plugin 'calc.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'calc.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'calc.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'calc.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'calc.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'calc.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'calc.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'calc.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'calc.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'calc.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'calc.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'calc.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'calc.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'calc.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'calc.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'calc.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'calc.far-plug-wide' doesn't export 'ExitFARW'
+Plugin 'calc.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'calc.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'calc.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'calc.far-plug-wide' doesn't export 'CompareW'
+Plugin 'calc.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'calc.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'calc.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'calc.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'calc.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'calc.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'calc.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'calc.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/adb/plug/adb.far-plug-wide'
+Plugin 'adb.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'adb.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'adb.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'adb.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'adb.far-plug-wide' doesn't export 'CompareW'
+Plugin 'adb.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'adb.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'adb.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'adb.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'adb.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'adb.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'adb.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'adb.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/gitgutter/plug/gitgutter.far-plug-wide'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'CompareW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'GetMinFarVersionW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'gitgutter.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/align/plug/align.far-plug-wide'
+Plugin 'align.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'align.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'align.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'align.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'align.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'align.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'align.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'align.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'align.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'align.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'align.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'align.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'align.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'align.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'align.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'align.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'align.far-plug-wide' doesn't export 'ConfigureW'
+Plugin 'align.far-plug-wide' doesn't export 'ExitFARW'
+Plugin 'align.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'align.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'align.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'align.far-plug-wide' doesn't export 'CompareW'
+Plugin 'align.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'align.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'align.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'align.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'align.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'align.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'align.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'align.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/ImageViewer/plug/ImageViewer.far-plug-wide'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'CompareW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'GetMinFarVersionW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'ImageViewer.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/drawline/plug/drawline.far-plug-wide'
+Plugin 'drawline.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'drawline.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'drawline.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'drawline.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'drawline.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'drawline.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'drawline.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'drawline.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'drawline.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'drawline.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'drawline.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'drawline.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'drawline.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'drawline.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'drawline.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'drawline.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'drawline.far-plug-wide' doesn't export 'ConfigureW'
+Plugin 'drawline.far-plug-wide' doesn't export 'ExitFARW'
+Plugin 'drawline.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'drawline.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'drawline.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'drawline.far-plug-wide' doesn't export 'CompareW'
+Plugin 'drawline.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'drawline.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'drawline.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'drawline.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'drawline.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'drawline.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'drawline.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'drawline.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/memo/plug/memo.far-plug-wide'
+Plugin 'memo.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'memo.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'memo.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'memo.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'memo.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'memo.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'memo.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'memo.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'memo.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'memo.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'memo.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'memo.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'memo.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'memo.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'memo.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'memo.far-plug-wide' doesn't export 'ExitFARW'
+Plugin 'memo.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'memo.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'memo.far-plug-wide' doesn't export 'CompareW'
+Plugin 'memo.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'memo.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'memo.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'memo.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'memo.far-plug-wide' doesn't export 'GetMinFarVersionW'
+Plugin 'memo.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'memo.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'memo.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/compare/plug/compare.far-plug-wide'
+Plugin 'compare.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'compare.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'compare.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'compare.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'compare.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'compare.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'compare.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'compare.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'compare.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'compare.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'compare.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'compare.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'compare.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'compare.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'compare.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'compare.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'compare.far-plug-wide' doesn't export 'ConfigureW'
+Plugin 'compare.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'compare.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'compare.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'compare.far-plug-wide' doesn't export 'CompareW'
+Plugin 'compare.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'compare.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'compare.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'compare.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'compare.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'compare.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'compare.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'compare.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/OpenWith/plug/OpenWith.far-plug-wide'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'CompareW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'OpenWith.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/autowrap/plug/autowrap.far-plug-wide'
+Plugin 'autowrap.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'autowrap.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'ConfigureW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'ExitFARW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'CompareW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'autowrap.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/arclite/plug/arclite.far-plug-wide'
+Plugin 'arclite.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'arclite.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'arclite.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'arclite.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'arclite.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'arclite.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'arclite.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'arclite.far-plug-wide' doesn't export 'CompareW'
+Plugin 'arclite.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'arclite.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'arclite.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'arclite.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'arclite.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'arclite.far-plug-wide' doesn't export 'GetMinFarVersionW'
+Plugin 'arclite.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'arclite.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/filecase/plug/filecase.far-plug-wide'
+Plugin 'filecase.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'filecase.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'filecase.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'filecase.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'filecase.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'filecase.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'filecase.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'filecase.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'filecase.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'filecase.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'filecase.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'filecase.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'filecase.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'filecase.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'filecase.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'filecase.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'filecase.far-plug-wide' doesn't export 'ConfigureW'
+Plugin 'filecase.far-plug-wide' doesn't export 'ExitFARW'
+Plugin 'filecase.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'filecase.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'filecase.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'filecase.far-plug-wide' doesn't export 'CompareW'
+Plugin 'filecase.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'filecase.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'filecase.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'filecase.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'filecase.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'filecase.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'filecase.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'filecase.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/SimpleIndent/plug/SimpleIndent.far-plug-wide'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'ConfigureW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'ExitFARW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'CompareW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'GetMinFarVersionW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'SimpleIndent.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/NetRocks/plug/NetRocks.far-plug-wide'
+Plugin 'NetRocks.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'NetRocks.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'NetRocks.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'NetRocks.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'NetRocks.far-plug-wide' doesn't export 'CompareW'
+Plugin 'NetRocks.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'NetRocks.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'NetRocks.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'NetRocks.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'NetRocks.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'NetRocks.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'NetRocks.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'NetRocks.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/multiarc/plug/multiarc.far-plug-mb'
+Plugin 'multiarc.far-plug-mb' doesn't export 'GetVirtualFindData'
+Plugin 'multiarc.far-plug-mb' doesn't export 'FreeVirtualFindData'
+Plugin 'multiarc.far-plug-mb' doesn't export 'MakeDirectory'
+Plugin 'multiarc.far-plug-mb' doesn't export 'SetFindList'
+Plugin 'multiarc.far-plug-mb' doesn't export 'MayExitFAR'
+Plugin 'multiarc.far-plug-mb' doesn't export 'ProcessEvent'
+Plugin 'multiarc.far-plug-mb' doesn't export 'Compare'
+Plugin 'multiarc.far-plug-mb' doesn't export 'ProcessEditorInput'
+Plugin 'multiarc.far-plug-mb' doesn't export 'ProcessEditorEvent'
+Plugin 'multiarc.far-plug-mb' doesn't export 'ProcessViewerEvent'
+Plugin 'multiarc.far-plug-mb' doesn't export 'ProcessDialogEvent'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/edsort/plug/edsort.far-plug-wide'
+Plugin 'edsort.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'edsort.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'edsort.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'edsort.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'edsort.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'edsort.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'edsort.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'edsort.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'edsort.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'edsort.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'edsort.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'edsort.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'edsort.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'edsort.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'edsort.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'edsort.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'edsort.far-plug-wide' doesn't export 'ConfigureW'
+Plugin 'edsort.far-plug-wide' doesn't export 'ExitFARW'
+Plugin 'edsort.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'edsort.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'edsort.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'edsort.far-plug-wide' doesn't export 'CompareW'
+Plugin 'edsort.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'edsort.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'edsort.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'edsort.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'edsort.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'edsort.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'edsort.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'edsort.far-plug-wide' doesn't export 'FreeCustomDataW'
+LoadPlugin: cache miss for '/tmp/f.app/Contents/MacOS/Plugins/jumpword/plug/jumpword.far-plug-wide'
+Plugin 'jumpword.far-plug-wide' doesn't export 'PluginModuleOpen'
+Plugin 'jumpword.far-plug-wide' doesn't export 'OpenFilePluginW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'ClosePluginW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'GetOpenPluginInfoW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'GetFindDataW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'FreeFindDataW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'GetVirtualFindDataW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'FreeVirtualFindDataW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'SetDirectoryW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'GetLinkTargetW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'GetFilesW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'PutFilesW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'DeleteFilesW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'MakeDirectoryW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'ProcessHostFileW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'SetFindListW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'ConfigureW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'ExitFARW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'MayExitFARW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'ProcessKeyW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'ProcessEventW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'CompareW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'ProcessEditorInputW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'ProcessEditorEventW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'ProcessViewerEventW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'ProcessDialogEventW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'ProcessSynchroEventW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'AnalyseW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'GetCustomDataW'
+Plugin 'jumpword.far-plug-wide' doesn't export 'FreeCustomDataW'
+CommandLine::ShowBackground
+STARTUP: 44121
+SaveScreen::SaveArea 0 0 79 27
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_ESCAPE "?" DOWN, 0 1b 0 1
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_ESCAPE "?" UP, 0 1b 0 1
+TestController: got command 6
+CommandLine::ShowBackground
+SaveScreen::RestoreArea 0 0 79 27 
+Local edit settings count 2
+Local edit settings count 3
+Local edit settings count 4
+SaveScreen::SaveArea 2 4 77 22
+SaveScreen::SaveArea 2 4 79 23
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_ESCAPE "?" DOWN, 0 1b 0 1
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_ESCAPE "?" UP, 0 1b 0 1
+SaveScreen::RestoreArea 2 4 79 23 
+TestController: got command 6
+SaveScreen::RestoreArea 2 4 77 22 
+CommandLine::ShowBackground
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_DOWN "?" DOWN, 0 28 0 50
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_DOWN "?" UP, 0 28 0 50
+TestController: got command 6
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_F3 "?" DOWN, 0 72 0 3d
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_F3 "?" UP, 0 72 0 3d
+TestController: got command 6
+SaveScreen::SaveArea 0 0 79 27
+SaveScreen::RestoreArea 0 0 79 27 
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_ESCAPE "?" DOWN, 0 1b 0 1
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_ESCAPE "?" UP, 0 1b 0 1
+TestController: got command 6
+~ViewerStrings: 26 lines, 2420 bytes
+CommandLine::ShowBackground
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_F3 "?" DOWN, 0 72 0 3d
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_F3 "?" UP, 0 72 0 3d
+TestController: got command 6
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 2
+TestController: got command 2
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 2
+TestController: got command 2
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 2
+TestController: got command 2
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 2
+TestController: got command 2
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 2
+TestController: got command 2
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 2
+TestController: got command 2
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 2
+TestController: got command 2
+TestController: got command 2
+TestController: got command 2
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 2
+TestController: got command 2
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_F4 "?" DOWN, 0 73 0 3e
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_F4 "?" UP, 0 73 0 3e
+TestController: got command 6
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_F6 "?" DOWN, 0 75 0 40
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_F6 "?" UP, 0 75 0 40
+TestController: got command 6
+EditorConfigOrg: loaded '/Users/Viachaslau_Kudzinau/Projects/far2l/.worktrees/markdown-colorer-look/.editorconfig'
+EditorConfigOrg: matched section '*'
+EditorConfigOrg: ExpandTabs=0 TabSize=4 EndOfLine='
+' TrimTrailingWhitespace=-1 InsertFinalNewline=-1 CodePage=65001 CodePageBOM=0
+* Editor: load took 0 msec
+EcoString: char_local:0 char_heap:10 wide_local:0 wide_heap:0 (loaded)
+fatal: path 'testing/tests/000d-view-md-look/workdir/left/fixture.md' exists on disk, but not in 'HEAD'
+~ViewerStrings: 26 lines, 2420 bytes
+fatal: path 'testing/tests/000d-view-md-look/workdir/left/fixture.md' exists on disk, but not in 'HEAD'
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_F1 "?" DOWN, 0 70 0 3b
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_F1 "?" UP, 0 70 0 3b
+EcoString: char_local:0 char_heap:10 wide_local:0 wide_heap:0 (F1)
+SaveScreen::SaveArea 0 0 79 27
+TestController: got command 6
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_ESCAPE "?" DOWN, 0 1b 0 1
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_ESCAPE "?" UP, 0 1b 0 1
+TestController: got command 6
+fatal: path 'testing/tests/000d-view-md-look/workdir/left/fixture.md' exists on disk, but not in 'HEAD'
+SaveScreen::RestoreArea 0 0 79 27 
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_ESCAPE "?" DOWN, 0 1b 0 1
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_ESCAPE "?" UP, 0 1b 0 1
+TestController: got command 6
+Editor::GetCacheParams: SaveTabSettings=0 ExpandTabs=0 TabSize=0
+EcoString: char_local:0 char_heap:10 wide_local:0 wide_heap:0 (~Editor start)
+EcoString: char_local:0 char_heap:0 wide_local:0 wide_heap:0 (~Editor finish)
+* ~Editor took 0 msec
+CommandLine::ShowBackground
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_F10 "?" DOWN, 0 79 0 44
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_F10 "?" UP, 0 79 0 44
+TestController: got command 6
+SaveScreen::SaveArea 23 10 56 16
+SaveScreen::SaveArea 23 10 58 17
+TestController: got command 1
+TestController: got command 1
+TestController: got command 3
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_RETURN "?" DOWN, 0 d 0 1c
+TestController: got command 5
+ConsoleInput::Enqueue: ncs e la lc sh ra rc VK_RETURN "?" UP, 0 d 0 1c
+TestController: got command 0
+SaveScreen::RestoreArea 23 10 58 17 
+SaveScreen::RestoreArea 23 10 56 16 
+CommandLine::ShowBackground
+TestController: loop stopped
+If you see this in output - uncomment code below and check again
+ReaderThread: raw mode discarded
+SudoAskpassServer::Thread finished

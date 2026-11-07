@@ -13,6 +13,11 @@ struct ViewerPrinter
 
 	virtual int Length(const wchar_t *str, int limit = -1) = 0;
 	virtual void Print(int skip_len, int print_len, const wchar_t *str) = 0;
+	// One pass over the row just printed, at screen coordinates (the caller
+	// knows them; Print works in window columns).  MarkdownPrinter restores the
+	// underline bit the console drops for one-cell characters (story
+	// markdown-colorer-look, spec Underline).  Empty for the plain printer.
+	virtual void FinishRow(int screen_x1, int screen_y) {}
 
 protected:
 
@@ -37,6 +42,8 @@ struct PlainViewerPrinter : ViewerPrinter
 
 	virtual int Length(const wchar_t *str, int limit = -1);
 	virtual void Print(int skip_len, int print_len, const wchar_t *str);
+	// One GetText/PutText pair for the row, setting 0x8000 on the recorded
+	// column spans (the mechanism of Viewer::ApplyUnderlineSegment, spec).
 
 private:
 	uint64_t _color;
@@ -56,6 +63,9 @@ struct MarkdownPrinter : ViewerPrinter
 
 	virtual int Length(const wchar_t *str, int limit = -1);
 	virtual void Print(int skip_len, int print_len, const wchar_t *str);
+	// One GetText/PutText pair for the row, setting 0x8000 on the recorded
+	// column spans (the mechanism of Viewer::ApplyUnderlineSegment, spec).
+	virtual void FinishRow(int screen_x1, int screen_y) override;
 
 private:
 	// Print one run cell by cell, up to `cell_stop` (cell coordinates of the row).
@@ -68,4 +78,7 @@ private:
 	const std::vector<MdLine> *_lines;
 	const std::vector<MdTokenGroup> *_groups;
 	size_t _row = 0;
+	// Window-column spans [first, second) of the row whose color carries
+	// COMMON_LVB_UNDERSCORE; filled by Print, consumed by FinishRow.
+	std::vector<std::pair<int, int>> _spans;
 };

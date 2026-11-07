@@ -159,13 +159,15 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 {
 	const MdLine *line = (_row < _lines->size()) ? &(*_lines)[_row] : nullptr;
 	++_row;
+	_spans.clear();
 
 	int pos = 0;   // cell coordinate in the row, counted over all runs
 	if (line) {
 		for (const MdRun &run : line->runs) {
 			const bool tokenized = line->tokens >= 0 && _groups != nullptr &&
 				(size_t)line->tokens < _groups->size() && run.role == MD_ROLE_CODE;
-			SetColor(_selection ? _sel_color : MarkdownRunColor(run.role));
+			const uint64_t run_color = _selection ? _sel_color : MarkdownRunColor(run.role);
+			SetColor(run_color);
 			if (tokenized) {
 				PrintCodeRuns((*_groups)[line->tokens], run.text, pos, skip_len, print_len);
 				continue;
@@ -197,6 +199,9 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 						Text(p, piece);
 						print_len -= (int)cells;
 						pos += (int)cells;
+						if (run_color & COMMON_LVB_UNDERSCORE) {
+							_spans.emplace_back(pos - (int)cells, pos);
+						}
 					}
 				}
 				if (!p[piece]) break;
@@ -272,4 +277,42 @@ void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstrin
 		const int64_t stop = ti < group.tokens.size() ? (int64_t)group.tokens[ti].start : INT64_MAX;
 		Cells(p, pos, print_len, stop);
 	}
+}
+
+// One GetText/PutText pair for the row: Console::Text drops the underline bit
+// for one-cell characters, so the printer records the spans and restores the
+// bit here, the way Viewer::ApplyUnderlineSegment does.  A row with no
+// underlined run costs nothing (spec, Underline).
+void MarkdownPrinter::FinishRow(int screen_x1, int screen_y)
+{
+	if (_spans.empty())
+		return;
+
+	int first = _spans.front().first;
+	int last = _spans.back().second - 1;
+	for (const auto &span : _spans) {
+		if (span.first < first)
+			first = span.first;
+		if (span.second - 1 > last)
+			last = span.second - 1;
+	}
+	const int width = last - first + 1;
+	if (width <= 0)
+		return;
+
+	const int x1 = screen_x1 + first;
+	const int x2 = screen_x1 + last;
+	std::vector<CHAR_INFO> buf(static_cast<size_t>(width));
+	GetText(x1, screen_y, x2, screen_y, buf.data(), width * (int)sizeof(CHAR_INFO));
+	for (int i = 0; i < width; ++i) {
+		const int col = first + i;
+		for (const auto &span : _spans) {
+			if (col >= span.first && col < span.second) {
+				buf[static_cast<size_t>(i)].Attributes |= COMMON_LVB_UNDERSCORE;
+				break;
+			}
+		}
+	}
+	PutText(x1, screen_y, x2, screen_y, buf.data());
+	_spans.clear();
 }
