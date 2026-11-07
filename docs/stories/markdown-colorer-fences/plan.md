@@ -100,7 +100,7 @@ hostile fixture (`fixture.py`, 1 MB, authored by this task) stays inside the bud
 Finish: the gate's full Run-it command; `0004-vt-shell` and `000b-find-file` are the known Mac
 failures.
 
-**Done check:** the gate's Run-it command prints `check ok` (all PASS, the two known Mac
+**Done check:** the gate's Run-it command prints `PASS` for every test (the two known Mac
 failures allowed), and the cost line is printed.
 
 ## T5: Durable docs
@@ -125,10 +125,10 @@ files prints nothing.
 **Depends on:** T5
 **Role:** implementer — review final
 
-The orchestrator writes the close-out draft (the records commit): the story ledger rows, the T1
-measurements, and the gate's At-merge rows. The main session fills the gate close-out rows and
-commits the durable docs. It opens the pull request into `next/2.9.1-ovr.1`, merges, and pulls
-into the main checkout. The check runs once more on the merge.
+The orchestrator writes the close-out draft (the records commit): the story ledger rows, the T4
+cost measurements, and the gate's At-merge rows. The main session fills the gate close-out rows
+and commits the durable docs. It opens the pull request into `next/2.9.1-ovr.1`, merges, and
+pulls into the main checkout. The check runs once more on the merge.
 
 **Done check:** the records commit exists, the final review's findings have fixes, and the merge
 into `next/2.9.1-ovr.1` shows the story's tip.

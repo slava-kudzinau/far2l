@@ -40,9 +40,10 @@ int ColorerTokenizeV2(int abi, const wchar_t *language, const wchar_t *const *li
   Colorer style word (bit 4 = underline). `[5]..[7]` zero.
 - The colors resolve through `HrcLibrary::getRegionDefine` for the active scheme, with the F4
   fallback chain: the region, then its parents, then `def:Text`.
-- Return codes as V1: 0 with a count in the return, -1 (no catalog), -2 (unknown language), -3
-  (fatal parse). `*generation` carries the scheme generation of the answer, and 0 on a code
-  other than 0.
+- Return codes as V1: a positive count in the return, -1 (no catalog), -2 (unknown language),
+  -3 (fatal parse). `*generation` carries the scheme generation of the answer, and 0 on a code
+  other than a count. A deadline stop returns the cells written: a partial group, painted and
+  cached as-is, like V1's code 1 path.
 - `abi == 1` for this shape; a larger abi answers -2.
 - The export never creates `FarEditorSet`: the same three-call shape as the look export (count
   the catalog, count the lines, load the scheme, tokenize).

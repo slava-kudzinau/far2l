@@ -40,7 +40,7 @@ flowchart LR
   the underline. A cell with no range keeps the plain code role.
 - The 3:1 contrast verdict of markdown-colorer-look decides for the whole view. On a failure,
   fences use the plain code role, and prose the fork table.
-- A 20k-line fence renders inside the 40 ms budget; task 1 measures it.
+- A 20k-line fence renders inside the 40 ms budget; task 4 measures it.
 
 ### Decisions the model made
 
@@ -63,7 +63,37 @@ same colors. Change the scheme (F4, Ctrl-F7, pick a scheme, reopen F3): the fenc
 
 ### A fresh reader's paraphrase
 
-_To fill after the fresh read._
+**T1 - The V2 export.** Add `ColorerTokenizeV2` beside `ColorerTokenizeV1` in
+`ColorerExport.cpp`, as a `SHAREDSYMBOL` export. The same input path as V1: catalog, language,
+load scheme, tokenize, deadline. Each token resolves its region's foreground and style through
+`HrcLibrary::getRegionDefine` for the active scheme. An unset color takes the F4 chain: the
+region, its parents, then `def:Text`. Cells are 8 words: start, end, `0xRRGGBB` foreground, the
+scheme's 4-bit foreground, the style word, three zeros. `*generation` carries the scheme
+generation. Driver cases: `tokens_v2`, `tokens_v2_limits`, `tokens_v2_v1_callers`.
+
+**T2 - The bridge, the cache key, the token group.** Bind V2 once beside the V1 binding. A
+missing symbol falls back to V1's classes through the alias table. A cached range carries
+`{start, end, fg, fg4, underline}`, not a class. The cache key gains the scheme generation:
+(language, hash, generation). Driver case `look_fence_generation`: two generations, the second
+render refetches.
+
+**T3 - `PrintCodeRuns` and the view contrast verdict.** The printer paints each range: true
+color takes `fg`, else `fg4`; the underline bit rides the span re-apply. A cell with no range
+keeps the plain code role. The look's batch verdict is keyed (viewer background, generation)
+and decides for the whole
+view. On a failure, fences take the plain code role, and prose the fork table. Driver case
+`look_fence_contrast`.
+
+**T4 - Smoke, hostile, budget.** The 000d smoke asserts the javascript fence: a keyword cell, a
+function cell, a string cell, and the tail. The colors are the console.hrd rows. The fixture
+gains a `javascript` fence. `tokens_v2_cost` renders a 20k-line fence inside the budget, and
+prints the mean and the worst. The 1 MB hostile fixture stays inside it.
+
+**T5 - Durable docs.** ADR-010 records the V2 contract: colors, the 8-word stride, the
+generation key, V1 stays. The viewer spec, the data view and the invariants gain the rows.
+
+**T6 - Close-out.** The orchestrator writes the close-out draft. The main session fills the
+gate, opens the pull request into `next/2.9.1-ovr.1`, merges, and runs the check once more.
 
 ## Flow
 
@@ -94,7 +124,19 @@ sh testing/markdown/look-driver.sh
  for t in $(ls tests); do o=$(./far2l-smoke-run.sh "$APP" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && echo "PASS $t" || echo "FAIL $t"; done)
 ```
 
-`check ok` with all PASS (the two known Mac failures allowed), and the story's Done list.
+Every test prints `PASS` (the two known Mac failures allowed), every driver exits 0, and the
+story's Done list.
+
+## Plan
+
+| Task | Scope | Depends | Done check |
+|---|---|---|---|
+| T1 | The V2 export in the plugin, the 8-word cells, the driver scaffold | - | `tokens_v2`, `tokens_v2_limits`, `tokens_v2_v1_callers` exit 0; full build exits 0 |
+| T2 | The core bridge, the generation key, the range on the token group | T1 | `look_fence_generation` exits 0; the look driver is green; full build exits 0 |
+| T3 | `PrintCodeRuns`, the view-wide contrast verdict | T2 | `look_fence_contrast` exits 0; the look driver is green; smokes `0007`, `000c`, `000d` PASS |
+| T4 | The 000d fence cells, the hostile fixture, the cost line | T3 | the gate's Run-it command: all `PASS` (two known Mac failures), cost line printed |
+| T5 | ADR-010, the viewer spec, the data view, the invariants | T4 | the four files show the new rows; `check_ste.py` prints nothing |
+| T6 | The records commit, the close-out, the pull request | T5 | the records commit exists; the merge shows the story's tip |
 
 ## Done
 
