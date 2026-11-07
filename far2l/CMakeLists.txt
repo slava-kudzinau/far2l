@@ -1,3 +1,4 @@
+cmake_minimum_required(VERSION 3.5)
 project(far2l)
 
 add_subdirectory (bootstrap)
@@ -192,6 +193,7 @@ src/markdown/md4c/md4c.c
 src/markdown/MarkdownRender.cpp
 src/markdown/AsciiMermaid.cpp
 src/markdown/MdPalette.cpp
+src/markdown/MdColorer.cpp
 )
 
 # Option to disable building macro subsystem completely

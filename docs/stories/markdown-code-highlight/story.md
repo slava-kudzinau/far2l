@@ -1,6 +1,6 @@
 ---
 description: Add syntax colors to fenced code blocks in the F3 Markdown view, with tokens from the loaded Colorer plugin through one small export.
-status: planned
+status: done
 size: M
 risk: security,contract
 depends-on: markdown-palette
@@ -123,7 +123,23 @@ M. One new plugin file, about five lines in `pcolorer.cpp` and one line in the p
   - Helper process: this tree has no Colorer console tool.
   - HRC data with a new tokenizer: needs Colorer's regex dialect.
 - `.tsx` maps to the `jsx` type. This is accepted.
+- Owner's words, 2026-11-07: "we could have mapping of known slugs to
+  colorer, if slug is unknown assume is an extention/colorer slug". The
+  export first matches the file name `x.<slug>` against the scheme masks;
+  when no mask matches, it asks Colorer for the type by name (the
+  owner's "colorer slug" case). The alias table in the export and the
+  bridge has 38 rows. The `slug_probe` driver case checks every row and
+  every direct slug against the installed plugin and fails on a dead
+  row. Ten slugs have no scheme in the bundle and keep the code role:
+  `clojure`, `scheme`, `prolog`, `applescript`, `nginx`, `http`,
+  `liquid`, `ejs`, `stylus` and `mermaid`; `matlab` names a catalog
+  type, so the type-name lookup resolves it and it shows colors (R4).
 - `plugins/colorer` had 14 commits since the move on 2026-08-26, and none since 2026-09-27. A new file there merges easily.
 - Tier from `flow-for.mjs`: `flow tier=full docs=spec,plan design=no orchestrator=yes final=final-reviewer gate=stop scan=yes verifier=none`. The owner reads the gate before the build, because of the storage choice and the input limits.
 - Branch `feat/markdown-code-highlight`. Base `next/2.9.1-ovr.1`, after `markdown-palette` merges. Budget and hard stop M $15/$20.
-- Check: "The check" in `AGENTS.md`, plus the plugin test that the gate names.
+- Budget and hard stop: M $15/$20 (recorded in the workspace ledger).
+- Started: 2026-11-06T21:41:52Z (UTC).
+- Flow: `flow tier=full docs=spec,plan design=no orchestrator=yes final=final-reviewer gate=stop scan=yes verifier=none`. Gate page: the owner reads it before the build (G2-design).
+- Check: "The check" in `AGENTS.md` with `BUILD=../far2l.markdown-code-highlight.build` and `TESTS="0007-view-file-markdown 0008-view-md-default 0009-view-md-setting-off"`, plus the plugin smoke test named in the plan.
+- Baseline at base `54bd9cc79`, before any task: `check ok` in `../far2l.markdown-code-highlight.build` (2026-11-06).
+- Closed 2026-11-07. Final review found two P2 items: four bridge alias rows sent names the catalog cannot resolve (gitignore, handlebars, brainfuck fences lost color), and the horizontal-scroll and no-scheme-slug rows were unpinned. Both fixed; `alias_probe` pins the four rows; check green at `75e5f4b7f`.

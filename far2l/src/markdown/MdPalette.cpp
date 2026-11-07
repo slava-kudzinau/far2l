@@ -47,23 +47,30 @@ constexpr uint64_t kBackBits = 0xf0 | BACKGROUND_TRUECOLOR | (uint64_t(0xffffff)
 struct RoleDefault
 {
 	uint32_t rgb;        // the spec value, written as 0xRRGGBB
+	uint32_t def256;     // the RGB of the spec's 256 index: what a terminal without RGB shows (R52)
 	uint64_t fallback16; // the 4-bit foreground: the color without RGB, and the index under RGB
 };
 
-constexpr std::array<RoleDefault, MD_ROLE_ART - 1> kRoleDefaults {{
-	{0xffff5f, F_YELLOW},        // h1
-	{0xffaf5f, F_LIGHTRED},      // h2
-	{0x87afff, F_LIGHTGRAY},     // h3
-	{0xffffff, F_WHITE},         // strong
-	{0x87ff87, F_LIGHTGREEN},    // link
-	{0xff87ff, F_LIGHTMAGENTA},  // code
-	{0xafafd7, F_CYAN},          // quote
-	{0x8787af, F_CYAN},          // rule
+constexpr std::array<RoleDefault, MD_ROLE_COUNT - 1> kRoleDefaults {{
+	{0xffff5f, 0xffff5f, F_YELLOW},          // h1 (256 index 227)
+	{0xffaf5f, 0xffaf5f, F_LIGHTRED},        // h2, token number (256 index 215)
+	{0x87afff, 0x87afff, F_LIGHTGRAY},       // h3, token keyword (256 index 111)
+	{0xffffff, 0xffffff, F_WHITE},           // strong (256 index 231)
+	{0x87ff87, 0x87ff87, F_LIGHTGREEN},      // link, token string (256 index 120)
+	{0xff87ff, 0xd7d7af, F_LIGHTMAGENTA},    // code (256 index 213)
+	{0xafafd7, 0xafafd7, F_CYAN},            // quote (256 index 147)
+	{0x8787af, 0x8787af, F_CYAN},            // rule, token comment (256 index 103)
+	{0, 0, 0},                               // art: never reads this row (special-cased above)
+	{0x87afff, 0x87afff, F_LIGHTGRAY},       // token keyword (256 index 111)
+	{0x87ff87, 0x87ff87, F_LIGHTGREEN},      // token string (256 index 120)
+	{0x8787af, 0x8787af, F_CYAN},            // token comment (256 index 103)
+	{0xffaf5f, 0xffaf5f, F_LIGHTRED},        // token number (256 index 215)
 }};
 
 // The user file key of each role, in MdRole order.
-const char *const kRoleKeys[MD_ROLE_ART + 1] = {
-	"body", "heading1", "heading2", "heading3", "strong", "link", "code", "quote", "rule", "art"
+const char *const kRoleKeys[MD_ROLE_COUNT] = {
+	"body", "heading1", "heading2", "heading3", "strong", "link", "code", "quote", "rule", "art",
+	"token-keyword", "token-string", "token-comment", "token-number"
 };
 
 // The far palette entries an @Name may name; ColorsInit is private to farcolors.cpp, so the
@@ -94,7 +101,10 @@ unsigned int TodayLookEntry(uint64_t role)
 		case MD_ROLE_CODE: return COL_HELPHIGHLIGHTTEXT;
 		case MD_ROLE_QUOTE:
 		case MD_ROLE_RULE: return COL_VIEWERTEXT;
-		default: return COL_PANELHIGHLIGHTTEXT; // art
+		case MD_ROLE_TOKEN_KEYWORD:
+		case MD_ROLE_TOKEN_STRING:
+		case MD_ROLE_TOKEN_COMMENT:
+		case MD_ROLE_TOKEN_NUMBER: return COL_HELPHIGHLIGHTTEXT;   // spec: the code entry
 	}
 }
 
@@ -200,7 +210,7 @@ struct PaletteOverrides
 {
 	time_t mtime = 0;
 	bool no_file = false;
-	RoleOverride roles[MD_ROLE_ART + 1];
+	RoleOverride roles[MD_ROLE_COUNT];
 };
 
 // Reads and validates the whole [markdown] section.
@@ -230,7 +240,7 @@ PaletteOverrides LoadOverrides()
 	if (!section)
 		return out; // no [markdown] section: all defaults, cached against the mtime
 
-	for (size_t role = 0; role <= MD_ROLE_ART; ++role) {
+	for (size_t role = 0; role < MD_ROLE_COUNT; ++role) {
 		if (!section->HasKey(kRoleKeys[role]))
 			continue;
 		out.roles[role] = ParseOverrideValue(section->GetString(kRoleKeys[role]));
@@ -276,9 +286,11 @@ bool RgbDefaultsPass()
 {
 	RGB bg, fg;
 	extractColor(FarColorToReal(COL_VIEWERTEXT), fg, bg);
-	for (const RoleDefault &def : kRoleDefaults) {
+	for (size_t i = 0; i < kRoleDefaults.size(); ++i) {
+		if (i == MD_ROLE_ART - 1)
+			continue;   // art has no RGB default row (the placeholder is not a color)
 		RGB def_fg, def_bg;
-		extractColor(RgbRealColor(def), def_fg, def_bg);
+		extractColor(RgbRealColor(kRoleDefaults[i]), def_fg, def_bg);
 		if (wcagComputeContrast(def_fg, bg) < 3.0)
 			return false;
 	}
@@ -313,7 +325,7 @@ uint64_t MdRunColor(uint64_t role)
 	const uint64_t body = FarColorToReal(COL_VIEWERTEXT);
 
 	// Out-of-range roles take the body look, not the body override.
-	if (role > MD_ROLE_ART)
+	if (role >= MD_ROLE_COUNT)
 		return body;
 
 	// 1. The user file.  An override has no contrast check.  An @Name resolves here, on every
@@ -348,8 +360,22 @@ uint64_t MdRunColor(uint64_t role)
 		if (WINPORT(GetConsoleColorPalette)(NULL) >= 8)
 			entry = FarColorToReal(TodayLookEntry(role));
 		else
-			entry = def.fallback16;
+			entry = RgbRealColor(RoleDefault{def.def256, 0, def.fallback16});   // the 256-color look of the spec table, with the 16-color index in the low bits (R52)
 	}
 
 	return (entry & ~kBackBits) | (body & kBackBits);
+}
+
+// The 256-color look of a role, in the attribute form of the truecolor bits; the low index
+// of the 16-color path, for a terminal that ignores RGB.
+uint64_t MdRoleColor256(uint64_t role)
+{
+	if (role >= MD_ROLE_COUNT)
+		return 0;
+	if (role == MD_ROLE_BODY)
+		return 0;
+	if (role == MD_ROLE_ART)
+		return 0;
+	const RoleDefault &def = kRoleDefaults[role - 1];
+	return RgbRealColor(RoleDefault{def.def256, 0, def.fallback16});
 }

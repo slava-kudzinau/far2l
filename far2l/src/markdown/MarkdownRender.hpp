@@ -5,8 +5,9 @@
 #include <map>
 #include <vector>
 #include <string>
-#include <farplug-wide.h>
-#include "colors.hpp"
+#include <chrono>
+#include <cstdint>
+#include "MdColorer.hpp"
 
 // Palette role of a run.  The viewer maps it to a far palette entry when it draws, so a theme
 // change shows on the next redraw.  Plain integers, so the layout code can build runs as (text, role).
@@ -21,6 +22,11 @@ enum MdRole : uint64_t {
     MD_ROLE_QUOTE,         // block quote text and quote bars
     MD_ROLE_RULE,          // horizontal rules and table borders
     MD_ROLE_ART,           // mermaid art
+    MD_ROLE_TOKEN_KEYWORD, // keyword token in a fenced code block
+    MD_ROLE_TOKEN_STRING,  // string token in a fenced code block
+    MD_ROLE_TOKEN_COMMENT, // comment token in a fenced code block
+    MD_ROLE_TOKEN_NUMBER,  // number token in a fenced code block
+    MD_ROLE_COUNT,         // one past the last role
 };
 
 // A run of text sharing one palette role.
@@ -29,12 +35,20 @@ struct MdRun {
     uint64_t role = MD_ROLE_BODY;   // an MdRole
 };
 
+// The tokens of one screen row of a code fence, in cells of that row's
+// single code run (the 4-cell code indent counted), so the printer needs no
+// offset math and a horizontal scroll works on the same coordinates.
+struct MdTokenGroup {
+    std::vector<MdToken> tokens;
+};
+
 // One display line: an ordered sequence of styled runs plus its source offset: the file
 // offset where the source line holding its first source text starts.  Offsets never decrease
 // down the doc, so the viewer finds the line for a file position (poscache, mode switch) by searching them.
 struct MdLine {
     std::vector<MdRun> runs;
     int64_t nFilePos = 0;
+    int tokens = -1;   // index into MarkdownDoc::m_token_groups; -1: no token group
 
     // Total visible width in cells (sum of run lengths; cells, not codepoints).
     int Width() const;
@@ -67,6 +81,8 @@ public:
     bool IsValid() const { return m_valid; }
     // The rendered display lines; the viewer draws rows from them by index.
     const std::vector<MdLine> &Lines() const { return m_lines; }
+    // The token groups of the current render, indexed by MdLine::tokens.
+    const std::vector<MdTokenGroup> &TokenGroups() const { return m_token_groups; }
     int64_t Cursor() const { return m_cursor; }
     void SetCursor(int64_t c) { m_cursor = c; m_cursor_pos = (c >= 0 && c < (int64_t)m_lines.size()) ? m_lines[c].nFilePos : -1; }
     int Width() const { return m_width; }
@@ -86,6 +102,14 @@ private:
 
     // mermaid render cache keyed by (fence source hash, width).
     std::map<std::pair<size_t, int>, std::vector<MdLine>> m_mermaid_cache;
+
+    // Token groups of the current render, indexed by MdLine::tokens.
+    std::vector<MdTokenGroup> m_token_groups;
+
+    // Fence token cache keyed by (normalized fence language, FNV-1a of the
+    // cap-trimmed fence source), in the form of m_mermaid_cache: it survives
+    // Invalidate(width) and a resize.
+    std::map<std::pair<std::string, uint64_t>, std::vector<MdTokenGroup>> m_token_cache;
 };
 
 #endif // FAR2L_MARKDOWN_RENDER_HH

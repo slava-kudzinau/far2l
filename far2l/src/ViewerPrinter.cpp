@@ -122,8 +122,9 @@ uint64_t MarkdownRunColor(uint64_t role)
 
 }
 
-MarkdownPrinter::MarkdownPrinter(uint64_t sel_color, const std::vector<MdLine> *lines)
-	: _sel_color(sel_color), _lines(lines)
+MarkdownPrinter::MarkdownPrinter(uint64_t sel_color, const std::vector<MdLine> *lines,
+	const std::vector<MdTokenGroup> *groups)
+	: _sel_color(sel_color), _lines(lines), _groups(groups)
 {
 }
 
@@ -159,21 +160,30 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 	const MdLine *line = (_row < _lines->size()) ? &(*_lines)[_row] : nullptr;
 	++_row;
 
+	int pos = 0;   // cell coordinate in the row, counted over all runs
 	if (line) {
 		for (const MdRun &run : line->runs) {
+			const bool tokenized = line->tokens >= 0 && _groups != nullptr &&
+				(size_t)line->tokens < _groups->size() && run.role == MD_ROLE_CODE;
 			SetColor(_selection ? _sel_color : MarkdownRunColor(run.role));
+			if (tokenized) {
+				PrintCodeRuns((*_groups)[line->tokens], run.text, pos, skip_len, print_len);
+				continue;
+			}
 
 			const wchar_t *p = run.text.c_str();
 			bool joining = false;
 
 			// advance past the horizontal scroll offset (in cells)
 			while (skip_len > 0 && *p) {
+				const int before = skip_len;
 				if (static_cast<uint32_t>(*p) <= 0x7f) { if (!joining) skip_len--; joining = false; }
 				else if (!ShouldSkip(*p)) {
 					if (*p == CharClasses::ZERO_WIDTH_JOINER) joining = true;
 					else if (CharClasses::IsFullWidth(p)) { if (!joining) skip_len -= 2; joining = false; }
 					else if (!CharClasses::IsXxxfix(*p)) { if (!joining) skip_len--; joining = false; }
 				}
+				pos += before - skip_len;
 				++p;
 			}
 
@@ -186,6 +196,7 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 					if (piece) {
 						Text(p, piece);
 						print_len -= (int)cells;
+						pos += (int)cells;
 					}
 				}
 				if (!p[piece]) break;
@@ -194,10 +205,71 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 		}
 	}
 
-	// Blank cells (past the line end, or an empty line) take the viewer text color,
-	// not whatever color the last run or the arrows left behind.
+	// Blank cells (past the line end, or an empty line) take the viewer text
+	// color, not whatever color the last run or the arrows left behind.  A row
+	// with a token group pads with the code role (spec.md, Token roles).
 	if (print_len > 0) {
-		SetColor(_selection ? _sel_color : FarColorToReal(COL_VIEWERTEXT));
+		const bool tokenized_row = line && line->tokens >= 0 && _groups != nullptr &&
+			(size_t)line->tokens < _groups->size();
+		SetColor(_selection ? _sel_color :
+			(tokenized_row ? MarkdownRunColor(MD_ROLE_CODE) : FarColorToReal(COL_VIEWERTEXT)));
 		PrintSpaces(print_len);
+	}
+}
+
+// Print one run cell by cell, up to `cell_stop` (a cell coordinate of the row).
+void MarkdownPrinter::Cells(const wchar_t *&p, int &pos, int &print_len, int64_t cell_stop)
+{
+	bool joining = false;
+	while (print_len > 0 && *p && (int64_t)pos < cell_stop) {
+		size_t piece = 0;
+		while (p[piece] && !ShouldSkip(p[piece])) ++piece;
+		if (piece) {
+			size_t cells = print_len;
+			if ((int64_t)cells > cell_stop - pos)
+				cells = (size_t)(cell_stop - pos);
+			piece = StrSizeOfCells(p, piece, cells, false);
+			if (piece) {
+				Text(p, piece);
+				print_len -= (int)cells;
+				pos += (int)cells;
+			}
+		}
+		p += piece;
+		if (ShouldSkip(*p)) ++p;   // skip the one skipped char the piece loop stopped at
+		if (!*p) break;
+	}
+}
+
+// Print one code run, coloring the token slices of `group` (plan T4).  Cells
+// past the last token keep the code role; the row padding keeps the text role.
+void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstring &text,
+	int &pos, int skip_len, int &print_len)
+{
+	const wchar_t *p = text.c_str();
+	bool joining = false;
+	while (skip_len > 0 && *p) {   // advance past the horizontal scroll offset
+		const int before = skip_len;
+		if (static_cast<uint32_t>(*p) <= 0x7f) { if (!joining) skip_len--; joining = false; }
+		else if (!ShouldSkip(*p)) {
+			if (*p == CharClasses::ZERO_WIDTH_JOINER) joining = true;
+			else if (CharClasses::IsFullWidth(p)) { if (!joining) skip_len -= 2; joining = false; }
+			else if (!CharClasses::IsXxxfix(*p)) { if (!joining) skip_len--; joining = false; }
+		}
+		pos += before - skip_len;
+		++p;
+	}
+
+	size_t ti = 0;   // index over the group's tokens, ascending
+	while (print_len > 0 && *p) {
+		if (ti < group.tokens.size() && (int64_t)pos >= (int64_t)group.tokens[ti].start) {
+			SetColor(_selection ? _sel_color : MarkdownRunColor(MdRoleForTokenClass(group.tokens[ti].cls)));
+			Cells(p, pos, print_len, (int64_t)group.tokens[ti].end);
+			SetColor(_selection ? _sel_color : MarkdownRunColor(MD_ROLE_CODE));
+			++ti;
+			continue;
+		}
+		const int64_t stop = ti < group.tokens.size() ? (int64_t)group.tokens[ti].start : INT64_MAX;
+		Cells(p, pos, print_len, stop);
 	}
 }

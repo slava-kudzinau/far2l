@@ -30,3 +30,5 @@ far2l_sudoapp
 
 .worktrees/
 .claude/
+
+.build/

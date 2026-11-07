@@ -672,10 +672,12 @@ var norgb_strong = ExpectString("strong")
 var norgb_code = ExpectString("Code Fence Body")
 // The exact 4-bit index of each spec fallback: F_YELLOW 14, F_LIGHTRED 12, F_LIGHTGRAY 7,
 // F_WHITE 15, F_LIGHTGREEN 10, F_LIGHTMAGENTA 13, F_CYAN 3. A wrong index fails here.
-function CheckNorgb(name, cell, expected) {
-	if (cell.IsForeTC) {
-		Log(name + ": IsForeTC is true, foreTC " + cell.ForeTC)
-		Panic(name + " still shows a 24-bit color under --norgb")
+function CheckNorgb(name, cell, tc, expected) {
+	// --norgb keeps the 256-color look in the attribute (R52); a 256-color
+	// terminal paints ForeTC, a 16-color terminal paints Fore.
+	if (cell.ForeTC != tc) {
+		Log(name + ": foreTC " + cell.ForeTC.toString(16) + ", expected " + tc.toString(16))
+		Panic(name + " shows the wrong 256-color look under --norgb")
 	}
 	if (cell.Fore != expected) {
 		Log(name + ": fore " + cell.Fore + ", expected " + expected)
@@ -684,21 +686,21 @@ function CheckNorgb(name, cell, expected) {
 }
 // The palette-driven roles must show their readable 16-color fallback; the plain body text
 // keeps the viewer's own COL_VIEWERTEXT truecolor, which the palette module does not control.
-CheckNorgb("norgb h1", ReadCell(norgb_heading.X, norgb_heading.Y), 14)
-CheckNorgb("norgb h3", ReadCell(norgb_h3.X, norgb_h3.Y), 7)
-CheckNorgb("norgb strong", ReadCell(norgb_strong.X, norgb_strong.Y), 15)
-CheckNorgb("norgb code", ReadCell(norgb_code.X, norgb_code.Y), 13)
+CheckNorgb("norgb h1", ReadCell(norgb_heading.X, norgb_heading.Y), 0x5fffff, 14)
+CheckNorgb("norgb h3", ReadCell(norgb_h3.X, norgb_h3.Y), 0xffaf87, 7)
+CheckNorgb("norgb strong", ReadCell(norgb_strong.X, norgb_strong.Y), 0xffffff, 15)
+CheckNorgb("norgb code", ReadCell(norgb_code.X, norgb_code.Y), 0xafd7d7, 13)
 // The H2, link and quote cells sit on the last page; the thematic break is the last row.
 TypeEnd()
 var norgb_h2 = ExpectString("Heading Two")
-CheckNorgb("norgb h2", ReadCell(norgb_h2.X, norgb_h2.Y), 12)
+CheckNorgb("norgb h2", ReadCell(norgb_h2.X, norgb_h2.Y), 0x5fafff, 12)
 var norgb_link = ExpectString("labeled link")
-CheckNorgb("norgb link", ReadCell(norgb_link.X, norgb_link.Y), 10)
+CheckNorgb("norgb link", ReadCell(norgb_link.X, norgb_link.Y), 0x87ff87, 10)
 var norgb_quote = ExpectString("block quote line")
-CheckNorgb("norgb quote", ReadCell(norgb_quote.X + 2, norgb_quote.Y), 3)
+CheckNorgb("norgb quote", ReadCell(norgb_quote.X + 2, norgb_quote.Y), 0xd7afaf, 3)
 var norgb_rule = ExpectString("────────────────────────────────────────────────────────────────────────────────")
 // The rule takes the spec's 16-color fallback F_CYAN (3), the same index as quote.
-CheckNorgb("norgb rule", ReadCell(norgb_rule.X, norgb_rule.Y), 3)
+CheckNorgb("norgb rule", ReadCell(norgb_rule.X, norgb_rule.Y), 0xaf8787, 3) // spec 256 index 103 (R52)
 TypeEscape()
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")

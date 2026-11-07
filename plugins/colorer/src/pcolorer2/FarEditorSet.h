@@ -160,6 +160,9 @@ class FarEditorSet
   UnicodeString* GetUserHrdPath() { return &Opt.userHrdPath; }
   bool GetPluginStatus() { return Opt.rEnabled; }
 
+  /** Returns the loaded ParserFactory, or null when the plugin is disabled. */
+  ParserFactory* GetParserFactory() { return parserFactory.get(); }
+
   bool SetBgEditor() const;
 
   std::unique_ptr<UnicodeString> sTempHrdName;

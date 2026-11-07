@@ -21,6 +21,7 @@ set(SOURCES
     src/pcolorer2/FarEditorSet.cpp
     src/pcolorer2/FarViewer.cpp
     src/pcolorer2/FarHrcSettings.cpp
+    src/pcolorer2/ColorerExport.cpp
     src/pcolorer2/pcolorer.cpp
     src/pcolorer2/tools.cpp
     src/pcolorer2/CerrLogger.cpp
