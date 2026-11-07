@@ -8,7 +8,7 @@ Commits:
 - 9a556c4ac: T4, the panel and the toggle.
 - 93089a732: the durable docs.
 Commits after the review: the `--init-config` sample lists the four keys, and the sample test checks them.
-Check: the AGENTS.md check with `sh testing/markdown/browser-page.sh` added before `echo "check ok"`, run through `sh`: exit 0, `check ok`. The smoke tests 0007, 0008 and 0009 pass. `browser-page.sh` 80 ok, 0 fail. `browser-links-dom.sh` 36 ok, 0 fail.
+Check: the AGENTS.md check with `sh testing/markdown/browser-page.sh` added before `echo "check ok"`, run through `sh`: exit 0, `check ok`. The smoke tests 0007, 0008 and 0009 pass. `browser-page.sh` 80 ok, 0 fail. `browser-links-dom.sh` 37 ok, 0 fail.
 
 Regression copies that the acceptance criteria name:
 - With the root rule removed, `browser-links-dom.sh` fails `dom_link_in_tree`, `dom_link_big`, `dom_other_link` and `dom_anchor_other_file`.
