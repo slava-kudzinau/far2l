@@ -90,7 +90,7 @@ scan=yes verifier=none
 
 ```sh
 cd /Users/Viachaslau_Kudzinau/Projects/far2l/.worktrees/markdown-code-tint
-export BUILD=../far2l.markdown-code-tint.build
+export BUILD=$(cd ../far2l.markdown-code-tint.build && pwd)
 cmake -S . -B "$BUILD" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTING=Yes -DUSEWX=No -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
 cmake --build "$BUILD" -j8
 sh testing/markdown/ascii-golden.sh && sh testing/markdown/ascii-driver.sh
