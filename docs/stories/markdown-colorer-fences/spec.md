@@ -109,7 +109,8 @@ contract for the render path.
 - `sh testing/markdown/look-driver.sh --case tokens_v2`: a `javascript` fence through the real
   plugin: keyword, function, string, number, constant, operator, tail. The per-word values equal
   F4. On `far2l.hrd`: keyword `0xffffff`, function `0x6060f0`, string `0x88ee88`, number
-  `0x00e000`, constant (`def:BooleanConstant`) `0xa030ff`, operator (`def:Symbol`) `0xe0e0c0`.
+  (`def:NumberDec`) `0x00e020`, constant (`def:BooleanConstant`) `0xa030ff`, operator
+  (`def:Symbol`) `0xe0e0c0`.
   On `console.hrd`: the scheme's 4-bit rows. An unset color takes the F4 chain to `def:Text`.
 - `tokens_v2_limits`: 32 lines, 256 cells, the deadline, as V1's `look_codes`.
 - `tokens_v2_cost`: a 20k-line fence renders inside the budget; the report prints the mean and
