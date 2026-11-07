@@ -44,12 +44,20 @@ using TokenizeFn = int (*)(const wchar_t* lang, const wchar_t* const* lines, int
 	void* ctx, int deadline_ms);
 using LookFn = int (*)(int abi, const wchar_t* const* names, int count,
 	unsigned int* look, int capacity, unsigned int* generation);
+// V2 (story markdown-colorer-fences): the region's real look per token, in
+// 8-word cells; the return is the number of cells written, codes -1..-3.
+using TokenizeV2Fn = int (*)(int abi, const wchar_t* language, const wchar_t* const* lines,
+	int nLines, int budget_ms, uint64_t* cells, int capacity, uint64_t* generation);
 
 ModuleOpenFn g_module_open = nullptr;
 StartupInfoFn g_set_startup_info = nullptr;
 ViewerEventFn g_viewer_event = nullptr;
 TokenizeFn g_tokenize = nullptr;
 LookFn g_look = nullptr;
+TokenizeV2Fn g_tokenize_v2 = nullptr;
+// --rgb ran: the plugin's ReloadBase picked the rgb scheme (far2l.hrd);
+// without it, the 16-color scheme (console/default.hrd, `fore="#B"` rows).
+bool g_rgb = false;
 ViewerInfo g_vi = {};
 // The plugin manager the core bridge asks. The driver owns it here:
 // `new ControlObject` scans and registers the plugins, as at startup.
@@ -143,8 +151,9 @@ bool LoadModules(std::string& why)
 	g_viewer_event = (ViewerEventFn)dlsym(g_plugin_handle, "ProcessViewerEventW");
 	g_tokenize = (TokenizeFn)dlsym(g_plugin_handle, "ColorerTokenizeV1");
 	g_look = (LookFn)dlsym(g_plugin_handle, "ColorerRegionLookV1");
+	g_tokenize_v2 = (TokenizeV2Fn)dlsym(g_plugin_handle, "ColorerTokenizeV2");
 	if (g_module_open == nullptr || g_set_startup_info == nullptr || g_viewer_event == nullptr
-		|| g_tokenize == nullptr || g_look == nullptr) {
+		|| g_tokenize == nullptr || g_look == nullptr || g_tokenize_v2 == nullptr) {
 		const char* err = dlerror();
 		why = std::string("dlsym: ") + (err ? err : "a needed export is missing");
 		return false;
@@ -501,6 +510,363 @@ int look_bridge_real()
 	return 0;
 }
 
+// ---- T1 cases: the V2 export (story markdown-colorer-fences) ----
+
+// The javascript fence: a keyword (`function`), a function name (the regexp
+// region of `function name (`), a string, a number, a boolean constant, an
+// operator, and a tail: the identifier and the semicolon of the third line,
+// regions with no class (plain code role, spec States).
+const wchar_t* const kJsFence[] = {
+	L"function tailSum(a, b) {",
+	L"  const s = \"lit\" + 42 * true;",
+	L"  tailSum; // note",
+};
+constexpr int kJsFenceLines = 3;
+
+// One V2 call: the cells of `n` lines under the active scheme.  The words
+// past the count keep the sentinel 0xAB, so an over-write is visible.
+struct V2Out
+{
+	std::vector<uint64_t> w;
+	int rc = -99;
+	uint64_t gen = 0;
+	int Count() const { return rc > 0 ? rc : 0; }
+	const uint64_t* At(int i) const { return w.data() + static_cast<size_t>(i) * 8; }
+	// The last cell covering the 1-based column (the printer paints the
+	// inner region last, R2; single-line calls keep the cells on one line).
+	const uint64_t* Cover(int col) const
+	{
+		const uint64_t* hit = nullptr;
+		for (int i = 0; i < Count(); ++i) {
+			const uint64_t* c = At(i);
+			if (c[0] <= static_cast<uint64_t>(col) && static_cast<uint64_t>(col) <= c[1]) {
+				hit = c;
+			}
+		}
+		return hit;
+	}
+};
+
+V2Out CallV2(const wchar_t* const* lines, int n, int budget_ms = 5000, int capacity = 256,
+	int abi = 1, const wchar_t* lang = L"javascript")
+{
+	V2Out out;
+	out.w.assign(static_cast<size_t>(capacity) * 8 + 8, 0xAB);
+	out.rc = g_tokenize_v2(abi, lang, lines, n, budget_ms, out.w.data(), capacity, &out.gen);
+	return out;
+}
+
+// One expectation: a cell covering `col` of the one-line call, its 24-bit
+// foreground, its 4-bit foreground, its style word.
+struct V2Want
+{
+	int line;
+	int col;
+	const wchar_t* what;
+	uint64_t fg;   // the far2l.hrd row (--rgb)
+	uint64_t fg4;  // the console scheme's 4-bit row (no --rgb)
+	uint64_t style;
+};
+
+// One expectation, by index into the table below: the last cell covering
+// `col` of a one-line call carries the wanted 24-bit foreground, the
+// scheme's 4-bit foreground, the style word, and three zeros.  The active
+// scheme decides which side is measured: --rgb runs far2l.hrd (the table's
+// 24-bit column), without it console default.hrd (the table's 4-bit
+// column).  The companions are the same scheme through the palette's
+// quantize: far2l.hrd's 24-bit value under the 16-color scheme, the
+// console row expanded back to 24 bits under the rgb scheme.
+bool Expect(const V2Out& out, int idx, int col, const wchar_t* what)
+{
+	// 0 keyword, 1 function, 2 keyword2, 3 string, 4 number, 5 operator,
+	// 6 constant, 7 comment (far2l.hrd rows, console default.hrd rows).
+	static const uint64_t s_rgb[] = {
+		0xffffff, 0x6060f0, 0xffffff, 0x88ee88, 0x00e020, 0xe0e0c0, 0xa030ff, 0x696989,
+	};
+	static const uint64_t s_rgb4[] = {15, 9, 15, 15, 10, 15, 13, 9};
+	static const uint64_t s_console4[] = {15, 11, 15, 14, 10, 15, 11, 3};
+	static const uint64_t s_console24[] = {
+		0xffffff, 0x55ffff, 0xffffff, 0xffff55, 0x55ff55, 0xffffff, 0x55ffff, 0x00aaaa,
+	};
+	const uint64_t want_fg = g_rgb ? s_rgb[idx] : s_console24[idx];
+	const uint64_t want_fg4 = g_rgb ? s_rgb4[idx] : s_console4[idx];
+	const uint64_t* cell = out.Cover(col);
+	if (cell == nullptr) {
+		printf("FAILED tokens_v2: %S: no cell covers col %d\n", what, col);
+		for (int i = 0; i < out.Count(); ++i) {
+			const uint64_t* c = out.At(i);
+			printf("  cell %d: [%llu,%llu] 0x%llX/%llu style %llu\n", i,
+				(unsigned long long)c[0], (unsigned long long)c[1],
+				(unsigned long long)c[2], (unsigned long long)c[3],
+				(unsigned long long)c[4]);
+		}
+		return false;
+	}
+	if (cell[2] != want_fg || cell[3] != want_fg4 || cell[4] != 0
+		|| cell[5] != 0 || cell[6] != 0 || cell[7] != 0) {
+		printf("FAILED tokens_v2: %S col %d is [0x%llX/%llu style %llu %llu,%llu,%llu], want [0x%llX/%llu style 0 0,0,0]\n",
+			what, col,
+			(unsigned long long)cell[2], (unsigned long long)cell[3],
+			(unsigned long long)cell[4], (unsigned long long)cell[5],
+			(unsigned long long)cell[6], (unsigned long long)cell[7],
+			(unsigned long long)want_fg, (unsigned long long)want_fg4);
+		return false;
+	}
+	printf("probe %S: [0x%llX/%llu style %llu] under %s\n", what,
+		(unsigned long long)cell[2], (unsigned long long)cell[3],
+		(unsigned long long)cell[4], g_rgb ? "far2l.hrd" : "console default.hrd");
+	return true;
+}
+
+// The javascript fence through the real plugin, V2: one call per line (the
+// cells keep their line), then the whole fence for the tail.  The 24-bit
+// values are the far2l.hrd rows (spec Done), the 4-bit values the console
+// scheme's rows; an unset color (def:Function on the console scheme) takes
+// def:Text, the F4 chain.
+int tokens_v2()
+{
+	std::string why;
+	if (!LoadModules(why) || !CreateEditorSet(why)) {
+		printf("FAILED tokens_v2: %s\n", why.c_str());
+		return 1;
+	}
+	// The rows the two schemes give (far2l.hrd / console default.hrd).  The
+	// function name's console fg is def:Text's #B: def:Function's assign
+	// leaves the fore unset, the F4 chain falls to def:Text.
+	static const V2Want s_want[] = {
+		{0, 4,  L"keyword",    0xffffff, 15, 0}, // def:Keyword
+		{0, 12, L"function",   0x6060f0, 11, 0}, // def:Function
+		{1, 5,  L"keyword2",   0xffffff, 15, 0}, // def:Keyword (const)
+		{1, 15, L"string",     0x88ee88, 14, 0}, // def:String (content)
+		{1, 21, L"number",     0x00e020, 10, 0}, // def:NumberDec -> def:Number (#A)
+		{1, 24, L"operator",   0xe0e0c0, 15, 0}, // def:Symbol (*)
+		{1, 27, L"constant",   0xa030ff, 11, 0}, // def:BooleanConstant
+		{2, 15, L"comment",    0x696989,  8, 0}, // def:Comment
+	};
+	for (int w = 0; w < 8; ++w) {
+		const V2Want& want = s_want[w];
+		V2Out out = CallV2(&kJsFence[want.line], 1);
+		if (out.rc < 1) {
+			printf("FAILED tokens_v2: line %d rc=%d, want cells\n", want.line, out.rc);
+			return 1;
+		}
+		if (out.gen == 0) {
+			printf("FAILED tokens_v2: generation=0 with a count\n");
+			return 1;
+		}
+		if (!Expect(out, w, want.col, want.what)) {
+			return 1;
+		}
+	}
+	// The tail line (`  tailSum; // note`): the identifier carries no cell
+	// (plain code role); the semicolon's Symbol match and the comment do.
+	{
+		V2Out tail = CallV2(&kJsFence[2], 1);
+		if (tail.Count() < 1) {
+			printf("FAILED tokens_v2: the tail line gave %d cells, want the comment\n",
+				tail.Count());
+			return 1;
+		}
+		for (int i = 0; i < tail.Count(); ++i) {
+			if (tail.At(i)[0] < 10) {
+				printf("FAILED tokens_v2: the tail line cell %d starts at %llu, want 10+\n",
+					i, (unsigned long long)tail.At(i)[0]);
+				return 1;
+			}
+		}
+		if (!Expect(tail, 7, 15, L"comment")) {
+			return 1;
+		}
+		if (tail.Cover(4) != nullptr) {
+			printf("FAILED tokens_v2: a cell covers the tail identifier (col 4)\n");
+			return 1;
+		}
+		printf("probe tail: no cell at col 4, the plain code role (def:Text)\n");
+	}
+	// The whole fence: the two token lines' cells plus the tail's two
+	// (the semicolon's Symbol, the comment block), the 1-based inclusive
+	// span of the keyword.
+	V2Out fence = CallV2(kJsFence, kJsFenceLines);
+	V2Out head2 = CallV2(kJsFence, 2);
+	if (fence.rc != head2.rc + 2) {
+		printf("FAILED tokens_v2: the fence gave %d cells, the first two lines %d, want two more\n",
+			fence.rc, head2.rc);
+		return 1;
+	}
+	// The fence's stream order: the function scheme's cell opens the
+	// fence (jsFunctionDef enters at its start keyword, its span is the
+	// name), the keyword's leaf writes after it, and the printer paints
+	// the leaf over the scheme (R2).  1-based inclusive.
+	const uint64_t* fn = fence.At(0);
+	if (fn[0] != 10 || fn[1] != 16) {
+		printf("FAILED tokens_v2: the fence cell 0 is [%llu,%llu], want [10,16] (the name)\n",
+			(unsigned long long)fn[0], (unsigned long long)fn[1]);
+		return 1;
+	}
+	const uint64_t* kw = fence.At(1);
+	if (kw[0] != 1 || kw[1] != 8) {
+		printf("FAILED tokens_v2: the fence cell 1 is [%llu,%llu], want [1,8] (the keyword)\n",
+			(unsigned long long)kw[0], (unsigned long long)kw[1]);
+		return 1;
+	}
+	// abi: the shape's abi is 1; a larger abi answers -2.
+	V2Out abi2 = CallV2(kJsFence, kJsFenceLines, 5000, 256, 2);
+	if (abi2.rc != -2 || abi2.gen != 0) {
+		printf("FAILED tokens_v2: abi 2 gave rc=%d gen=%llu, want -2/0\n",
+			abi2.rc, (unsigned long long)abi2.gen);
+		return 1;
+	}
+	printf("ok tokens_v2: fence cells under %s, the tail bare, abi 2 -> -2 (generation %llu)\n",
+		g_rgb ? "far2l.hrd" : "console default.hrd", (unsigned long long)fence.gen);
+	return 0;
+}
+
+// 32 lines, 256 cells, the deadline (spec: same input and limits as V1,
+// as look_codes).
+int tokens_v2_limits()
+{
+	std::string why;
+	if (!LoadModules(why) || !CreateEditorSet(why)) {
+		printf("FAILED tokens_v2_limits: %s\n", why.c_str());
+		return 1;
+	}
+	// The line cap: 34 lines answer as 32 (the extra lines add no cells),
+	// under the cell cap so the count shows the line cap at work.
+	static const wchar_t* kShort = L"1;";
+	std::vector<const wchar_t*> lines(34, kShort);
+	V2Out full32 = CallV2(lines.data(), 32);
+	V2Out full34 = CallV2(lines.data(), 34);
+	if (full32.rc <= 0 || full32.rc >= 256) {
+		printf("FAILED tokens_v2_limits: 32 short lines gave rc=%d, want 0 < rc < 256\n",
+			full32.rc);
+		return 1;
+	}
+	if (full34.rc != full32.rc) {
+		printf("FAILED tokens_v2_limits: 34 lines gave rc=%d, want rc=%d (the 32-line cap)\n",
+			full34.rc, full32.rc);
+		return 1;
+	}
+	printf("probe limits: %d cells from %d lines (cap 32 lines)\n", full32.rc, 34);
+	// The cell cap: a token-rich fence writes exactly capacity cells, and
+	// touches nothing past them (the sentinel word at 256*8 stays).
+	static const wchar_t* kRich =
+		L"1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1;";
+	std::vector<const wchar_t*> rich(120, kRich);
+	V2Out cap = CallV2(rich.data(), 120, 5000, 256);
+	if (cap.rc != 256) {
+		printf("FAILED tokens_v2_limits: a rich fence gave rc=%d, want 256 (the cell cap)\n",
+			cap.rc);
+		return 1;
+	}
+	if (cap.w[256 * 8] != 0xAB) {
+		printf("FAILED tokens_v2_limits: the word past the cap was written\n");
+		return 1;
+	}
+	// A small capacity answers its own count.
+	V2Out ten = CallV2(rich.data(), 120, 5000, 10);
+	if (ten.rc != 10 || ten.w[10 * 8] != 0xAB) {
+		printf("FAILED tokens_v2_limits: capacity 10 gave rc=%d\n", ten.rc);
+		return 1;
+	}
+	printf("probe limits: 256 cells written, a 10-capacity call stops at 10\n");
+	// The deadline: a spent budget answers the cells it wrote before the
+	// first check (a small count); a 1 ms budget over a fence with far
+	// more tokens than the cap answers a partial count; the viewer's
+	// 100 ms writes the full 256.
+	std::vector<const wchar_t*> many(32, kRich);
+	V2Out spent = CallV2(many.data(), 32, 0);
+	V2Out partial = CallV2(many.data(), 32, 1);
+	V2Out whole = CallV2(many.data(), 32, 100);
+	if (spent.rc <= 0 || spent.rc >= 256) {
+		printf("FAILED tokens_v2_limits: a spent budget gave rc=%d, want a small count\n",
+			spent.rc);
+		return 1;
+	}
+	if (spent.rc >= partial.rc || partial.rc > whole.rc || whole.rc != 256) {
+		printf("FAILED tokens_v2_limits: budgets gave %d/%d/%d, want a rise to 256\n",
+			spent.rc, partial.rc, whole.rc);
+		return 1;
+	}
+	if (partial.gen == 0) {
+		printf("FAILED tokens_v2_limits: a deadline stop lost the generation\n");
+		return 1;
+	}
+	printf("probe limits: budget 0 -> %d, 1 ms -> %d, 100 ms -> %d (generation %llu)\n",
+		spent.rc, partial.rc, whole.rc, (unsigned long long)whole.gen);
+	return 0;
+}
+
+// V1 keeps its shape beside V2: the four classes through the 4-word emit
+// callback, its own stride; V2 answers the same fence in 8-word cells.
+int tokens_v2_v1_callers()
+{
+	std::string why;
+	if (!LoadModules(why) || !CreateEditorSet(why)) {
+		printf("FAILED tokens_v2_v1_callers: %s\n", why.c_str());
+		return 1;
+	}
+	struct Emit { int line, start, end, cls; };
+	std::vector<Emit>* sink = new std::vector<Emit>(); // one case, no teardown (R49)
+	const int rc = g_tokenize(L"javascript", kJsFence, kJsFenceLines,
+		[](void* ctx, int line, int start, int end, int token_class) {
+			static_cast<std::vector<Emit>*>(ctx)->push_back({line, start, end, token_class});
+		},
+		sink, 5000);
+	if (rc != 0) {
+		printf("FAILED tokens_v2_v1_callers: V1 rc=%d, want 0\n", rc);
+		return 1;
+	}
+	// The four classes, on their spans (V1's 0-based half-open cells).
+	int seen[5] = {0, 0, 0, 0, 0};
+	for (const Emit& e : *sink) {
+		if (e.cls >= 1 && e.cls <= 4) {
+			++seen[e.cls];
+		}
+		if (e.line == 0 && e.cls == 1 && e.start == 0 && e.end == 8) {
+			seen[0] = 1; // `function` on line 0, cells [0,8)
+		}
+	}
+	for (int cls = 1; cls <= 4; ++cls) {
+		if (seen[cls] == 0) {
+			printf("FAILED tokens_v2_v1_callers: V1 gave no class %d\n", cls);
+			return 1;
+		}
+	}
+	if (seen[0] == 0) {
+		printf("FAILED tokens_v2_v1_callers: V1's keyword emit is not [0,8) on line 0\n");
+		return 1;
+	}
+	// The tail keeps no class (V1 emits nothing after the comment).
+	int tail_emits = 0;
+	for (const Emit& e : *sink) {
+		if (e.line == 2 && e.start < 10) {
+			++tail_emits; // `  tailSum;` carries no class
+		}
+	}
+	if (tail_emits != 0) {
+		printf("FAILED tokens_v2_v1_callers: the tail gave %d V1 emits, want 0\n", tail_emits);
+		return 1;
+	}
+	// V2 opens the fence with the function scheme's cell (the name's
+	// region, V1's second class-1 emit), then the keyword's leaf — the
+	// printer paints the leaf over the scheme, as in V1's R2.
+	V2Out v2 = CallV2(kJsFence, kJsFenceLines);
+	const uint64_t* fn = v2.At(0);
+	const uint64_t* kw = v2.At(1);
+	if (v2.rc <= 0 || fn[0] != 10 || fn[1] != 16 || kw[0] != 1 || kw[1] != 8) {
+		printf("FAILED tokens_v2_v1_callers: V2's cells are [%llu,%llu],[%llu,%llu], want [10,16],[1,8]\n",
+			(unsigned long long)fn[0], (unsigned long long)fn[1],
+			(unsigned long long)kw[0], (unsigned long long)kw[1]);
+		return 1;
+	}
+	if (v2.w[static_cast<size_t>(v2.rc) * 8] != 0xAB) {
+		printf("FAILED tokens_v2_v1_callers: V2 wrote past its count\n");
+		return 1;
+	}
+	printf("ok tokens_v2_v1_callers: V1's four classes on the 4-word emits, V2's 8-word cells\n");
+	return 0;
+}
+
 struct Case
 {
 	const char* name;
@@ -514,6 +880,9 @@ const Case s_cases[] = {
 	{"look_bridge", look_bridge},
 	{"look_codes", look_codes},
 	{"look_bridge_real", look_bridge_real},
+	{"tokens_v2", tokens_v2},
+	{"tokens_v2_limits", tokens_v2_limits},
+	{"tokens_v2_v1_callers", tokens_v2_v1_callers},
 };
 } // namespace
 
@@ -553,6 +922,7 @@ int main(int argc, char** argv)
 		--argc;
 	}
 	EnsureConsoleOutput(rgb);
+	g_rgb = rgb;   // the tokens_v2 rows follow the active scheme
 	setvbuf(stdout, nullptr, _IONBF, 0);   // the crash trace keeps the case log
 	// Same startup as far2l main (main.cpp:431-437): the plugin manager scans
 	// `Plugins` next to the app binary (FAR2L_APP).
