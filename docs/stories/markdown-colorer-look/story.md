@@ -94,3 +94,10 @@ M. One new plugin file, one bridge function, one resolver step, one new role, th
   fixture at `initdir/left/fixture.md` (the shape of 000c), the merged T6 (smoke sessions),
   and the durable docs moved to the main session at close-out. G2-design: stop for the owner
   at `gate.md`.
+- Ledger, 2026-11-07: T1 done: 0a0eef8, review clean (one Minor), spend unmetered (transcripts flush at close).
+- Ledger, 2026-11-07: T2 done: 99e1f2a, review 1 Important fixed (drawSyntax gate), spend unmetered.
+- Ledger, 2026-11-07: T3 done: 4b21a5f (roles ride the T4 commit), review clean, spend unmetered.
+- Ledger, 2026-11-07: T4 done: 4b21a5f, critical review 1 Important fixed (accessor gate), spend unmetered.
+- Ledger, 2026-11-07: T5 done: 9e9ddd1, review clean (probes removed), spend unmetered.
+- Ledger, 2026-11-07: T6 done: 19f4464, review clean (expectations from a sweep run), spend unmetered.
+  Final check exit 0: full build, 4 drivers, smoke 14/16 (0004-vt-shell, 000b-find-file = known Mac failures).

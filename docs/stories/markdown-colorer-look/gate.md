@@ -92,6 +92,9 @@ scan=yes verifier=none
 ## Spend
 
 - Budget: M story. $15 spend, $20 hard stop.
+- Last recorded: `spend markdown-colorer-look $0.00 of budget $15.00, hard stop $20.00: ok`
+  (10:32 snapshot, cost.jsonl).  The omp transcripts flush at session close; the main session
+  reruns `spend.mjs` at close-out for the real number.
 
 ## Check
 
@@ -136,17 +139,27 @@ Any other failure is new.
 
 ### What was built
 
-_To fill at close-out: against "What it builds": same, more, or less, and why._
+Same as "What it builds", plus: in a 16-color terminal the F3 look is the console.hrd rows (the
+scheme's 4-bit path), the table draws with box characters, and the scheme underline rides every
+run the scheme underlines.  F4 and F6 on the same file show the same scheme, and a scheme change
+(the editor's parse, then the reopen) moves the F3 look - the cache and generation contract work.
 
 ### Decisions changed during the build
 
-_To fill at close-out: rows changed or added in the table above, with the reason; or "none"._
+None of the decision table's rows.  The 000d expectations are the console.hrd rows because the
+harness runs a 16-color terminal (ruling R9); the truecolor far2l.hrd rows are asserted by the
+driver's `look_real_hrd`.
 
 ### What the reviews caught
 
-_To fill at close-out: the findings that changed code, one line each; or "nothing that changed
-code"._
+- T2: the code-2 gate now includes `drawSyntax` (accessor `GetSyntaxDraw`) - a scheme with syntax
+  drawing off must fall back to the fork table.
+- T4: same accessor on the gate (codes 1/2/3 answer no generation).
+- T5: probes removed before the commit; the underline pass is one GetText/PutText pair per row.
 
 ### Run it
 
-_To fill at close-out: the command or demo, and what you should see._
+Run the Check section above; expect all PASS except the two known Mac failures (`0004-vt-shell`,
+`000b-find-file`).  In the built app, F3 a `.md` file: in a truecolor terminal you see the
+far2l.hrd colors (`#8888ff` headings underlined, `#40a000` strong, `#ff20a0` emphasis); in a
+16-color terminal the console.hrd rows, all underlined.  F4 on the same file matches.
