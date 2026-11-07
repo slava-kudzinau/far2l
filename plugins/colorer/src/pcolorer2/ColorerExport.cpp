@@ -70,12 +70,12 @@ const LangAlias s_aliases[] = {
 	{L"pascal", L"pas"},
 	{L"fortran", L"f"},
 	{L"make", L"makefile"},
-	{L"gitignore", L"ignore"},
+	{L"gitignore", L"gitignore"},
 	{L"apache", L"conf"},
-	{L"apacheconf", L"conf"},
+	{L"apacheconf", L"apache"},
 	{L"blade", L"php"},
-	{L"handlebars", L"hbs"},
-	{L"brainfuck", L"bf"},
+	{L"handlebars", L"twig"},
+	{L"brainfuck", L"lisp"},
 	{L"graphviz", L"dot"},
 	{L"terraform", L"hcl"},
 };
@@ -254,6 +254,11 @@ SHAREDSYMBOL int ColorerTokenizeV1(const wchar_t* lang, const wchar_t* const* li
 		file_name.append(UnicodeString(type_name));
 		HrcLibrary& library = factory->getHrcLibrary();
 		FileType* file_type = library.chooseFileType(&file_name, nullptr, 0);
+		if (file_type == nullptr || file_type->getName() == UnicodeString("default")) {
+			// The name may be a Colorer type name, not a file extension:
+			// 'gitignore' has a type, no '*.gitignore' mask (R4).
+			file_type = library.getFileType(UnicodeString(type_name));
+		}
 		if (file_type == nullptr) {
 			return -2;
 		}

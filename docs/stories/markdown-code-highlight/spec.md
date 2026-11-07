@@ -44,7 +44,10 @@ The export maps a region to a class with `Region::isAncestorOf(scheme, L"def", <
 
 ## Language names
 
-The core picks the file type by the fake file name `x.<lang>`. The alias table is complete and exact:
+The core picks the file type by the fake file name `x.<lang>`. When no
+mask matches, the export asks Colorer for the type by name, so an
+installed type name works as a fence slug. Two names need the alias
+table, because Colorer knows them by a shorter name:
 
 | Fence name | File name sent to Colorer |
 |---|---|
@@ -59,15 +62,14 @@ to `py`, `bash` and `shell` to `sh`, `rust` to `rs`, `csharp` to `cs`,
 `elixir` to `ex`, `erlang` to `erl`, `haskell` to `hs`, `julia` to
 `jl`, `objectivec`, `objc` and `obj-c` to `m`, `fsharp` to `fs`,
 `vbnet` to `vb`, `assembly` to `asm`, `pascal` to `pas`, `fortran` to
-`f`, `make` to `makefile`, `gitignore` to `ignore`, `apache` and
-`apacheconf` to `conf`, `blade` to `php`, `handlebars` to `hbs`,
-`brainfuck` to `bf`, `graphviz` to `dot` and `terraform` to `hcl`. A
-slug absent from the table is sent as it is. The `slug_probe` driver
-case checks every row against the installed plugin (owner list
-2026-11-07). The languages without a scheme in the bundle keep the
-code role: `matlab`, `clojure`, `nim`, `scheme`, `prolog`,
-`actionscript`, `applescript`, `nginx`, `http`, `liquid`, `ejs`,
-`mermaid`.
+`f`, `make` to `makefile`, `apacheconf` to `apache`, `blade` to `php`,
+`handlebars` to `twig`, `brainfuck` to `lisp`, `graphviz` to `dot` and
+`terraform` to `hcl`. A slug absent from the table is sent as it is.
+The `slug_probe` driver case checks every row and every direct slug
+against the installed plugin (owner list 2026-11-07). The eleven
+slugs without a scheme in the bundle keep the code role: `matlab`,
+`clojure`, `scheme`, `prolog`, `applescript`, `nginx`, `http`,
+`liquid`, `ejs`, `stylus` and `mermaid`.
 
 The file type `default` means no colors: the fence keeps the code role. These twelve names reach all four classes in the fixture test: `js`, `ts`, `python`, `bash`, `c`, `cpp`, `go`, `rust`, `java`, `sql`. `json` and `yaml` reach the classes their HRC scheme defines, at least string and number, and are accepted with fewer classes.
 
