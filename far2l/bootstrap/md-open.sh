@@ -1250,10 +1250,16 @@ HTML
   }
   // applyLink A DIR FILEBASE PAGEBASE ENC: the link rules of the spec. A link
   // in the tree points to the page and a route. A link that does not go in the
-  // tree keeps its text, loses its href and gets the note.
+  // tree keeps its text, loses its href and gets the note. The one-file page
+  // keeps the links of story 1: the base element resolves them, and only a
+  // dangerous scheme loses its href.
   function applyLink(a, dir, fileBase, pageBase, enc) {
     var href = a.getAttribute('href');
     if (href === null) return;
+    if (!treeMode) {
+      if (/^(javascript|vbscript|data):/i.test(href.replace(/[\x00-\x20]/g, ''))) a.removeAttribute('href');
+      return;
+    }
     var t = target(href, dir);
     if (t.kind === 'keep') return;
     if (t.kind === 'anchor') {
@@ -1270,7 +1276,6 @@ HTML
     }
     if (has(tree, t.enc)) {
       a.setAttribute('href', pageBase + '#/' + t.enc + (t.frag ? '#' + t.frag : ''));
-      if (tree[t.enc] === 'big' || tree[t.enc] === 'cut') a.setAttribute('data-md-note', tree[t.enc]);
       return;
     }
     a.removeAttribute('href');

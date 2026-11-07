@@ -33,7 +33,6 @@ Regression copies that the acceptance criteria name:
 
 - T2 Minor 2: the reuse step of the scan passes when `find` cannot stat the page. The window is small, and the `cksum` line still guards the reuse.
 - T1 Minor 3: two assertions prove less than their names say. `case_tree_ini_hostile` cannot tell `dir` from `repo` because the fixture has no `.git`. `case_tree_ini_keys` does not check that a trimmed `tree_depth` value is used.
-- T3: `data-md-note` on a link to a `big` or `cut` file is not used by the page. The file itself shows the limit note.
 - The Linux scan was not run. The root `/` case was not run: macOS has no readable file in `/` in the test folder.
 
 ## Manual checks for the owner
@@ -48,7 +47,7 @@ Regression copies that the acceptance criteria name:
 |---|---|---|---|---|---|
 | task-reviewer-critical | opus | 2 | 1 | 1 | 8 |
 | re-reviewer | haiku | 2 | 0 | 0 | 0 |
-| final-reviewer | opus | 1 | 0 | 0 | 0 |
+| final-reviewer | opus | 1 | 0 | 1 | 2 |
 
 ## Lessons
 

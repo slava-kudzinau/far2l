@@ -274,7 +274,7 @@ case_dom_link_big() {
     awk 'BEGIN { for (i = 0; i < 1200000; i++) printf "x"; printf "\n" }' > big.md || bad "write big"
     build o.md
     dom > "$d/dom"
-    want='<a href="'"$(file_url "$page")"'#/big.md" data-md-note="big">L-Big</a>'
+    want='<a href="'"$(file_url "$page")"'#/big.md">L-Big</a>'
     main_of < "$d/dom" | grep -qF "$want" || bad "a big file link is not a route: $(main_of < "$d/dom")"
     dom '/big.md' > "$d/dom2"
     main_of < "$d/dom2" | grep -qF 'This file is too large for the page.' || bad "no note for the big file"
@@ -304,6 +304,25 @@ case_dom_image_base() {
     build o.md
     dom '/sub/f.md' > "$d/dom"
     main_of < "$d/dom" | grep -qF '/sub/img.png"' || bad "the image is not in the folder of the file: $(main_of < "$d/dom")"
+    exit 0
+}
+
+# In one-file mode the links keep the page of story 1: the base element
+# resolves a relative link, and only a dangerous scheme loses its href.
+case_dom_one_file_links() {
+    fresh
+    mkdir sub || bad "mkdir"
+    printf '# A-OPEN\n\n[L-NEXT](a.md)\n\n[L-SUB](sub/f.md)\n\n[L-BAD](javascript:alert(1))\n' > o.md || bad "write"
+    printf '# B-ONLY\n' > a.md || bad "write"
+    printf '# F\n' > sub/f.md || bad "write"
+    build --tree off o.md
+    grep -q 'data-tree="off"' "$page" || bad "the page is not in one-file mode"
+    dom > "$d/dom"
+    m=$(main_of < "$d/dom")
+    echo "$m" | grep -qF '<a href="a.md">L-NEXT</a>' || bad "the relative link lost its href: $m"
+    echo "$m" | grep -qF '<a href="sub/f.md">L-SUB</a>' || bad "the relative link lost its href: $m"
+    echo "$m" | grep -qF '<a>L-BAD</a>' || bad "the script link kept its href: $m"
+    ! echo "$m" | grep -qF 'not in this tree' || bad "the one-file page has the tree note: $m"
     exit 0
 }
 
@@ -349,7 +368,7 @@ case_dom_one_file_anchor() {
     build --tree off o.md
     grep -q 'data-tree="off"' "$page" || bad "the page is not in one-file mode"
     dom > "$d/dom"
-    want='<a href="'"$(file_url "$page")"'#sec">L-Sec</a>'
+    want='<a href="#sec">L-Sec</a>'
     main_of < "$d/dom" | grep -qF "$want" || bad "the one-file anchor is not a same-page link: $(main_of < "$d/dom")"
     main_of < "$d/dom" | grep -qF 'id="user-content-sec"' || bad "no heading id in one-file mode"
     exit 0
@@ -674,7 +693,7 @@ for c in dom_start_file dom_route_file dom_route_unknown \
          dom_link_absolute dom_link_bad_escape dom_link_file_scheme \
          dom_link_percent dom_link_big dom_other_link dom_image_base \
          dom_heading_ids dom_anchor_same_file dom_anchor_other_file \
-         dom_one_file_anchor dom_names_hostile dom_raw_html_text \
+         dom_one_file_anchor dom_one_file_links dom_names_hostile dom_raw_html_text \
          dom_script_scheme dom_panel_tree dom_panel_current dom_panel_folders_open \
          dom_panel_root_name dom_panel_cap_note dom_panel_big_style \
          dom_panel_toggle_markup dom_panel_off_notice dom_panel_width_rule \

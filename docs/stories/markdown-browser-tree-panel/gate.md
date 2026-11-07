@@ -103,7 +103,7 @@ New keys in `md-view.ini`: `tree`, `root`, `tree_depth`, `tree_max_files`. New f
 - T2 Critical: the escape function was quadratic. One file with a long line of `\` stopped the build. It now runs one linear `sed` pass. A test with a 400 KB line covers it.
 - T2 Minor: the reuse step of the scan passes when `find` cannot stat the page. Accepted; the `cksum` line still guards the reuse.
 - T1 Minor: two test assertions prove less than their names say. Accepted as polish.
-- Final review: see the row below.
+- Final review Important: in one-file mode a relative link lost its `href` and got the tree note. The page of story 1 must keep its links, so `applyLink` now leaves them as story 1 made them. A new DOM case covers it.
 
 The review yield is in `closeout.md`.
 
