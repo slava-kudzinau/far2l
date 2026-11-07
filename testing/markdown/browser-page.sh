@@ -89,10 +89,11 @@ html_tag() {
 }
 
 # expect_tag W T F: the page starts at width W and theme T; F is 1 when forced.
+# The tree attributes (from data-tree on) are not part of this check.
 expect_tag() {
     want="<html lang=\"en\" data-start-width=\"$1\" data-start-theme=\"$2\">"
     [ "$3" = 1 ] && want="<html lang=\"en\" data-start-width=\"$1\" data-start-theme=\"$2\" data-forced=\"1\">"
-    got=$(html_tag)
+    got=$(html_tag | sed 's/ data-tree=.*>$/>/')
     [ "$got" = "$want" ] || bad "html tag is [$got], want [$want]"
 }
 
@@ -621,20 +622,20 @@ case_page_start_values() {
     md --no-open --out "$page" "$sample"
     [ "$rc" = 0 ] || bad "exit $rc"
     expect_tag 70 auto 0
-    grep -qxF '<meta name="far2l-md-key" content="w=70;t=auto;f=0">' "$page" \
+    grep -qxF '<meta name="far2l-md-key" content="w=70;t=auto;f=0;tr=on;r=dir;d=6;n=500">' "$page" \
         || bad "no page key for the defaults"
     rm -f "$page"
     md --width 60 --theme light --no-open --out "$page" "$sample"
     [ "$rc" = 0 ] || bad "exit $rc for a flag run"
     expect_tag 60 light 1
-    grep -qxF '<meta name="far2l-md-key" content="w=60;t=light;f=1">' "$page" \
+    grep -qxF '<meta name="far2l-md-key" content="w=60;t=light;f=1;tr=on;r=dir;d=6;n=500">' "$page" \
         || bad "no page key for a forced run"
     rm -f "$page"
     write_ini '[View]' 'width=80' 'theme=dark'
     md --no-open --out "$page" "$sample"
     [ "$rc" = 0 ] || bad "exit $rc with ini"
     expect_tag 80 dark 0
-    grep -qxF '<meta name="far2l-md-key" content="w=80;t=dark;f=0">' "$page" \
+    grep -qxF '<meta name="far2l-md-key" content="w=80;t=dark;f=0;tr=on;r=dir;d=6;n=500">' "$page" \
         || bad "no page key from the ini file"
     grep -qF "getAttribute('data-start-width')" "$page" || bad "the page script does not read data-start-width"
     grep -qF "getAttribute('data-start-theme')" "$page" || bad "the page script does not read data-start-theme"
@@ -678,7 +679,8 @@ case_page_narrow_rule() {
 
 case_page_hljs_after_marked() {
     fresh
-    md --no-open --out "$page" "$sample"
+    # The one-file page; tree_page_markup checks the elements of a tree page.
+    md --tree off --no-open --out "$page" "$sample"
     [ "$rc" = 0 ] || bad "exit $rc"
     line_of '<script type="text/markdown" id="md">'; l_md=$ln
     line_of 'marked v18.1.3'; l_marked=$ln
@@ -883,11 +885,20 @@ case_vendor_sha384() {
 # --- the stable page path and reuse -----------------------------------------
 
 # cache_page FILE: sets cpage to the cache page of FILE, as the spec names it.
+# The real folder keeps a newline at the end of its name (see real).
 cache_page() {
-    cdir=$(cd "$(dirname -- "$1")" && pwd -P) || bad "cd for cache_page"
-    creal=$cdir/$(basename -- "$1")
+    case $1 in
+        */*) cdir=${1%/*} ;;
+        *) cdir=. ;;
+    esac
+    case $cdir in
+        /*) ;;
+        *) cdir=./$cdir ;;
+    esac
+    real "$cdir"
+    creal=${rpath%/}/${1##*/}
     ccrc=$(printf '%s' "$creal" | cksum | sed 's/ .*//')
-    cbase=$(basename -- "$1" | sed 's/[^A-Za-z0-9._-]/_/g' | cut -c1-40)
+    cbase=$(printf '%s\n' "${1##*/}" | sed 's/[^A-Za-z0-9._-]/_/g' | cut -c1-40 | sed 1q)
     cpage=${XDG_CACHE_HOME:-$HOME/.cache}/far2l/md/$cbase-$ccrc.html
 }
 
@@ -941,7 +952,7 @@ case_cache_path_stable() {
     expect_open "$cpage"
     [ "$(cache_files)" = 1 ] || bad "want one file in the cache folder, got $(ls -A "$XDG_CACHE_HOME/far2l/md")"
     [ -z "$(ls -A "$TMPDIR")" ] || bad "a page was made in TMPDIR: $(ls -A "$TMPDIR")"
-    grep -qxF '<meta name="far2l-md-key" content="w=70;t=auto;f=0">' "$cpage" || bad "no page key"
+    grep -qxF '<meta name="far2l-md-key" content="w=70;t=auto;f=0;tr=on;r=dir;d=6;n=500">' "$cpage" || bad "no page key"
     # The same file by an absolute path, by another relative path and through a
     # linked folder gives the same page.
     md --no-cache --no-open "$d/work/s.md"
@@ -986,6 +997,16 @@ case_cache_two_files() {
     grep -qF 'alpha-text' "$pa" || bad "the page of a/note.md does not hold its text"
     grep -qF 'beta-text' "$pb" || bad "the page of b/note.md does not hold its text"
     if grep -qF 'beta-text' "$pa"; then bad "the page of a/note.md holds the text of b/note.md"; fi
+    # A folder whose name ends in a newline does not share a page with its sibling.
+    mkdir "a$tnl" || bad "mkdir a<newline>"
+    printf '# gamma-text\n' > "a$tnl/note.md" || bad "write"
+    md --no-open "a$tnl/note.md"
+    [ "$rc" = 0 ] || bad "exit $rc for a<newline>/note.md: $(cat "$d/err")"
+    cache_page "a$tnl/note.md"; pn=$cpage
+    [ "$pn" != "$pa" ] || bad "a<newline>/note.md and a/note.md have one page name"
+    [ -f "$pn" ] || bad "no page at $pn"
+    grep -qF 'gamma-text' "$pn" || bad "the page of a<newline>/note.md does not hold its text"
+    grep -qF 'alpha-text' "$pa" || bad "the page of a/note.md was replaced"
     exit 0
 }
 
@@ -1061,7 +1082,7 @@ case_cache_rebuild_on_flag() {
     md --width 80 --no-open s.md
     [ "$rc" = 0 ] || bad "exit $rc for --width 80"
     if marked; then bad "the page was not built again for --width 80"; fi
-    grep -qxF '<meta name="far2l-md-key" content="w=80;t=auto;f=1">' "$cpage" || bad "no key for --width 80"
+    grep -qxF '<meta name="far2l-md-key" content="w=80;t=auto;f=1;tr=on;r=dir;d=6;n=500">' "$cpage" || bad "no key for --width 80"
     expect_tag_at "$cpage" 80 auto 1
     mark
     md --width 80 --no-open s.md
@@ -1075,7 +1096,7 @@ case_cache_rebuild_on_flag() {
     mark
     md --no-open s.md
     if marked; then bad "the page was not built again for no flag after a forced run"; fi
-    grep -qxF '<meta name="far2l-md-key" content="w=70;t=auto;f=0">' "$cpage" || bad "no key for no flag"
+    grep -qxF '<meta name="far2l-md-key" content="w=70;t=auto;f=0;tr=on;r=dir;d=6;n=500">' "$cpage" || bad "no key for no flag"
     exit 0
 }
 
@@ -1129,7 +1150,7 @@ case_cache_rebuild_on_ini() {
     write_ini '[View]' 'width=60'
     old "$ini"
     md --no-open s.md
-    grep -qxF '<meta name="far2l-md-key" content="w=60;t=auto;f=0">' "$cpage" || bad "no key from the new ini"
+    grep -qxF '<meta name="far2l-md-key" content="w=60;t=auto;f=0;tr=on;r=dir;d=6;n=500">' "$cpage" || bad "no key from the new ini"
     exit 0
 }
 
@@ -1356,7 +1377,9 @@ case_cache_tmp_removed_on_error() {
     done
     kill -TERM "$pid" || bad "kill"
     # Open the fifo for writing, so that the reader gets end of file and the shell runs its trap.
-    ( : > "$d/fifo" ) &
+    # The writer keeps the fifo open for 1 s: on macOS a reader whose open meets a writer
+    # that closes at once can block in read for ever.
+    ( exec 3> "$d/fifo"; sleep 1 ) &
     w=$!
     wait "$pid"
     rc=$?
@@ -1951,6 +1974,432 @@ page sub/b.md"
     exit 0
 }
 
+# --- the page in tree mode, and reuse (story markdown-browser-tree-panel) ----
+
+# tpage ARGS...: a page at $page (--out, --no-open) under the watchdog. It must
+# exit 0 with an empty stderr.
+tpage() {
+    rm -f "$page"
+    md_wd --no-open --out "$page" "$@"
+    [ "$rc" = 0 ] || bad "exit $rc: $(cat "$d/err")"
+    [ ! -s "$d/err" ] || bad "stderr: $(cat "$d/err")"
+}
+
+# file_tags [PAGE]: the start tags of the file elements and of the tree index.
+file_tags() {
+    grep -E '^<script type="text/(markdown|plain)"' "${1:-$page}"
+}
+
+# elem_text ENC: the lines of the file element with data-path ENC.
+elem_text() {
+    awk -v t="data-path=\"$1\">" '
+        on && $0 == "</script>" { exit }
+        on { print }
+        index($0, "<script type=\"text/markdown\"") == 1 && substr($0, length($0) - length(t) + 1) == t { on = 1 }' "$page"
+}
+
+# tree_index [PAGE]: the lines of the tree index element.
+tree_index() {
+    sed -n '/^<script type="text\/plain" id="md-tree">$/,/^<\/script>$/p' "${1:-$page}" | sed -e 1d -e '$d'
+}
+
+# head_of PAGE: the head of PAGE, as md-open.sh reads it.
+head_of() {
+    sed -n '1,/^<\/head>$/p' "$1"
+}
+
+# state_line FILE [ARGS...]: sets sline to the tree state line that the spec
+# gives for the --list-tree output of FILE: the first field of its cksum and
+# the number of tree files up to the cap.
+state_line() {
+    lt "$@"
+    ssum=$(cksum < "$d/out" | sed 's/ .*//')
+    scount=$(body | awk '$1 == "cap" { c = $2; next } { n++ } END { print (c != "" ? c : n) + 0 }')
+    sline="<!-- far2l-md-tree: $ssum $scount -->"
+}
+
+# mklong NAME BYTES: a file of BYTES bytes, in lines of 100 bytes.
+mklong() {
+    awk 'BEGIN { s = ""; for (i = 0; i < 99; i++) s = s "x"; for (;;) print s }' | head -c "$2" > "$1" || bad "write $1"
+}
+
+case_tree_page_markup() {
+    fresh
+    mkdir -p proj/.git proj/sub proj/z || bad "mkdir"
+    printf '# opened-zq\n' > proj/sub/o.md || bad "write"
+    printf '\357\273\277# A\r\nx \\ y </script> <!-- c -->\r\nend\n' > proj/a.md || bad "write"
+    printf 'bee-zq\n' > proj/z/b.md || bad "write"
+    printf 'not markdown\n' > proj/n.txt || bad "write"
+    write_ini '[View]' 'root=repo'
+    tpage proj/sub/o.md
+    # The base is the root, with the escapes of today.
+    real proj
+    grep -qxF "<base href=\"file://$rpath/\">" "$page" || bad "base is $(grep '^<base' "$page"), want the root $rpath"
+    # The opened file first, once; then the other page files in tree order; then the index.
+    want='<script type="text/markdown" id="md" data-path="sub/o.md">
+<script type="text/markdown" class="md-file" data-path="a.md">
+<script type="text/markdown" class="md-file" data-path="z/b.md">
+<script type="text/plain" id="md-tree">'
+    [ "$(file_tags)" = "$want" ] || bad "file elements: $(file_tags)"
+    [ "$(grep -c 'data-path="sub/o.md"' "$page")" = 1 ] || bad "the opened file is not written once"
+    [ "$(elem_text sub/o.md)" = "# opened-zq" ] || bad "text of sub/o.md: [$(elem_text sub/o.md)]"
+    [ "$(elem_text z/b.md)" = "bee-zq" ] || bad "text of z/b.md: [$(elem_text z/b.md)]"
+    # The escapes of today: BOM and CR go, then \ to \\, </ to <\/, <!-- to <\!--.
+    elem_text a.md > "$d/got"
+    printf '# A\nx \\\\ y <\\/script> <\\!-- c -->\nend\n\n' > "$d/want"
+    cmp -s "$d/want" "$d/got" || bad "text of a.md: [$(cat "$d/got")]"
+    if grep -qF 'not markdown' "$page"; then bad "a file that is not Markdown is in the page"; fi
+    # A file that cannot be read gives an empty element, and the page is made.
+    chmod 000 proj/z/b.md || bad "chmod"
+    tpage proj/sub/o.md
+    chmod 644 proj/z/b.md || bad "chmod back"
+    grep -qxF '<script type="text/markdown" class="md-file" data-path="z/b.md">' "$page" || bad "no element for an unreadable file"
+    [ -z "$(elem_text z/b.md)" ] || bad "text of an unreadable file: [$(elem_text z/b.md)]"
+    grep -qF 'opened-zq' "$page" || bad "no opened text with an unreadable file"
+    # One-file mode keeps the element of today: no data-path, no index, the base of the folder.
+    tpage --tree off proj/sub/o.md
+    [ "$(file_tags)" = '<script type="text/markdown" id="md">' ] || bad "one-file elements: $(file_tags)"
+    # The folder as pwd gives it, as today.
+    lpath=$(cd proj/sub && pwd) || bad "cd"
+    grep -qxF "<base href=\"file://$lpath/\">" "$page" || bad "one-file base is $(grep '^<base' "$page")"
+    if grep -qF 'bee-zq' "$page"; then bad "the one-file page has another file"; fi
+    if grep -qF 'data-path=' "$page"; then bad "the one-file page has data-path"; fi
+    exit 0
+}
+
+case_tree_page_index() {
+    fresh
+    mkdir -p proj/.git proj/sub || bad "mkdir"
+    write_ini '[View]' 'root=repo'
+    : > proj/a.md; : > proj/sub/o.md; : > 'proj/sub/x y.md'
+    mkbytes proj/big.md 1048577
+    lt proj/sub/o.md
+    body > "$d/want"
+    tpage proj/sub/o.md
+    tree_index > "$d/got"
+    cmp -s "$d/want" "$d/got" || bad "index [$(cat "$d/got")], want [$(cat "$d/want")]"
+    grep -qxF 'big big.md' "$d/got" || bad "no big line in the index"
+    grep -qxF 'page sub/x%20y.md' "$d/got" || bad "no encoded line in the index"
+    # With the cap: the opened file past the cap is last, and no cap line.
+    write_ini '[View]' 'root=repo' 'tree_max_files=2'
+    lt proj/sub/o.md
+    grep -qxF 'cap 2' "$d/out" || bad "no cap in --list-tree: $(cat "$d/out")"
+    tpage proj/sub/o.md
+    want='page a.md
+big big.md
+page sub/o.md'
+    [ "$(tree_index)" = "$want" ] || bad "capped index: $(tree_index)"
+    # Each index line is a state word and an encoded path.
+    tree_index | grep -vE '^(page|big|cut) [A-Za-z0-9._~/%-]*$' > "$d/badlines"
+    [ ! -s "$d/badlines" ] || bad "bad index lines: $(cat "$d/badlines")"
+    exit 0
+}
+
+case_tree_page_attrs() {
+    fresh
+    mkdir -p 'my proj' || bad "mkdir"
+    : > 'my proj/a.md'; : > 'my proj/b.md'
+    tpage 'my proj/b.md'
+    want='<html lang="en" data-start-width="70" data-start-theme="auto" data-tree="on" data-root="my%20proj" data-files="2" data-cap="0">'
+    [ "$(html_tag)" = "$want" ] || bad "html is $(html_tag)"
+    # 600 files, the opened file is file 550: 500 files and the cap.
+    mkdir big || bad "mkdir"
+    many big 600
+    printf '# file-550-zq\n' > big/f550.md || bad "write"
+    tpage big/f550.md
+    want='<html lang="en" data-start-width="70" data-start-theme="auto" data-tree="on" data-root="big" data-files="500" data-cap="1">'
+    [ "$(html_tag)" = "$want" ] || bad "html is $(html_tag)"
+    [ "$(file_tags | sed -n 1p)" = '<script type="text/markdown" id="md" data-path="f550.md">' ] \
+        || bad "the opened file is not first: $(file_tags | sed -n 1p)"
+    grep -qF 'file-550-zq' "$page" || bad "the opened file text is not in the page"
+    [ "$(tree_index | tail -n 1)" = 'page f550.md' ] || bad "the opened file is not last in the index"
+    [ "$(tree_index | wc -l | tr -d ' ')" = 501 ] || bad "index has $(tree_index | wc -l) lines"
+    # One-file mode: data-tree="off" and the reason.
+    tpage --tree off 'my proj/a.md'
+    [ "$(html_tag)" = '<html lang="en" data-start-width="70" data-start-theme="auto" data-tree="off" data-tree-why="flag">' ] \
+        || bad "--tree off html is $(html_tag)"
+    write_ini '[View]' 'tree=off'
+    tpage 'my proj/a.md'
+    [ "$(html_tag)" = '<html lang="en" data-start-width="70" data-start-theme="auto" data-tree="off" data-tree-why="ini">' ] \
+        || bad "tree=off html is $(html_tag)"
+    rm -f "$ini"
+    printf '# home\n' > "$HOME/h.md" || bad "write"
+    tpage "$HOME/h.md"
+    [ "$(html_tag)" = '<html lang="en" data-start-width="70" data-start-theme="auto" data-tree="off" data-tree-why="home">' ] \
+        || bad "home html is $(html_tag)"
+    exit 0
+}
+
+case_tree_page_cut() {
+    fresh
+    mkdir proj || bad "mkdir"
+    # z is opened and counts first (1000000). a to g fit (8000000); h and i pass 8388608.
+    for n in a b c d e f g h i z; do
+        mklong "proj/$n.md" 1000000
+        printf 'text-of-%s-zq\n' "$n" >> "proj/$n.md" || bad "write"
+    done
+    printf 'small-zq\n' > proj/j.md || bad "write"
+    mklong proj/big.md 1048577
+    printf 'text-of-big-zq\n' >> proj/big.md || bad "write"
+    tpage proj/z.md
+    want='<script type="text/markdown" id="md" data-path="z.md">'
+    for n in a b c d e f g j; do
+        want="$want$tnl<script type=\"text/markdown\" class=\"md-file\" data-path=\"$n.md\">"
+    done
+    want="$want$tnl<script type=\"text/plain\" id=\"md-tree\">"
+    [ "$(file_tags)" = "$want" ] || bad "file elements: $(file_tags)"
+    for n in z a g; do
+        grep -qF "text-of-$n-zq" "$page" || bad "no text of $n.md"
+    done
+    grep -qF 'small-zq' "$page" || bad "no text of j.md"
+    for n in h i big; do
+        if grep -qF "text-of-$n-zq" "$page"; then bad "the text of $n.md is in the page"; fi
+    done
+    for l in 'cut h.md' 'cut i.md' 'big big.md' 'page j.md' 'page z.md'; do
+        tree_index | grep -qxF "$l" || bad "no index line [$l]"
+    done
+    exit 0
+}
+
+case_tree_page_names_hostile() {
+    fresh
+    mkdir -p 'proj/d "q" $(touch PWNED)' || bad "mkdir"
+    for f in '"><script>.md' 'a b.md' '100%.md' "it's.md" '<x>.md' 'a&b.md' '-dash.md' \
+             "$(printf '\303\251.md')" '`touch PWNED`.md' '$(touch PWNED).md' 'q?*[x].md' \
+             'd "q" $(touch PWNED)/in.md'; do
+        printf '# hostile-zq\n' > "proj/$f" || bad "write [$f]"
+    done
+    tpage 'proj/-dash.md'
+    file_tags | sed -n 's/.* data-path="\([^"]*\)">$/\1/p' > "$d/paths"
+    [ "$(wc -l < "$d/paths" | tr -d ' ')" = 12 ] || bad "$(wc -l < "$d/paths") data-path values"
+    grep -vE '^[A-Za-z0-9._~/%-]*$' "$d/paths" > "$d/badpaths"
+    [ ! -s "$d/badpaths" ] || bad "raw data-path: $(cat "$d/badpaths")"
+    # Each file element tag is one of the two forms; nothing else is in the tag.
+    file_tags | grep -vxE '<script type="text/markdown" (id="md"|class="md-file") data-path="[A-Za-z0-9._~/%-]*">|<script type="text/plain" id="md-tree">' > "$d/badtags"
+    [ ! -s "$d/badtags" ] || bad "bad tags: $(cat "$d/badtags")"
+    tree_index | grep -vE '^(page|big|cut) [A-Za-z0-9._~/%-]*$' > "$d/badlines"
+    [ ! -s "$d/badlines" ] || bad "bad index lines: $(cat "$d/badlines")"
+    [ "$(tree_index | wc -l | tr -d ' ')" = 12 ] || bad "index has $(tree_index | wc -l) lines"
+    [ "$(grep -c 'hostile-zq' "$page")" = 12 ] || bad "want 12 file texts"
+    for w in '"><script>' '<x>.md' "it's.md" 'a&b.md' '100%.md' '$(touch PWNED)' '`touch PWNED`' 'q?*[x]'; do
+        if grep -qF -- "$w" "$page"; then bad "the raw name [$w] is in the page"; fi
+    done
+    grep -qxF '<script type="text/markdown" class="md-file" data-path="%22%3E%3Cscript%3E.md">' "$page" \
+        || bad "no encoded element for \"><script>.md"
+    no_pwned
+    exit 0
+}
+
+case_tree_off_same_page() {
+    fresh
+    mkdir -p "$d/base" || bad "mkdir"
+    (cd "$root" && git show 7f6523ad5:far2l/bootstrap/md-open.sh) > "$d/base/md-open.sh" || bad "git show"
+    for g in $vendored; do
+        cp "$vendor/$g" "$d/base/" || bad "cp $g"
+    done
+    cp "$sample" s.md || bad "cp"
+    : > other.md
+    sh "$d/base/md-open.sh" --no-open --out "$d/base.html" s.md 2> "$d/err" || bad "the BASE script failed: $(cat "$d/err")"
+    tpage --tree off s.md
+    # Only the html line, the key line and the page script may differ.
+    strip() {
+        sed -e '/^<html /d' -e '/^<meta name="far2l-md-key" /d' -e '/^(function () {$/,/^})();$/d' "$1"
+    }
+    strip "$d/base.html" > "$d/a"
+    strip "$page" > "$d/b"
+    cmp -s "$d/a" "$d/b" || bad "the pages differ: $(diff "$d/a" "$d/b" | head -20)"
+    [ "$(html_tag)" = "$(grep '^<html ' "$d/base.html" | sed 's/>$//') data-tree=\"off\" data-tree-why=\"flag\">" ] \
+        || bad "html line is $(html_tag)"
+    [ "$(grep '^<meta name="far2l-md-key" ' "$page")" = "$(grep '^<meta name="far2l-md-key" ' "$d/base.html" | sed 's/">$//');tr=off;r=dir;d=6;n=500\">" ] \
+        || bad "key line is $(grep '^<meta name="far2l-md-key" ' "$page")"
+    # The page script is there in both.
+    [ "$(grep -c '^(function () {$' "$page")" = 1 ] || bad "no page script"
+    [ "$(head_of "$page" | wc -l)" = "$(head_of "$d/base.html" | wc -l)" ] || bad "the head has new lines"
+    exit 0
+}
+
+case_tree_key_line() {
+    fresh
+    mkdir -p proj/.git proj/sub || bad "mkdir"
+    : > proj/a.md; : > proj/sub/o.md
+    tpage proj/sub/o.md
+    key='<meta name="far2l-md-key" content="w=70;t=auto;f=0;tr=on;r=dir;d=6;n=500">'
+    grep -qxF "$key" "$page" || bad "key: $(grep far2l-md-key "$page")"
+    # The tree state goes after the ini comment, in the head.
+    state_line proj/sub/o.md
+    [ "$sline" = '<!-- far2l-md-tree: '"$ssum"' 1 -->' ] || bad "count in [$sline]"
+    head_of "$page" | grep -A1 -xF '<!-- far2l-md-ini: none -->' | sed -n 2p > "$d/next"
+    [ "$(cat "$d/next")" = "$sline" ] || bad "after the ini line: [$(cat "$d/next")], want [$sline]"
+    [ "$(grep -c 'far2l-md-tree:' "$page")" = 1 ] || bad "want one tree state line"
+    write_ini '[View]' 'root=repo' 'tree_depth=3' 'tree_max_files=7'
+    tpage proj/sub/o.md
+    grep -qxF '<meta name="far2l-md-key" content="w=70;t=auto;f=0;tr=on;r=repo;d=3;n=7">' "$page" \
+        || bad "key with ini: $(grep far2l-md-key "$page")"
+    state_line proj/sub/o.md
+    [ "$sline" = '<!-- far2l-md-tree: '"$ssum"' 2 -->' ] || bad "count in [$sline]"
+    head_of "$page" | grep -qxF "$sline" || bad "no tree state [$sline] for root=repo"
+    write_ini '[View]' 'tree_depth=99' 'tree_max_files=99999'
+    tpage proj/sub/o.md
+    grep -qxF '<meta name="far2l-md-key" content="w=70;t=auto;f=0;tr=on;r=dir;d=12;n=2000">' "$page" \
+        || bad "key with ceilings: $(grep far2l-md-key "$page")"
+    write_ini '[View]' 'tree_depth=<script>' 'tree_max_files=-1' 'root=x"y'
+    tpage proj/sub/o.md
+    grep -qxF "$key" "$page" || bad "key with hostile values: $(grep far2l-md-key "$page")"
+    if grep -qF 'x"y' "$page"; then bad "a hostile value is in the page"; fi
+    rm -f "$ini"
+    # With the cap, the count is the files up to the cap.
+    write_ini '[View]' 'root=repo' 'tree_max_files=1'
+    tpage proj/sub/o.md
+    state_line proj/sub/o.md
+    [ "$scount" = 1 ] || bad "capped count $scount"
+    head_of "$page" | grep -qxF "$sline" || bad "no capped tree state [$sline]"
+    rm -f "$ini"
+    tpage --tree off proj/sub/o.md
+    grep -qxF '<meta name="far2l-md-key" content="w=70;t=auto;f=0;tr=off;r=dir;d=6;n=500">' "$page" \
+        || bad "--tree off key: $(grep far2l-md-key "$page")"
+    if grep -qF 'far2l-md-tree:' "$page"; then bad "a one-file page has a tree state"; fi
+    exit 0
+}
+
+# tree_proj: a root proj with three tree files, all old, and cpage for proj/o.md.
+tree_proj() {
+    mkdir -p proj/sub || bad "mkdir"
+    printf '# opened\n' > proj/o.md || bad "write"
+    printf '# a\n' > proj/a.md || bad "write"
+    printf '# b\n' > proj/sub/b.md || bad "write"
+    printf 'text\n' > proj/notes.txt || bad "write"
+    old proj/o.md proj/a.md proj/sub/b.md proj/notes.txt
+    cache_page proj/o.md
+}
+
+case_cache_tree_reuse() {
+    fresh
+    tree_proj
+    md_wd --no-open proj/o.md
+    [ "$rc" = 0 ] || bad "exit $rc"
+    grep -qF 'far2l-md-tree:' "$cpage" || bad "the cache page is not a tree page"
+    mark
+    cp "$cpage" "$d/before" || bad "cp"
+    chmod 500 "$XDG_CACHE_HOME/far2l/md" || bad "chmod"
+    md_wd proj/o.md
+    st=$rc
+    chmod 700 "$XDG_CACHE_HOME/far2l/md" || bad "chmod back"
+    [ "$st" = 0 ] || bad "exit $st for a reuse: $(cat "$d/err")"
+    [ ! -s "$d/err" ] || bad "stderr for a reuse: $(cat "$d/err")"
+    expect_open "$cpage"
+    cmp -s "$cpage" "$d/before" || bad "the page changed on a reuse"
+    marked || bad "the page was built again"
+    # A change to a file that is not in the tree does not build the page again.
+    future proj/notes.txt
+    : > proj/.hidden.md
+    mkdir -p proj/node_modules && : > proj/node_modules/x.md
+    md_wd --no-open proj/o.md
+    marked || bad "the page was built again for a file outside the tree"
+    [ "$(cache_files)" = 1 ] || bad "want one page, got $(ls -A "$XDG_CACHE_HOME/far2l/md")"
+    no_tmp
+    exit 0
+}
+
+case_cache_tree_changed_file() {
+    fresh
+    tree_proj
+    md_wd --no-open proj/o.md
+    mark
+    md_wd --no-open proj/o.md
+    marked || bad "no reuse before the change"
+    printf 'changed-zq\n' >> proj/sub/b.md || bad "edit"
+    future proj/sub/b.md
+    md_wd --no-open proj/o.md
+    [ "$rc" = 0 ] || bad "exit $rc after the change"
+    if marked; then bad "the page was not built again after a change of sub/b.md"; fi
+    grep -qF 'changed-zq' "$cpage" || bad "the changed text is not in the page"
+    # A file of the future is newer than any page; an old one again allows a reuse.
+    old proj/sub/b.md
+    md_wd --no-open proj/o.md
+    mark
+    md_wd --no-open proj/o.md
+    marked || bad "no reuse after the build"
+    no_tmp
+    exit 0
+}
+
+case_cache_tree_added_file() {
+    fresh
+    tree_proj
+    md_wd --no-open proj/o.md
+    mark
+    printf '# new-zq\n' > proj/sub/new.md || bad "write"
+    old proj/sub/new.md
+    md_wd --no-open proj/o.md
+    [ "$rc" = 0 ] || bad "exit $rc after the add"
+    if marked; then bad "the page was not built again after an old file was added"; fi
+    grep -qF 'data-path="sub/new.md"' "$cpage" || bad "the new file is not in the page"
+    grep -qF 'new-zq' "$cpage" || bad "the new text is not in the page"
+    mark
+    md_wd --no-open proj/o.md
+    marked || bad "no reuse after the build"
+    no_tmp
+    exit 0
+}
+
+case_cache_tree_deleted_file() {
+    fresh
+    tree_proj
+    md_wd --no-open proj/o.md
+    mark
+    grep -qF 'data-path="sub/b.md"' "$cpage" || bad "sub/b.md is not in the page"
+    rm proj/sub/b.md || bad "rm"
+    md_wd --no-open proj/o.md
+    [ "$rc" = 0 ] || bad "exit $rc after the delete"
+    if marked; then bad "the page was not built again after a delete"; fi
+    if grep -qF 'sub/b.md' "$cpage"; then bad "the deleted file is still in the page"; fi
+    no_tmp
+    exit 0
+}
+
+case_cache_tree_head_only() {
+    fresh
+    tree_proj
+    # The tree state after an add, found before the add.
+    : > proj/sub/new.md
+    old proj/sub/new.md
+    state_line proj/o.md
+    rm proj/sub/new.md || bad "rm"
+    # The opened file holds that line, and so does the end of the page.
+    printf '# opened\n\n%s\n' "$sline" > proj/o.md || bad "write"
+    old proj/o.md
+    md_wd --no-open proj/o.md
+    [ "$rc" = 0 ] || bad "exit $rc"
+    if head_of "$cpage" | grep -qxF "$sline"; then bad "the head has the state after the add"; fi
+    printf '%s\n' "$sline" >> "$cpage" || bad "append"
+    mark
+    : > proj/sub/new.md
+    old proj/sub/new.md
+    md_wd --no-open proj/o.md
+    [ "$rc" = 0 ] || bad "exit $rc after the add"
+    if marked; then bad "a tree state outside the head made a reuse"; fi
+    head_of "$cpage" | grep -qxF "$sline" || bad "the new head has no state [$sline]"
+    no_tmp
+    exit 0
+}
+
+case_cache_tree_no_cache() {
+    fresh
+    tree_proj
+    md_wd --no-open proj/o.md
+    mark
+    md_wd --no-open proj/o.md
+    marked || bad "a normal call did not reuse the page"
+    md_wd --no-cache --no-open proj/o.md
+    [ "$rc" = 0 ] || bad "exit $rc for --no-cache"
+    [ -f "$cpage" ] || bad "no page at the cache path after --no-cache"
+    if marked; then bad "--no-cache did not build the page again"; fi
+    grep -qF 'far2l-md-tree:' "$cpage" || bad "the --no-cache page is not a tree page"
+    [ "$(cache_files)" = 1 ] || bad "want one page, got $(ls -A "$XDG_CACHE_HOME/far2l/md")"
+    no_tmp
+    exit 0
+}
+
 for c in flags_ok flag_width_bad flag_theme_bad flag_width_missing \
          ini_valid ini_hostile ini_missing ini_browser_bad ini_browser_app_dir \
          init_config_writes init_config_keeps print_association_ok \
@@ -1965,7 +2414,10 @@ for c in flags_ok flag_width_bad flag_theme_bad flag_width_missing \
          tree_ini_keys tree_ini_ceiling tree_ini_hostile tree_flag tree_off_no_scan \
          root_dir root_repo root_repo_none root_home_off \
          scan_skip_rules scan_symlinks scan_depth scan_cap scan_open_past_cap scan_big scan_cut \
-         scan_order scan_names_hostile list_tree_flag root_newline; do
+         scan_order scan_names_hostile list_tree_flag root_newline \
+         tree_page_markup tree_page_index tree_page_attrs tree_page_cut tree_page_names_hostile \
+         tree_off_same_page tree_key_line cache_tree_reuse cache_tree_changed_file \
+         cache_tree_added_file cache_tree_deleted_file cache_tree_head_only cache_tree_no_cache; do
     run "$c"
 done
 

@@ -490,6 +490,58 @@ list_tree_text() {
     fi
 }
 
+# page_files: prints the file elements of a tree page. The opened file goes first
+# in the script element "md", then each other "page" file of tree_list in a
+# script element of the class "md-file". Each has data-path, the encoded tree
+# path. Then the tree index "md-tree" has the "<state> <ENC>" lines of
+# list_tree_text, without the root line and the cap line. One awk pass reads
+# all files from the root, as "./<tree path>". The text gets the escapes of
+# the one-file page: a BOM on line 1 and a CR at a line end go, then "\" becomes
+# "\\", "</" becomes "<\/" and "<!--" becomes "<\!--". A file that cannot be
+# read gives an empty element.
+page_files() {
+    (
+        cd "$tree_root" || exit 1
+        { [ -n "$tree_list" ] && printf '%s\n' "$tree_list"; } |
+        MD_OPENED=$tree_opened awk "$enc_fn"'
+        # rep(s, a, b): s with each a replaced by b, as plain text.
+        function rep(s, a, b,    r, i) {
+            r = ""
+            while ((i = index(s, a)) > 0) {
+                r = r substr(s, 1, i - 1) b
+                s = substr(s, i + length(a))
+            }
+            return r s
+        }
+        function emit(p, attrs,    f, line, n) {
+            printf "<script type=\"text/markdown\" %s data-path=\"%s\">\n", attrs, enc(p)
+            f = "./" p
+            n = 0
+            while ((getline line < f) > 0) {
+                if (n++ == 0 && substr(line, 1, 3) == "\357\273\277") line = substr(line, 4)
+                if (substr(line, length(line)) == "\r") line = substr(line, 1, length(line) - 1)
+                line = rep(line, "\\", "\\\\")
+                line = rep(line, "</", "<\\/")
+                line = rep(line, "<!--", "<\\!--")
+                print line
+            }
+            close(f)
+            printf "\n</script>\n"
+        }
+        BEGIN {
+            opened = ENVIRON["MD_OPENED"]
+            emit(opened, "id=\"md\"")
+        }
+        substr($0, 1, 5) == "page " {
+            p = substr($0, 6)
+            if (p != opened) emit(p, "class=\"md-file\"")
+        }'
+    ) || return 1
+    printf '<script type="text/plain" id="md-tree">\n'
+    list_tree_text | sed -e 1d -e '/^cap /d'
+    printf '</script>\n'
+}
+
 file=
 out=
 do_open=1
@@ -679,13 +731,8 @@ else
     cache_dir=${cache_home%/}/far2l/md
     if (umask 077; mkdir -p "$cache_dir") 2>/dev/null && [ -d "$cache_dir" ] && [ ! -L "$cache_dir" ] \
         && chmod 700 "$cache_dir" 2>/dev/null && [ -w "$cache_dir" ]; then
-        file_dir=$(dirname -- "$file")
-        case $file_dir in
-            /*) ;;
-            *) file_dir=./$file_dir ;;
-        esac
-        real_dir=$(cd "$file_dir" && pwd -P) || { echo "md-open: cannot read $file" >&2; exit 2; }
-        file_name=$(basename -- "$file")
+        # real_dir and file_name keep a newline at the end of a name, so a
+        # folder "a<newline>" and a folder "a" get two page names.
         real=${real_dir%/}/$file_name
         crc=$(printf '%s' "$real" | cksum | sed 's/ .*//')
         base=$(printf '%s\n' "$file_name" | sed 's/[^A-Za-z0-9._-]/_/g' | cut -c1-40 | sed 1q)
@@ -731,7 +778,8 @@ done
 
 # The page key and the state of md-view.ini go in the page head. The state is
 # the size and the modification time that ls shows, or "none".
-key_line="<meta name=\"far2l-md-key\" content=\"w=$width;t=$theme;f=$forced\">"
+if [ "$tree_mode" = 1 ]; then tree_word=on; else tree_word=off; fi
+key_line="<meta name=\"far2l-md-key\" content=\"w=$width;t=$theme;f=$forced;tr=$tree_word;r=$root_mode;d=$tree_depth;n=$tree_max\">"
 ini_state=none
 if [ -f "$ini" ]; then
     ini_state=$(ls -lnLd -- "$ini" 2>/dev/null \
@@ -741,8 +789,27 @@ if [ -f "$ini" ]; then
 fi
 ini_line="<!-- far2l-md-ini: $ini_state -->"
 
+# In tree mode the head has the tree state: the cksum of the --list-tree output
+# and the number of tree files up to the cap. The html element gets the tree
+# attributes; each value is an encoded path, a number or an accepted word.
+tree_line=
+if [ "$tree_mode" = 1 ]; then
+    tree_sum=$(list_tree_text | cksum | sed 's/ .*//')
+    case $tree_sum$tree_count in
+        ''|*[!0-9]*) echo 'md-open: cannot read the file tree' >&2; exit 2 ;;
+    esac
+    [ "$tree_capped" = 1 ] || tree_capped=0
+    tree_line="<!-- far2l-md-tree: $tree_sum $tree_count -->"
+    root_enc=$(enc_path "${tree_root##*/}")
+    html_attrs="$html_attrs data-tree=\"on\" data-root=\"$root_enc\" data-files=\"$tree_count\" data-cap=\"$tree_capped\""
+else
+    html_attrs="$html_attrs data-tree=\"off\" data-tree-why=\"$tree_why\""
+fi
+
 # page_fresh: true if the cache page can be used as it is. No input is newer than
 # the page, and the head of the page has the key and the ini state of this run.
+# In tree mode the head also has the tree state of this scan, and no tree file
+# is newer than the page.
 page_fresh() {
     [ -f "$page" ] && [ ! -L "$page" ] || return 1
     abs_marked=$marked_js
@@ -760,6 +827,15 @@ page_fresh() {
     [ -z "$newer" ] || return 1
     sed -n '1,/^<\/head>$/p' "$page" | grep -qxF -- "$key_line" || return 1
     sed -n '1,/^<\/head>$/p' "$page" | grep -qxF -- "$ini_line" || return 1
+    if [ "$tree_mode" = 1 ]; then
+        sed -n '1,/^<\/head>$/p' "$page" | grep -qxF -- "$tree_line" || return 1
+        case $page in
+            /*) abs_page=$page ;;
+            *) abs_page=$(pwd)/$page ;;
+        esac
+        newer=$(scan_find -newer "$abs_page") || return 1
+        [ -z "$newer" ] || return 1
+    fi
 }
 
 if [ "$cached" = 1 ] && [ "$no_cache" = 0 ] && page_fresh; then
@@ -785,14 +861,21 @@ if [ -z "$out" ]; then
     dest=$tmpf
 fi
 
-# Folder of the Markdown file as a file:// URL for <base href>.
-dir=$(cd "$(dirname -- "$file")" && pwd) || exit 2
+# Folder of the Markdown file as a file:// URL for <base href>. In tree mode it
+# is the root.
+if [ "$tree_mode" = 1 ]; then
+    dir=$tree_root
+else
+    dir=$(cd "$(dirname -- "$file")" && pwd) || exit 2
+fi
 case $dir in
     */) ;;
     *) dir=$dir/ ;;
 esac
+# A newline in the path becomes %0A, so the base stays on one line.
 base_url=file://$(printf '%s' "$dir" | sed -e 's/%/%25/g' -e 's/ /%20/g' -e 's/#/%23/g' \
-    -e 's/?/%3F/g' -e 's/"/%22/g' -e "s/'/%27/g" -e 's/</%3C/g' -e 's/>/%3E/g' -e 's/&/%26/g')
+    -e 's/?/%3F/g' -e 's/"/%22/g' -e "s/'/%27/g" -e 's/</%3C/g' -e 's/>/%3E/g' -e 's/&/%26/g' \
+    | awk 'NR > 1 { printf "%%0A" } { printf "%s", $0 }')
 
 title=$(basename -- "$file" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g')
 bom=$(printf '\357\273\277')
@@ -806,6 +889,7 @@ bom=$(printf '\357\273\277')
 <meta name="viewport" content="width=device-width, initial-scale=1">
 HTML
     printf '%s\n%s\n' "$key_line" "$ini_line"
+    [ -n "$tree_line" ] && printf '%s\n' "$tree_line"
     printf '<base href="%s">\n' "$base_url"
     printf '<title>%s</title>\n' "$title"
     # The vendored files go in as they are. Each pair is switched by its media
@@ -851,13 +935,18 @@ pre.mermaid[data-processed] { text-align: center; overflow-x: auto; }
 <button id="md-gear" type="button" aria-label="Page settings" aria-expanded="false" aria-controls="md-pop">&#9881;</button>
 <div id="md-pop" hidden></div>
 <main id="content" class="markdown-body"></main>
-<script type="text/markdown" id="md">
 HTML
     # The text cannot end its script element or open a comment there. Backslashes
     # are doubled first, then "</" becomes "<\/" and "<!--" becomes "<\!--"; the
     # page undoes the steps in reverse order. A BOM and CRs go too.
-    sed -e "1s/^$bom//" -e "s/$cr\$//" -e 's/\\/\\\\/g' -e 's|</|<\\/|g' -e 's|<!--|<\\!--|g' < "$file"
-    printf '\n</script>\n<script>\n'
+    if [ "$tree_mode" = 1 ]; then
+        page_files || exit 1
+    else
+        printf '<script type="text/markdown" id="md">\n'
+        sed -e "1s/^$bom//" -e "s/$cr\$//" -e 's/\\/\\\\/g' -e 's|</|<\\/|g' -e 's|<!--|<\\!--|g' < "$file"
+        printf '\n</script>\n'
+    fi
+    printf '<script>\n'
     cat "$marked_js"
     printf '\n</script>\n<script>\n'
     cat "$self_dir/highlight.min.js"
