@@ -1004,6 +1004,7 @@ void FarEditorSet::ReloadBase()
   }
 
   Info.RestoreScreen(scr);
+  ++m_baseGeneration;
 }
 
 FarEditor* FarEditorSet::addCurrentEditor()

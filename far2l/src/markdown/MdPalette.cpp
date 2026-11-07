@@ -8,6 +8,7 @@
 #include "KeyFileHelper.h"
 #include "utils.h"       // InMyConfig
 #include "Colorspace.h"  // wcagComputeContrast
+#include "MdColorer.hpp" // the Colorer look bridge (story markdown-colorer-look)
 
 #include <array>
 #include <ctime>
@@ -65,12 +66,15 @@ constexpr std::array<RoleDefault, MD_ROLE_COUNT - 1> kRoleDefaults {{
 	{0x87ff87, 0x87ff87, F_LIGHTGREEN},      // token string (256 index 120)
 	{0x8787af, 0x8787af, F_CYAN},            // token comment (256 index 103)
 	{0xffaf5f, 0xffaf5f, F_LIGHTRED},        // token number (256 index 215)
+	{0xd7d7af, 0xd7d7af, F_LIGHTMAGENTA},    // emphasis (256 index 187, spec: 0xd7d7af)
+	{0x8787af, 0x8787af, F_CYAN},            // listmark (256 index 103, spec: 0x8787af)
 }};
 
 // The user file key of each role, in MdRole order.
 const char *const kRoleKeys[MD_ROLE_COUNT] = {
 	"body", "heading1", "heading2", "heading3", "strong", "link", "code", "quote", "rule", "art",
-	"token-keyword", "token-string", "token-comment", "token-number"
+	"token-keyword", "token-string", "token-comment", "token-number",
+	"emphasis", "listmark"
 };
 
 // The far palette entries an @Name may name; ColorsInit is private to farcolors.cpp, so the
@@ -105,6 +109,8 @@ unsigned int TodayLookEntry(uint64_t role)
 		case MD_ROLE_TOKEN_STRING:
 		case MD_ROLE_TOKEN_COMMENT:
 		case MD_ROLE_TOKEN_NUMBER: return COL_HELPHIGHLIGHTTEXT;   // spec: the code entry
+		case MD_ROLE_EM:
+		case MD_ROLE_LISTMARK: return COL_VIEWERTEXT;   // spec, New roles: today's look
 	}
 }
 
@@ -318,6 +324,90 @@ bool RgbDefaultsAllowed()
 	return s_verdict;
 }
 
+// The Colorer look cache (spec, Cache): the ten rows under one scheme
+// generation, fetched once per generation.  The 3:1 verdict is cached on the
+// pair (viewer background, generation): a theme change and a scheme change
+// both re-evaluate it.
+struct LookCache
+{
+	unsigned long long generation = 0;
+	MdRegionLook rows[10] = {};
+	bool have[10] = {};
+	bool valid = false;
+};
+
+LookCache &LookRows(unsigned long long gen, MdLookSource &src)
+{
+	static std::mutex s_mutex;
+	static LookCache s_cache;
+
+	std::lock_guard<std::mutex> lock(s_mutex);
+	if (!s_cache.valid || s_cache.generation != gen) {
+		int count = 0;
+		const char *const *names = MdRegionNames(&count);
+		const unsigned long long got = src.Fetch(names, count, s_cache.rows);
+		s_cache.valid = (got != 0);
+		s_cache.generation = got;
+		for (int i = 0; i < count; ++i) {
+			s_cache.have[i] = (s_cache.rows[i].fore != 0);
+		}
+	}
+	return s_cache;
+}
+
+// The 3:1 verdict for the whole scheme batch, all or none, against the real
+// viewer background: one row below 3.0 sends every role to the fork table.
+bool LookAllowed(unsigned long long gen, const LookCache &cache)
+{
+	static std::mutex s_mutex;
+	static uint64_t s_bg_real = 0;
+	static unsigned long long s_gen = 0;
+	static bool s_verdict = false;
+	static bool s_computed = false;
+
+	const uint64_t bg_real = FarColorToReal(COL_VIEWERTEXT);
+
+	std::lock_guard<std::mutex> lock(s_mutex);
+	if (!s_computed || s_bg_real != bg_real || s_gen != gen) {
+		RGB row_fg, row_bg, bg;
+		extractColor(bg_real, bg, bg);
+		s_verdict = true;
+		for (int i = 0; i < 10; ++i) {
+			if (!cache.have[i]) {
+				continue; // a missing region takes the fork default (spec, Fallback)
+			}
+			extractColor(TrueForeColor(cache.rows[i].fore), row_fg, row_bg);
+			if (wcagComputeContrast(row_fg, bg) < 3.0) {
+				s_verdict = false;
+				break;
+			}
+		}
+		s_bg_real = bg_real;
+		s_gen = gen;
+		s_computed = true;
+	}
+	return s_verdict;
+}
+
+// The index of a role's region in the ten-name table (spec, Region map);
+// -1 for roles the Colorer look does not paint (art, the fence-token roles).
+int RoleRegionIndex(uint64_t role)
+{
+	switch (role) {
+		case MD_ROLE_H1:
+		case MD_ROLE_H2:
+		case MD_ROLE_H3: return 1;
+		case MD_ROLE_LINK: return 2;
+		case MD_ROLE_STRONG: return 3;
+		case MD_ROLE_EM: return 4;
+		case MD_ROLE_CODE: return 5;
+		case MD_ROLE_QUOTE: return 6;
+		case MD_ROLE_LISTMARK: return 7;
+		case MD_ROLE_RULE: return 8;
+		default: return -1;
+	}
+}
+
 } // namespace
 
 uint64_t MdRunColor(uint64_t role)
@@ -336,6 +426,33 @@ uint64_t MdRunColor(uint64_t role)
 		return (ov.color & ~kBackBits) | (body & kBackBits);
 	if (ov.kind == RoleOverride::NAME)
 		return (FarColorToReal(ov.entry) & ~kBackBits) | (body & kBackBits);
+
+	// 2. The Colorer look: the scheme's fore and the style word's underline bit,
+	// all or none at 3.0, cached on (viewer background, generation).  Below 8
+	// bits of color the step does not run: the look carries 24-bit fore only.
+	if (WINPORT(GetConsoleColorPalette)(NULL) >= 8) {
+		MdLookSource &src = MdGetLookSource();
+		const unsigned long long gen = src.Generation();
+		if (gen != 0) {
+			LookCache &cache = LookRows(gen, src);
+			if (cache.valid && LookAllowed(gen, cache)) {
+				int use = RoleRegionIndex(role);
+				if (role == MD_ROLE_BODY) {
+					// R2: body takes markdown:Text when its fore is non-zero,
+					// def:Text otherwise.
+					use = (cache.rows[9].fore != 0) ? 9 : 0;
+				}
+				if (use >= 0 && cache.have[use]) {
+					const MdRegionLook &row = cache.rows[use];
+					uint64_t bits = TrueForeColor(row.fore);
+					if (row.style & 4) {
+						bits |= COMMON_LVB_UNDERSCORE; // 0x8000 (spec, Underline)
+					}
+					return (bits & ~kBackBits) | (body & kBackBits);
+				}
+			}
+		}
+	}
 
 	// body never takes an RGB value: outside a user override it stays the viewer text entry.
 	if (role == MD_ROLE_BODY)

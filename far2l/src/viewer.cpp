@@ -754,6 +754,10 @@ void Viewer::ShowPage(int nMode)
 				}
 			}
 
+			// The underline pass for the row (story markdown-colorer-look): the
+			// screen row is known only here, after the selection overlay.
+			printer->FinishRow(X1, Y);
+
 			if (ViOpt.ClickableURLs)
 				UnderlineLinks(Y, LineLinks[I]);
 

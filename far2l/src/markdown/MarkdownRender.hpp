@@ -26,6 +26,8 @@ enum MdRole : uint64_t {
     MD_ROLE_TOKEN_STRING,  // string token in a fenced code block
     MD_ROLE_TOKEN_COMMENT, // comment token in a fenced code block
     MD_ROLE_TOKEN_NUMBER,  // number token in a fenced code block
+    MD_ROLE_EM,            // emphasis text: _text_ and *text* (story markdown-colorer-look)
+    MD_ROLE_LISTMARK,      // the bullet, the number, the task box of a list item
     MD_ROLE_COUNT,         // one past the last role
 };
 
