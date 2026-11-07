@@ -18,6 +18,7 @@
 #include "cfg/language.hpp"
 #include "global.hpp"
 #include "ConsoleOutput.h"
+#include "markdown/MdColorer.hpp"
 #include "cfg/config.hpp"
 #include "mix/pathmix.hpp"
 
@@ -319,6 +320,187 @@ int look_cost()
 	return 0;
 }
 
+// ---- T2 cases: the core bridge ----
+
+// A fake look source: records the names of the last Fetch, answers fixed
+// rows and generation, cycles codes for look_codes.
+class FakeLookSource : public MdLookSource
+{
+public:
+	unsigned long long Generation() override
+	{
+		if (m_codes_left > 0) {
+			return 0; // the export answered 1..4: no look
+		}
+		return m_generation;
+	}
+
+	unsigned long long Fetch(const char *const *names, int count,
+		MdRegionLook *out) override
+	{
+		m_last_names.assign(names, names + count);
+		if (m_codes_left > 0) {
+			return 0; // the export answered 1..4: no look
+		}
+		for (int i = 0; i < count; ++i) {
+			out[i].fore = 0x110000u + static_cast<unsigned>(i);
+			out[i].style = 4;
+		}
+		return m_generation;
+	}
+
+	std::vector<std::string> m_last_names;
+	unsigned long long m_generation = 7;
+	int m_codes_left = 0;
+};
+
+// The bridge hands the plugin the ten names of Global Constraints, in order,
+// and copies the plugin's rows back through Fetch, with the generation.
+int look_bridge()
+{
+	int count = 0;
+	const char *const *names = MdRegionNames(&count);
+	if (names == nullptr || count != 10) {
+		printf("FAILED look_bridge: MdRegionNames count=%d\n", count);
+		return 1;
+	}
+	static const char *const kWant[10] = {
+		"def:Text", "markdown:HeadText", "markdown:LinkText",
+		"markdown:StrongText", "markdown:EmText", "markdown:Code",
+		"markdown:QuoteText", "markdown:ListMark", "markdown:Rule",
+		"markdown:Text",
+	};
+	for (int i = 0; i < 10; ++i) {
+		if (strcmp(names[i], kWant[i]) != 0) {
+			printf("FAILED look_bridge: name %d is %s\n", i, names[i]);
+			return 1;
+		}
+	}
+
+	FakeLookSource *record = new FakeLookSource(); // the hook keeps it for the
+	MdSetLookSourceForTest(std::unique_ptr<FakeLookSource>(record));
+	MdRegionLook rows[10] = {};
+	const unsigned long long gen = MdGetLookSource().Fetch(names, count, rows);
+	// the hook owns the source for the life of the process; read the record
+	// back before clearing it
+	if (record->m_last_names.size() != 10 || record->m_last_names[0] != "def:Text"
+		|| record->m_last_names[9] != "markdown:Text") {
+		printf("FAILED look_bridge: the fake saw %zu names\n",
+			record->m_last_names.size());
+		return 1;
+	}
+	if (gen != 7) {
+		printf("FAILED look_bridge: generation=%llu\n", gen);
+		return 1;
+	}
+	for (int i = 0; i < 10; ++i) {
+		if (rows[i].fore != 0x110000u + static_cast<unsigned>(i)
+			|| rows[i].style != 4) {
+			printf("FAILED look_bridge: row %d is 0x%06X/%u\n", i,
+				rows[i].fore, rows[i].style);
+			return 1;
+		}
+	}
+	printf("ok look_bridge: ten names in order, rows copied, generation 7\n");
+	return 0;
+}
+
+// Codes 1..4 (and an old plugin binary without the symbol) give Fetch 0 and
+// Generation 0; the token source keeps working untouched.
+int look_codes()
+{
+	int count = 0;
+	const char *const *names = MdRegionNames(&count);
+	for (int round = 0; round < 4; ++round) {
+		auto fake = std::make_unique<FakeLookSource>();
+		fake->m_codes_left = 1; // the next Fetch answers "no look" (code 1..4)
+		MdSetLookSourceForTest(std::move(fake));
+		MdRegionLook rows[10] = {};
+		const unsigned long long gen = MdGetLookSource().Fetch(names, count, rows);
+		const unsigned long long probe = MdGetLookSource().Generation();
+		MdSetLookSourceForTest(nullptr); // the process keeps the fake alive
+		if (gen == 0 && probe == 0) {
+			printf("ok look_codes: round %d no look\n", round);
+		}
+		if (gen != 0 || probe != 0) {
+			printf("FAILED look_codes: round %d gave %llu/%llu\n", round, gen,
+				probe);
+			return 1;
+		}
+	}
+	// dlsym found no ColorerRegionLookV1 (an old plugin binary): the fake
+	// answers 0, standing for the missing symbol; the token path is untouched.
+	{
+		auto fake = std::make_unique<FakeLookSource>();
+		fake->m_codes_left = 1;
+		MdSetLookSourceForTest(std::move(fake));
+		MdRegionLook rows[1] = {};
+		const unsigned long long gen = MdGetLookSource().Fetch(names, 1, rows);
+		MdSetLookSourceForTest(nullptr);
+		if (gen != 0) {
+			printf("FAILED look_codes: missing symbol gave %llu\n", gen);
+			return 1;
+		}
+		std::vector<MdToken> tokens;
+		if (!MdGetTokenSource().Ready()) {
+			printf("FAILED look_codes: the token source is broken\n");
+			return 1;
+		}
+		if (!MdGetTokenSource().Tokenize("cpp", {"int x = 1;"}, 5000, tokens)) {
+			printf("FAILED look_codes: Tokenize failed\n");
+			return 1;
+		}
+	}
+	printf("ok look_codes: codes 1..4 and the missing symbol give no look\n");
+	return 0;
+}
+
+// The real bridge through the real plugin: Generation 0 before the first
+// viewer event (the code-1 path: dlopen, dlsym, export, mapping), generation
+// 1 after, and the ten far2l.hrd rows through Fetch.
+int look_bridge_real()
+{
+	printf("bridge_real: start\n");
+	std::string why;
+	if (!CreateEditorSet(why)) {
+		printf("bridge_real: editor set made\n");
+		printf("FAILED look_bridge_real: %s\n", why.c_str());
+		return 1;
+	}
+	printf("bridge_real: gen\n");
+	if (MdGetLookSource().Generation() != 1) {
+		printf("FAILED look_bridge_real: generation=%llu after the load\n",
+			MdGetLookSource().Generation());
+		return 1;
+	}
+	int count = 0;
+	const char *const *names = MdRegionNames(&count);
+	MdRegionLook rows[10] = {};
+	const unsigned long long gen = MdGetLookSource().Fetch(names, count, rows);
+	if (gen != 1) {
+		printf("FAILED look_bridge_real: fetch generation=%llu\n", gen);
+		return 1;
+	}
+	static const unsigned int kWant[10][2] = {
+		{0x99EEEE, 0}, {0x8888FF, 4}, {0x8888FF, 4}, {0x40A000, 0},
+		{0xFF20A0, 0}, {0xFFE977, 0}, {0x6699FF, 0}, {0xFFFFFF, 0},
+		{0xFFFFFF, 0}, {0x99EEEE, 0},
+	};
+	static const char *const kNames[10] = {
+		"def:Text", "HeadText", "LinkText", "StrongText", "EmText", "Code",
+		"QuoteText", "ListMark", "Rule", "Text",
+	};
+	for (int i = 0; i < 10; ++i) {
+		if (rows[i].fore != kWant[i][0] || rows[i].style != kWant[i][1]) {
+			printf("FAILED look_bridge_real: markdown:%s is 0x%06X/%u\n",
+				kNames[i], rows[i].fore, rows[i].style);
+			return 1;
+		}
+	}
+	printf("ok look_bridge_real: generation 1, ten far2l.hrd rows\n");
+	return 0;
+}
+
 struct Case
 {
 	const char* name;
@@ -329,6 +511,9 @@ const Case s_cases[] = {
 	{"look_first_call", look_first_call},
 	{"look_real_hrd", look_real_hrd},
 	{"look_cost", look_cost},
+	{"look_bridge", look_bridge},
+	{"look_codes", look_codes},
+	{"look_bridge_real", look_bridge_real},
 };
 } // namespace
 

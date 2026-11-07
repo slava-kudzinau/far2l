@@ -20,8 +20,8 @@ extern FarEditorSet* editorSet;
 
 // Return codes (spec.md, Export): 0 the look is filled, 1 no FarEditorSet
 // yet (the export does not create it, so the first call shows no
-// "Reloading" message), 2 the plugin is disabled (Enabled=0, or SyntaxDraw=0
-// left the factory and the mapper null), 3 a Colorer Exception, 4 a bad abi
+// "Reloading" message), 2 the plugin is disabled (Enabled=0, SyntaxDraw=0,
+// or the factory and the mapper are null), 3 a Colorer Exception, 4 a bad abi
 // or capacity.  A count-0 call answers with abi checked, no rows, and the
 // generation: the bridge probes it before fetching.
 SHAREDSYMBOL int ColorerRegionLookV1(int abi, const wchar_t* const* names, int count,
@@ -33,8 +33,8 @@ SHAREDSYMBOL int ColorerRegionLookV1(int abi, const wchar_t* const* names, int c
 	if (editorSet == nullptr) {
 		return 1;
 	}
-	if (!editorSet->GetPluginStatus() || !editorSet->GetParserFactory()
-		|| !editorSet->GetRegionMapper()) {
+	if (!editorSet->GetPluginStatus() || !editorSet->GetSyntaxDraw()
+		|| !editorSet->GetParserFactory() || !editorSet->GetRegionMapper()) {
 		return 2;
 	}
 

@@ -70,7 +70,13 @@ fi
 # driver the app's tree there, so FindPlugin sees the colorer module.
 ln -sfn install/far2l.app/Contents/MacOS/Plugins "$build/Plugins"
 
-export FAR2L_PLUGIN="$build/install/far2l.app/Contents/MacOS/Plugins/colorer/plug/colorer.far-plug-wide"
+FAR2L_PLUGIN="$build/install/far2l.app/Contents/MacOS/Plugins/colorer/plug/colorer.far-plug-wide"
+# Resolve to one absolute path: the core's plugin scan reaches the module
+# through the Plugins symlink above, the driver through this path; dyld must
+# see one path for one module (a relative path here loaded a second module
+# instance and the viewer-event init crashed on the second catalog).
+FAR2L_PLUGIN="$(cd "$(dirname "$FAR2L_PLUGIN")" && pwd)/$(basename "$FAR2L_PLUGIN")"
+export FAR2L_PLUGIN
 if [ ! -f "$FAR2L_PLUGIN" ]; then
   echo "no plugin under $build/install: run cmake --build $build first"
   exit 2

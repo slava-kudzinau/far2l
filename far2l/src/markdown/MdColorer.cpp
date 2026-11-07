@@ -140,6 +140,31 @@ bool ValidName(const std::string &lang, std::string &lower)
 	return true;
 }
 
+// The plugin module, located once per process: the module name far2l handed
+// to its own dlopen, asked back with RTLD_NOLOAD.  The token and the look
+// source share it: one load, two symbols (spec.md, Bridge).
+void *PluginModuleHandle()
+{
+	static void *handle = [] {
+		if (CtrlObject == nullptr) {
+			return static_cast<void *>(nullptr);
+		}
+		Plugin *plugin = CtrlObject->Plugins.FindPlugin(SYSID_COLORER);
+		if (plugin == nullptr) {
+			return static_cast<void *>(nullptr);
+		}
+		plugin->Load();
+		const std::string module = wide_to_utf8(plugin->GetModuleName());
+		if (module.empty()) {
+			return static_cast<void *>(nullptr);
+		}
+		// The exact path far2l passed to its own dlopen, asked back with
+		// RTLD_NOLOAD: the module the process already loaded answers.
+		return dlopen(module.c_str(), RTLD_LAZY | RTLD_NOLOAD);
+	}();
+	return handle;
+}
+
 // The token source that calls the plugin export.  The module is located once
 // per process; any failure sets one "no colors" flag for good.
 class PluginTokenSource : public MdTokenSource
@@ -150,21 +175,7 @@ class PluginTokenSource : public MdTokenSource
 	// Finds the loaded plugin module and its export, once.
 	bool Open()
 	{
-		if (CtrlObject == nullptr) {
-			return false;
-		}
-		Plugin *plugin = CtrlObject->Plugins.FindPlugin(SYSID_COLORER);
-		if (plugin == nullptr) {
-			return false;
-		}
-		plugin->Load();
-		const std::string module = wide_to_utf8(plugin->GetModuleName());
-		if (module.empty()) {
-			return false;
-		}
-		// The exact path far2l passed to its own dlopen, asked back with
-		// RTLD_NOLOAD: the module the process already loaded answers.
-		void *handle = dlopen(module.c_str(), RTLD_LAZY | RTLD_NOLOAD);
+		void *handle = PluginModuleHandle();
 		if (handle == nullptr) {
 			return false;
 		}
@@ -272,4 +283,115 @@ MdTokenSource &MdGetTokenSource()
 void MdSetTokenSourceForTest(std::unique_ptr<MdTokenSource> src)
 {
 	g_test_source = std::move(src);
+}
+
+namespace
+{
+
+// The export for the look of a list of region names (spec.md, Export).
+using RegionLookFn = int (*)(int abi, const wchar_t *const *names, int count,
+	unsigned int *look, int capacity, unsigned int *generation);
+
+// The look source that calls the plugin export through the shared module.
+// Codes 1 to 4 give generation 0 with no "broken for good" flag: a later
+// ReloadBase (a scheme change) can answer.
+class PluginLookSource : public MdLookSource
+{
+	RegionLookFn m_look = nullptr;
+
+	// Finds the export on the shared module, once per process; an old plugin
+	// binary without the symbol keeps answering 0.
+	RegionLookFn Open()
+	{
+		if (m_look == nullptr) {
+			m_look = reinterpret_cast<RegionLookFn>(
+				dlsym(PluginModuleHandle(), "ColorerRegionLookV1"));
+		}
+		return m_look;
+	}
+
+public:
+	unsigned long long Generation() override
+	{
+		RegionLookFn look = Open();
+		if (look == nullptr) {
+			return 0;
+		}
+		unsigned int generation = 0;
+		if (look(1, nullptr, 0, nullptr, 0, &generation) != 0) {
+			return 0;
+		}
+		return generation;
+	}
+
+	unsigned long long Fetch(const char *const *names, int count,
+		MdRegionLook *out) override
+	{
+		RegionLookFn look = Open();
+		if (look == nullptr || names == nullptr || out == nullptr || count <= 0) {
+			return 0;
+		}
+		std::vector<std::wstring> wide_names;
+		wide_names.reserve(static_cast<size_t>(count));
+		for (int i = 0; i < count; ++i) {
+			wide_names.push_back(names[i] != nullptr ? utf8_to_wide(names[i])
+				: std::wstring());
+		}
+		std::vector<const wchar_t *> pointers;
+		pointers.reserve(static_cast<size_t>(count));
+		for (const std::wstring &name : wide_names) {
+			pointers.push_back(name.c_str());
+		}
+		std::vector<unsigned int> words(static_cast<size_t>(2) * count, 0);
+		unsigned int generation = 0;
+		if (look(1, pointers.data(), count, words.data(), 2 * count, &generation) != 0) {
+			return 0;
+		}
+		for (int i = 0; i < count; ++i) {
+			out[i].fore = words[static_cast<size_t>(2) * i];
+			out[i].style = words[static_cast<size_t>(2) * i + 1];
+		}
+		return generation;
+	}
+};
+
+// The ten region names of the Region map, in the fixed order (spec.md,
+// Region map; plan Global Constraints).  MdPalette.cpp maps a role to index.
+const char *const s_region_names[] = {
+	"def:Text",
+	"markdown:HeadText",
+	"markdown:LinkText",
+	"markdown:StrongText",
+	"markdown:EmText",
+	"markdown:Code",
+	"markdown:QuoteText",
+	"markdown:ListMark",
+	"markdown:Rule",
+	"markdown:Text",
+};
+
+std::unique_ptr<MdLookSource> g_test_look_source;
+
+} // namespace
+
+MD_COLORER_API MdLookSource &MdGetLookSource()
+{
+	if (g_test_look_source) {
+		return *g_test_look_source;
+	}
+	static PluginLookSource s_plugin_look_source;
+	return s_plugin_look_source;
+}
+
+void MdSetLookSourceForTest(std::unique_ptr<MdLookSource> src)
+{
+	g_test_look_source = std::move(src);
+}
+
+MD_COLORER_API const char *const *MdRegionNames(int *count)
+{
+	if (count != nullptr) {
+		*count = static_cast<int>(sizeof(s_region_names) / sizeof(s_region_names[0]));
+	}
+	return s_region_names;
 }
