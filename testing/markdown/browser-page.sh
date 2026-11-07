@@ -688,7 +688,7 @@ case_page_hljs_after_marked() {
     line_of "  var MERMAID_URL = 'https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.min.js';"; l_page=$ln
     [ "$l_md" -lt "$l_marked" ] && [ "$l_marked" -lt "$l_hl" ] && [ "$l_hl" -lt "$l_page" ] \
         || bad "the scripts are not in the order text, marked, highlight, page"
-    line_of 'content.innerHTML = marked.parse(src);'; l_parse=$ln
+    line_of 'tpl.innerHTML = marked.parse(files[enc]);'; l_parse=$ln
     line_of 'hljs.highlightElement(code)'; l_hlel=$ln
     [ "$l_parse" -lt "$l_hlel" ] || bad "highlight runs before marked renders the text"
     exit 0
@@ -758,7 +758,7 @@ case_page_gear_markup() {
     printf '%s\n' "$pop" | grep -qF 'position: fixed' || bad "the popover is not fixed"
     # Values reach the page through textContent. The one innerHTML is the marked output.
     [ "$(iife | grep -c -F 'innerHTML')" = 1 ] || bad "innerHTML is used for more than the marked output"
-    iife | grep -qF 'content.innerHTML = marked.parse(src);' || bad "the marked output does not use innerHTML"
+    iife | grep -qF 'tpl.innerHTML = marked.parse(files[enc]);' || bad "the marked output does not use innerHTML"
     exit 0
 }
 

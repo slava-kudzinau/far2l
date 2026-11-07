@@ -978,10 +978,269 @@ HTML
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
   // Undo the escapes of the embedded text, in the reverse of the shell's order.
-  var src = document.getElementById('md').textContent
-    .split('<\\!--').join('<!--')
-    .split('<\\/').join('</')
-    .split('\\\\').join('\\');
+  function unescapeText(t) {
+    return t.split('<\\!--').join('<!--').split('<\\/').join('</').split('\\\\').join('\\');
+  }
+  var treeMode = root.getAttribute('data-tree') === 'on';
+  var ENC_RE = /^[A-Za-z0-9._~\/%-]+$/;
+  var files = Object.create(null);
+  var tree = Object.create(null);
+  var order = [];
+  var openedEnc = '';
+  var openedEl = document.getElementById('md');
+  var content = document.getElementById('content');
+  function has(obj, k) {
+    return Object.prototype.hasOwnProperty.call(obj, k);
+  }
+  // The files and the tree index are data. An ENC that does not match the
+  // pattern is ignored, and a state word is used only if it is page, big or cut.
+  (function readPage() {
+    var els = document.querySelectorAll('script[type="text/markdown"]');
+    if (treeMode) {
+      Array.prototype.forEach.call(els, function (el) {
+        var e = el.getAttribute('data-path');
+        if (e === null || !ENC_RE.test(e)) return;
+        files[e] = unescapeText(el.textContent);
+      });
+      if (openedEl) openedEnc = openedEl.getAttribute('data-path') || '';
+      var idx = document.getElementById('md-tree');
+      if (idx) {
+        idx.textContent.split('\n').forEach(function (line) {
+          var m = /^(page|big|cut) (\S+)$/.exec(line);
+          if (!m || !ENC_RE.test(m[2]) || has(tree, m[2])) return;
+          tree[m[2]] = m[1];
+          order.push(m[2]);
+        });
+      }
+    } else if (openedEl) {
+      files[''] = unescapeText(openedEl.textContent);
+    }
+  })();
+  // A decode error keeps the text as it is. decodeURIComponent throws on a bad
+  // escape, and the value is shown only with textContent.
+  function decodeText(s) {
+    try { return decodeURIComponent(s); } catch (e) { return s; }
+  }
+  // The base name of an encoded tree path, decoded for display.
+  function decName(enc) {
+    var parts = enc.split('/');
+    return decodeText(parts[parts.length - 1] || '');
+  }
+  // The encoded form of a tree path: each part is encoded, and each byte
+  // outside A-Za-z0-9._~- becomes %XX in upper case. "/" stays.
+  function encPath(path) {
+    return String(path).split('/').map(function (p) {
+      return encodeURIComponent(p).replace(/[!'()*]/g, function (c) {
+        return '%' + c.charCodeAt(0).toString(16).toUpperCase();
+      });
+    }).join('/');
+  }
+  // The folder parts of an encoded tree path, decoded.
+  function dirOfEnc(enc) {
+    var parts = enc.split('/');
+    parts.pop();
+    return parts.map(decodeText);
+  }
+  // The URL of the folder of a file, for images and for links that are not
+  // Markdown. The encoded parts of the ENC are safe in a URL.
+  function fileBaseFor(enc) {
+    var parts = enc.split('/');
+    parts.pop();
+    var rel = parts.join('/');
+    try { return new URL(rel ? rel + '/' : '', document.baseURI).href; } catch (e) { return document.baseURI; }
+  }
+  // The heading slug: lower case, then only letters, digits, space, "-" and "_".
+  function slug(text) {
+    return String(text).toLowerCase().replace(/[^\p{L}\p{N} _-]/gu, '').replace(/ /g, '-');
+  }
+  function badBytes(s) {
+    return /[\\?\x00-\x1f\x7f]/.test(s);
+  }
+  // inRoot PARTS UP: the root rule of step 8. UP is true when a `..` had no
+  // part before it. An empty result is out too.
+  function inRoot(parts, up) { // root-rule
+    return !up && parts.length > 0;
+  }
+  // target HREF DIR: the text rules 1 to 9. DIR is the folder of the shown file,
+  // as decoded parts. The kind is keep, anchor, drop, out, other or candidate.
+  function target(href, dir) {
+    if (href === '') return { kind: 'keep' };
+    if (href.charAt(0) === '#') return { kind: 'anchor', frag: href.slice(1) };
+    var clean = href.replace(/[\x00-\x20]/g, '');
+    if (/^(javascript|vbscript|data):/i.test(clean)) return { kind: 'drop' };
+    var m = /^[A-Za-z][A-Za-z0-9+.-]*:/.exec(href);
+    if (m) {
+      var s = m[0].toLowerCase();
+      if (s === 'http:' || s === 'https:' || s === 'mailto:') return { kind: 'other' };
+      return { kind: 'out' };
+    }
+    if (href.charAt(0) === '/') return { kind: 'out' };
+    if (badBytes(href)) return { kind: 'out' };
+    var i = href.indexOf('#');
+    var path = i < 0 ? href : href.slice(0, i);
+    var frag = i < 0 ? '' : href.slice(i + 1);
+    var dec;
+    try { dec = decodeURIComponent(path); } catch (e) { return { kind: 'out' }; }
+    if (badBytes(dec)) return { kind: 'out' };
+    var parts = dir.slice();
+    var up = false;
+    var segs = dec.split('/');
+    for (var k = 0; k < segs.length; k++) {
+      var seg = segs[k];
+      if (seg === '' || seg === '.') continue;
+      if (seg === '..') {
+        if (!parts.length) { up = true; break; }
+        parts.pop();
+        continue;
+      }
+      parts.push(seg);
+    }
+    if (!inRoot(parts, up)) return { kind: 'out' };
+    if (!/\.(md|markdown)$/i.test(parts[parts.length - 1])) return { kind: 'other' };
+    return { kind: 'candidate', enc: encPath(parts.join('/')), frag: frag };
+  }
+  // The note after a link that does not navigate.
+  function noteAfter(a) {
+    var s = document.createElement('span');
+    s.className = 'md-note';
+    s.textContent = ' (not in this tree)';
+    if (a.parentNode) a.parentNode.insertBefore(s, a.nextSibling);
+  }
+  // applyLink A DIR FILEBASE PAGEBASE ENC: the link rules of the spec. A link
+  // in the tree points to the page and a route. A link that does not go in the
+  // tree keeps its text, loses its href and gets the note.
+  function applyLink(a, dir, fileBase, pageBase, enc) {
+    var href = a.getAttribute('href');
+    if (href === null) return;
+    var t = target(href, dir);
+    if (t.kind === 'keep') return;
+    if (t.kind === 'anchor') {
+      a.setAttribute('href', pageBase + (treeMode ? '#/' + enc + '#' + t.frag : '#' + t.frag));
+      return;
+    }
+    if (t.kind === 'drop') { a.removeAttribute('href'); return; }
+    if (t.kind === 'out') { a.removeAttribute('href'); noteAfter(a); return; }
+    if (t.kind === 'other') {
+      if (!/^[A-Za-z][A-Za-z0-9+.-]*:/.test(href)) {
+        try { a.setAttribute('href', new URL(href, fileBase).href); } catch (e) { a.removeAttribute('href'); }
+      }
+      return;
+    }
+    if (has(tree, t.enc)) {
+      a.setAttribute('href', pageBase + '#/' + t.enc + (t.frag ? '#' + t.frag : ''));
+      if (tree[t.enc] === 'big' || tree[t.enc] === 'cut') a.setAttribute('data-md-note', tree[t.enc]);
+      return;
+    }
+    a.removeAttribute('href');
+    noteAfter(a);
+  }
+  // A relative image gets an absolute URL in the folder of the shown file.
+  function applyImage(img, fileBase) {
+    var v = img.getAttribute('src');
+    if (v === null || v === '' || v.charAt(0) === '/' || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(v)) return;
+    try { img.setAttribute('src', new URL(v, fileBase).href); } catch (e) { /* keep the value */ }
+  }
+  // The heading ids of the spec, with a counter for a repeated slug.
+  function headingIds(scope) {
+    var seen = Object.create(null);
+    Array.prototype.forEach.call(scope.querySelectorAll('h1,h2,h3,h4,h5,h6'), function (h) {
+      var s = slug(h.textContent);
+      if (has(seen, s)) {
+        seen[s] = seen[s] + 1;
+        s = s + '-' + seen[s];
+      } else {
+        seen[s] = 0;
+      }
+      h.id = 'user-content-' + s;
+    });
+  }
+  // Scrolls to the heading of FRAG. A decode error keeps the raw text. A
+  // missing heading goes to the top.
+  function scrollToFrag(frag) {
+    if (!frag) { window.scrollTo(0, 0); return; }
+    var f = decodeText(frag);
+    var el = document.getElementById('user-content-' + f);
+    if (!el) el = document.getElementById('user-content-' + f.toLowerCase());
+    if (el && el.scrollIntoView) el.scrollIntoView();
+    else window.scrollTo(0, 0);
+  }
+  // route: the route of the hash. ENC is null for a hash that is not "#/ENC".
+  function route() {
+    var h = window.location.hash || '';
+    if (h.indexOf('#/') === 0) {
+      var rest = h.slice(2);
+      var i = rest.indexOf('#');
+      return { enc: i < 0 ? rest : rest.slice(0, i), frag: i < 0 ? '' : rest.slice(i + 1) };
+    }
+    return { enc: null, frag: h.length > 1 ? h.slice(1) : '' };
+  }
+  // currentRoute: the file to show. An unknown route shows the opened file.
+  function currentRoute() {
+    var r = route();
+    if (!treeMode) return { enc: '', frag: r.frag };
+    if (r.enc === null || !has(tree, r.enc)) return { enc: openedEnc, frag: r.enc === null ? r.frag : '' };
+    return { enc: r.enc, frag: r.frag };
+  }
+  function showLimitNote(state) {
+    content.textContent = '';
+    var p = document.createElement('p');
+    p.className = 'md-file-note';
+    p.textContent = state === 'big' ? 'This file is too large for the page.' : 'This file is over the page limit.';
+    content.appendChild(p);
+    items = [];
+  }
+  // show ENC FRAG: renders one file into #content. The steps are the order of
+  // the spec: parse, remove script schemes, ids, links and images, move,
+  // highlight, mermaid, title and scroll.
+  function show(enc, frag) {
+    if (!treeMode) enc = '';
+    var state = tree[enc];
+    if (state === 'big' || state === 'cut') {
+      shownEnc = enc;
+      showLimitNote(state);
+      document.title = decName(enc);
+      return;
+    }
+    if (typeof files[enc] !== 'string') {
+      enc = openedEnc;
+      frag = '';
+      if (typeof files[enc] !== 'string') return;
+    }
+    var tpl = document.createElement('template');
+    tpl.innerHTML = marked.parse(files[enc]);
+    var nodes = tpl.content;
+    Array.prototype.forEach.call(nodes.querySelectorAll('a[href]'), function (a) {
+      if (/^(javascript|vbscript|data):/i.test(a.getAttribute('href').replace(/[\x00-\x20]/g, ''))) {
+        a.removeAttribute('href');
+      }
+    });
+    headingIds(nodes);
+    var dir = dirOfEnc(enc);
+    var fileBase = fileBaseFor(enc);
+    var pageBase = window.location.href.split('#')[0];
+    Array.prototype.forEach.call(nodes.querySelectorAll('a[href]'), function (a) {
+      applyLink(a, dir, fileBase, pageBase, enc);
+    });
+    Array.prototype.forEach.call(nodes.querySelectorAll('img[src]'), function (img) {
+      applyImage(img, fileBase);
+    });
+    content.textContent = '';
+    content.appendChild(nodes);
+    highlightAll(content);
+    items = Array.prototype.map.call(content.querySelectorAll('pre.mermaid'), function (pre) {
+      return { pre: pre, src: pre.textContent };
+    });
+    var mine = items;
+    if (mine.length) {
+      ensureMermaid(function (ok) {
+        if (!ok || items !== mine) return;
+        redraw(mine);
+      });
+    }
+    shownEnc = enc;
+    if (treeMode) document.title = decName(enc);
+    scrollToFrag(frag);
+  }
   // A start value is used only if it is an accepted word.
   function accepted(v, words, dflt) {
     return words.indexOf(v) >= 0 ? v : dflt;
@@ -1057,53 +1316,69 @@ HTML
       }
     }
   });
-  var content = document.getElementById('content');
-  content.innerHTML = marked.parse(src);
-  // A link with a script scheme loses its target. This runs after parsing, so
-  // entity-encoded schemes are caught as well.
-  Array.prototype.forEach.call(content.querySelectorAll('a[href]'), function (a) {
-    if (/^(javascript|vbscript|data):/i.test(a.getAttribute('href').replace(/[\x00-\x20]/g, ''))) {
-      a.removeAttribute('href');
-    }
-  });
   // Code with a known language gets highlight.js. A block with no language, with
   // an unknown one, or a mermaid block stays plain. An error leaves it plain.
-  Array.prototype.forEach.call(content.querySelectorAll('pre > code'), function (code) {
-    var m = /(?:^|\s)language-(\S+)/.exec(code.className || '');
-    if (!m || m[1] === 'mermaid') return;
-    try {
-      if (window.hljs && hljs.getLanguage(m[1])) hljs.highlightElement(code);
-    } catch (e) {
-      // The plain block stays.
+  function highlightAll(scope) {
+    Array.prototype.forEach.call(scope.querySelectorAll('pre > code'), function (code) {
+      var m = /(?:^|\s)language-(\S+)/.exec(code.className || '');
+      if (!m || m[1] === 'mermaid') return;
+      try {
+        if (window.hljs && hljs.getLanguage(m[1])) hljs.highlightElement(code);
+      } catch (e) {
+        // The plain block stays.
+      }
+    });
+  }
+  // Mermaid is added by a script element created here, and only at the first
+  // file with a diagram, so a slow or blocked CDN cannot hide the text. Its load
+  // or its error decides how the diagrams are shown. mermaidState: 0 not
+  // loaded, 1 loading, 2 ready, 3 failed.
+  var mermaidState = 0;
+  var mermaidWaiting = [];
+  function ensureMermaid(cb) {
+    if (mermaidState === 2) { cb(true); return; }
+    if (mermaidState === 3) { cb(false); return; }
+    mermaidWaiting.push(cb);
+    if (mermaidState === 1) return;
+    mermaidState = 1;
+    function done() {
+      mermaidReady = mermaidState === 2;
+      var list = mermaidWaiting;
+      mermaidWaiting = [];
+      list.forEach(function (f) { f(mermaidState === 2); });
     }
-  });
-
-  // The text is shown now. Mermaid is added by a script element created here, so
-  // a slow or blocked CDN cannot hide the text. Its load or its error decides how
-  // the diagrams are shown.
-  items = Array.prototype.map.call(content.querySelectorAll('pre.mermaid'), function (pre) {
-    return { pre: pre, src: pre.textContent };
-  });
+    var s = document.createElement('script');
+    s.src = MERMAID_URL;
+    s.integrity = MERMAID_SRI;
+    s.crossOrigin = 'anonymous';
+    s.onload = function () {
+      mermaidState = typeof mermaid === 'undefined' ? 3 : 2;
+      done();
+    };
+    s.onerror = function () {
+      mermaidState = 3;
+      done();
+    };
+    document.head.appendChild(s);
+  }
+  var shownEnc = null;
+  function start() {
+    var r = currentRoute();
+    show(r.enc, r.frag);
+  }
   applyTheme();
   buildPopover();
   wireControls();
-  if (!items.length) return;
-  var s = document.createElement('script');
-  s.src = MERMAID_URL;
-  s.integrity = MERMAID_SRI;
-  s.crossOrigin = 'anonymous';
-  s.onload = function () {
-    if (typeof mermaid === 'undefined') {
-      items.forEach(function (it) { showCode(it.pre, it.src, null); });
-    } else {
-      mermaidReady = true;
-      redraw(items);
+  start();
+  // A new route renders its file. The same file scrolls to its anchor only.
+  window.addEventListener('hashchange', function () {
+    var r = currentRoute();
+    if (r.enc === shownEnc) {
+      scrollToFrag(r.frag);
+      return;
     }
-  };
-  s.onerror = function () {
-    items.forEach(function (it) { showCode(it.pre, it.src, null); });
-  };
-  document.head.appendChild(s);
+    show(r.enc, r.frag);
+  });
 
   // Shows a diagram's source as a code block, with the error text when there is one.
   function showCode(pre, text, err) {
