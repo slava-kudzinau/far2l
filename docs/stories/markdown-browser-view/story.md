@@ -1,5 +1,5 @@
 ---
-status: in-review
+status: done
 size: S
 risk: none
 depends-on: markdown-preview-reading
