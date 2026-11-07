@@ -133,22 +133,44 @@ story's Done list.
 
 ### What was built
 
-_To fill at close-out: same as "What it builds", plus one paragraph on what the finished thing
-does, from the close-out report._
+A fenced code block in the F3 Markdown view paints a tinted band: every row of the block, from
+the first code row to the last (and the hint row under undrawn mermaid art), carries a blended
+background to the right edge, also past the end of the text. The tint blends one eighth of the
+code role's resolved foreground into the real viewer background, so it fits any theme. It shows
+when the terminal reports true color and the pair (code foreground, tint) reaches 3:1; the
+verdict is cached on (viewer background, code color) and recomputed on a theme or scheme change.
+Runs of the row, token runs included, ride the tint. `--norgb` draws the block without a tint.
 
 ### What changed
 
-_To fill at close-out: the commit list, one line each: what changed, and why._
+- `11672d8dc` The `MdLine.tint` field, `MdCodeTint`, the printer's row fill, the `tint` driver
+  case: the block is a row property, resolved to the live theme at draw time.
+- `459a413b2` Code runs ride the fence tint; the cells past the text keep it: one background
+  across the whole row.
+- `9d5df9ebb` 000d reads the fence tint, the cell past the text, the right edge, and the
+  `--norgb` plain codes.
+- `32687c70e` 000e: a 24-row sweep behind the tint, for rows printed after a scroll-in.
+- `c2062fcf1` T2 review: code runs ride the tint background, drawn before the fill loses.
+- `310db4d08` Final review: a tinted row paints in one pass, runs then tinted tail: rows
+  printed after a scroll-in keep one console row per Markdown row.
+- `588e909e1` The gap row inside a block rides the fill; 000e rewritten on `far2l -view`, away
+  from the panel cursor race.
+- `bc084a675` Durable docs: ADR-004's exception, the viewer spec, the data view, the invariants.
+- `a7541dffa` The gate check resolves the build path to an absolute one: the harness resolves a
+  relative app path from the test folder.
 
 ### Decisions changed during the build
 
-_To fill at close-out: rows of the decision table that moved during the build. If none:
-"None of the decision table's rows."_
+The print order moved: a tinted row paints in one pass (runs, then the tinted tail), not the
+fill first and the runs over it. The row count per Markdown row is what the smoke measures.
 
 ### What the reviews caught
 
-_To fill at close-out: the one-line summary of each review, for the owner who reads this page
-instead of the findings file._
+- T1: none beyond the plan.
+- T2: code runs were painted under the fill; they ride the tint now.
+- T3: the docs rows match the spec and the data view.
+- Final review: the fill order; and the gap row inside a fence lost the block background, now
+  read in 000d.
 
 ### Run it
 
@@ -157,12 +179,15 @@ Run the Check section above; expect all PASS except the two known Mac failures (
 
 ### How to verify
 
-_To fill at close-out: the command or demo, and what you should see._
+Open a `.md` file with a fenced block in F3:
+`../far2l.markdown-code-tint.build/install/far2l.app/Contents/MacOS/far2l`. The block shows a
+tinted band to the right edge; the band ends with the block. Run with `--norgb`: no tint, the
+text stays readable.
 
 ### Spend
 
-_To fill at close-out: the `check_requests` total, and the money at merge._
-
+Story agents about $2.5 (8 dispatches, request-priced; the build ran in the omp harness, where
+spend.mjs finds no Claude transcripts). The build used incremental cmake.
 ## Before build
 
 - At G2-design, the owner reads this page, answers the four questions, and approves.
