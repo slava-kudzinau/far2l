@@ -1,5 +1,9 @@
 # Heading
 
+```javascript
+const z = 7;
+```
+
 See [the link](http://example.com) here.
 
 **strong** and _emphasis_ words.
@@ -16,7 +20,5 @@ See [the link](http://example.com) here.
 | 1 | 2 |
 
 ```javascript
-function tailSum(a, b) {
-  const s = "\lit\n" + 42 * true; // note
-  return tailSum(s, 7);
+const x = 42; // wjs cjs
 ```

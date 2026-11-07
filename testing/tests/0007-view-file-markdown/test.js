@@ -13,6 +13,15 @@ function CheckBack(name, cell) {
 	}
 }
 
+// Two cells share a background: the code row and the blank cell past its text ride
+// the block's tint (story markdown-code-tint), so they are compared with each other.
+function CheckSameBack(name, cell, ref, refName) {
+	if (cell.Back != ref.Back || cell.IsBackTC != ref.IsBackTC || cell.BackTC != ref.BackTC) {
+		Log(name + ": back " + cell.Back + " tc " + cell.IsBackTC + " " + cell.BackTC + ", " + refName + " back " + ref.Back + " tc " + ref.IsBackTC + " " + ref.BackTC)
+		Panic(name + " background differs from the " + refName + " background")
+	}
+}
+
 function CheckFore(name, cell) {
 	if (cell.Fore != plain.Fore || cell.IsForeTC != plain.IsForeTC || cell.ForeTC != plain.ForeTC) {
 		Log(name + ": fore " + cell.Fore + " tc " + cell.IsForeTC + " " + cell.ForeTC + ", plain fore " + plain.Fore + " tc " + plain.IsForeTC + " " + plain.ForeTC)
@@ -98,8 +107,10 @@ var bullet = ExpectString("bullet one")
 CheckRowOf("list right under the h3 heading", bullet, h3.Y + 1)
 // Code takes its own palette entry, different from the heading and from the body.
 var code = ExpectString("Code Fence Body")
-CheckBack("code", ReadCell(code.X, code.Y))
+// The fence row rides the code tint: the text cell and the cell past the text share the
+// row's tinted background, one eighth of the code color into the viewer background.
 var code_cell = ReadCell(code.X, code.Y)
+CheckSameBack("code", code_cell, ReadCell(70, code.Y), "code row fill")
 CheckForeOther("code", code_cell, plain, "viewer")
 CheckForeOther("code", code_cell, heading_cell, "heading")
 var table = ExpectString("│ cell1")

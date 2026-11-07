@@ -164,6 +164,19 @@ The resolver order:
 
 The contrast rule is all or none. Each RGB default needs 3:1 or more against the real viewer background (`wcagComputeContrast`), or all defaults use step 4. The Colorer look has its own batch verdict, the same way. Each scheme color it offers needs 3:1, or every role takes the steps below. One view-wide Colorer verdict gates prose and fences together. The verdict is keyed on the pair (viewer background, scheme generation): a theme change and a scheme change both recompute it. An absent region (`fore` 0) is not a contrast failure: that role takes its fork default. An override has no contrast check. The defaults are in `far2l/src/markdown/MdPalette.cpp`.
 
+### Code block tint
+
+Every row of a code block paints its background with the block tint, to the right edge, also
+past the end of the text. The rows are the code rows and, under undrawn mermaid art, the hint
+row. The tint blends one eighth of the code role's resolved foreground into the real viewer
+background (the `BlendRgb` pattern of the file compare). It shows when the terminal reports
+true color. The pair (code foreground, tint) must reach 3:1; one verdict is cached on (viewer
+background, code color).
+A theme change and a scheme change both show on the next redraw. The block background is a
+row property, not a run property: the runs ride it, the cells past the text keep it.
+A run with a token role rides the tint too (story markdown-colorer-fences): the token
+foreground, the tint background.
+
 ### Tables
 
 - The width of a column is the largest cell in that column, counted in `wchar_t` units.

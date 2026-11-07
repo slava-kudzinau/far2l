@@ -54,6 +54,12 @@ struct MdLine {
     std::vector<MdRun> runs;
     int64_t nFilePos = 0;
     int tokens = -1;   // index into MarkdownDoc::m_token_groups; -1: no token group
+    // The code block's background (story markdown-code-tint): 0 marks a tinted row, -1
+    // none.  The fence builder sets it on the fence's rows (the code rows and the hint row
+    // under undrawn mermaid art); art rows keep their own background.  The printer resolves
+    // the row's tint to the live theme through MdCodeTint, so a theme change shows on the
+    // next redraw.
+    int64_t tint = -1;
 
     // Total visible width in cells (sum of run lengths; cells, not codepoints).
     int Width() const;

@@ -22,6 +22,10 @@ function CheckTok(name, cell, tc, fore) {
 
 // A fresh profile shows the help screen on start; a reused one would not.
 RemoveAll(profile)
+// The first open pays the Colorer catalog load (13 schemes on this fixture);
+// on a cold Mac that outlives the 3 s default, so the title scan lands in the
+// "Nothing at" window.  Give the reopen-from-cache room to paint.
+SetDefaultExpectTimeout(15000)
 
 // 80x28: all 13 fences (12 languages and the plain-code one) fit on one screen.
 StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 28);

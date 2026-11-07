@@ -642,6 +642,10 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                     b.set_line_pos(line_pos);
                 b.append(std::wstring(CODE_INDENT, L' ') + line, MD_ROLE_CODE);
                 b.flush();
+                // The fence's rows take the block's tint (story markdown-code-tint): a
+                // non-negative tint marks the row, the printer resolves the theme's blend
+                // at draw time, so a theme change shows on the next redraw.
+                b.out.back().tint = 0;
                 ++count;
                 if (nl == std::wstring::npos) break;
                 start = nl + 1;
@@ -906,6 +910,7 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width)
             MdLine hint;
             hint.runs.push_back(MdRun{it->lead + MERMAID_HINT, MD_ROLE_BODY});
             hint.nFilePos = m_lines[code_end - 1].nFilePos;
+            hint.tint = 0;   // the hint sits under the fence's code rows: same block, same tint
             m_lines.insert(m_lines.begin() + code_end, std::move(hint));
             continue;
         }

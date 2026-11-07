@@ -426,6 +426,41 @@ int RoleRegionIndex(uint64_t role)
 	}
 }
 
+
+// ---------------------------------------------------------------------------
+// The code block tint (story markdown-code-tint).
+// ---------------------------------------------------------------------------
+
+// The 24-bit background of a far attribute as 0xBBGGRR: the truecolor bits when set,
+// else the palette's background slot (the IndexedBackgroundRgb pattern of
+// far2l/src/filediff.cpp).
+uint32_t BackRgb(uint64_t attr)
+{
+	if (attr & BACKGROUND_TRUECOLOR)
+		return (uint32_t)((attr >> 40) & 0xffffff);
+	return Palette::FARPalette[(attr & B_MASK) >> 4] & 0x00ffffff;
+}
+
+// The 24-bit foreground of a far attribute as 0xBBGGRR: the truecolor bits when set,
+// else the palette's foreground slot (extractColor reads a 4-bit index from slot 16).
+uint32_t ForeRgb(uint64_t attr)
+{
+	if (attr & FOREGROUND_TRUECOLOR)
+		return (uint32_t)((attr >> 16) & 0xffffff);
+	return Palette::FARPalette[16 + (attr & 0x0f)] & 0x00ffffff;
+}
+
+// BlendRgb of far2l/src/filediff.cpp: alpha/256 of `mix` into `base`, both 0xBBGGRR,
+// the result in the ComposeRgb layout.  Alpha 32 is one eighth (spec, The blend).
+uint32_t BlendOneEighth(uint32_t base, uint32_t mix)
+{
+	constexpr int alpha = 32;
+	constexpr int inv = 256 - alpha;
+	const uint32_t r = (uint32_t)(((base & 0xff) * inv + (mix & 0xff) * alpha) >> 8);
+	const uint32_t g = (uint32_t)((((base >> 8) & 0xff) * inv + ((mix >> 8) & 0xff) * alpha) >> 8);
+	const uint32_t b = (uint32_t)((((base >> 16) & 0xff) * inv + ((mix >> 16) & 0xff) * alpha) >> 8);
+	return r | (g << 8) | (b << 16);
+}
 } // namespace
 
 uint64_t MdRunColor(uint64_t role)
@@ -545,4 +580,48 @@ uint64_t MdRangeColor(uint32_t fg, uint32_t fg4, bool underline)
 	if (underline)
 		entry |= COMMON_LVB_UNDERSCORE;   // the printer's span pass re-applies it
 	return (entry & ~kBackBits) | (body & kBackBits);
+}
+
+// The code block's background: one eighth of the code role's resolved foreground mixed
+// into the viewer background, packed 0xBBGGRR (see MdPalette.hpp).  One verdict for the
+// pair (viewer background, code color): the same pair answers the same value, a new pair
+// recomputes it - a theme change (new background) and a code-color change (new scheme
+// generation, new user ini) both re-evaluate the gate and the blend.
+int64_t MdCodeTint(uint64_t viewer_bg)
+{
+	// The code role at draw time: the color the printer gives the fence's runs, the
+	// foreground of the blend.  Resolved on every call, so the cached pair sees a
+	// scheme change.
+	const uint64_t code = MdRunColor(MD_ROLE_CODE);
+
+	static std::mutex s_mutex;
+	static uint64_t s_bg = 0;
+	static uint64_t s_code = 0;
+	static int64_t s_tint = -1;
+	static bool s_computed = false;
+
+	std::lock_guard<std::mutex> lock(s_mutex);
+	if (s_computed && s_bg == viewer_bg && s_code == code)
+		return s_tint;
+
+	s_tint = -1;
+	// The 24-bit background needs true color (the gate of CanUseTrueColorFallback,
+	// far2l/src/filediff.cpp): below it the plain viewer background stands.
+	if (WINPORT(GetConsoleColorPalette)(NULL) >= 24) {
+		const uint32_t tint = BlendOneEighth(BackRgb(viewer_bg), ForeRgb(code));
+		// 3:1 on (code foreground, tint): the pair's one verdict (spec, The gate).
+		// Both sides decode through the same 0xBBGGRR -> RGB mapping extractColor
+		// uses, so the comparison is channel-consistent.
+		RGB fg, bg;
+		extractColor(code, fg, bg);
+		const RGB tint_rgb = toRGB((int)((tint >> 16) & 0xff), (int)((tint >> 8) & 0xff),
+			(int)(tint & 0xff));
+		if (wcagComputeContrast(fg, tint_rgb) >= 3.0)
+			s_tint = (int64_t)tint;
+	}
+
+	s_bg = viewer_bg;
+	s_code = code;
+	s_computed = true;
+	return s_tint;
 }

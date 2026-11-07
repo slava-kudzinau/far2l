@@ -33,7 +33,7 @@ flowchart LR
 
 | Element | Contents | Written by | Lifetime |
 |---|---|---|---|
-| Screen line, `MdLine` | Runs and `nFilePos` | `Builder`, `MarkdownDoc::Render` | Until the next render |
+| Screen line, `MdLine` | Runs, `nFilePos`, and the row `tint` mark (0 = a tinted code-block row; the printer resolves the blend through `MdCodeTint`) | `Builder`, `MarkdownDoc::Render` | Until the next render |
 | Color run, `MdRun` | Text and an `MdRole` (body, h1, h2, h3, strong, em, link, code, quote, listmark, rule, art, and the four fence token roles), never a color | `Builder` | With its line |
 | Source offset, `nFilePos` | Byte offset of the start of the source line that holds the first source text of the row | `cb_text`, `Builder::flush` | With its line |
 | Top row, `m_md_top` | Index into `Lines()`. `m_md_top_pos` is the `FilePos` of the last sync. | `SetMarkdownTop` | While the file is open |

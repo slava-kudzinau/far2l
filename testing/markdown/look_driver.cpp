@@ -19,12 +19,13 @@
 #include "global.hpp"
 #include "ConsoleOutput.h"
 #include "markdown/MdColorer.hpp"
-#include "markdown/MarkdownRender.hpp"
 #include "cfg/config.hpp"
 #include "mix/pathmix.hpp"
-#include "Colorspace.h"   // iRGB, toIRGB: the fail-path split below
 #include "farcolors.hpp"
 #include "markdown/MdPalette.hpp"
+#include "ViewerPrinter.hpp"
+#include "interf.hpp"
+#include "scrbuf.hpp"
 
 #include <utils.h>
 
@@ -55,20 +56,12 @@ using TokenizeFn = int (*)(const wchar_t* lang, const wchar_t* const* lines, int
 	void* ctx, int deadline_ms);
 using LookFn = int (*)(int abi, const wchar_t* const* names, int count,
 	unsigned int* look, int capacity, unsigned int* generation);
-// V2 (story markdown-colorer-fences): the region's real look per token, in
-// 8-word cells; the return is the number of cells written, codes -1..-3.
-using TokenizeV2Fn = int (*)(int abi, const wchar_t* language, const wchar_t* const* lines,
-	int nLines, int budget_ms, uint64_t* cells, int capacity, uint64_t* generation);
 
 ModuleOpenFn g_module_open = nullptr;
 StartupInfoFn g_set_startup_info = nullptr;
 ViewerEventFn g_viewer_event = nullptr;
 TokenizeFn g_tokenize = nullptr;
 LookFn g_look = nullptr;
-TokenizeV2Fn g_tokenize_v2 = nullptr;
-// --rgb ran: the plugin's ReloadBase picked the rgb scheme (far2l.hrd);
-// without it, the 16-color scheme (console/default.hrd, `fore="#B"` rows).
-bool g_rgb = false;
 ViewerInfo g_vi = {};
 // The plugin manager the core bridge asks. The driver owns it here:
 // `new ControlObject` scans and registers the plugins, as at startup.
@@ -162,9 +155,8 @@ bool LoadModules(std::string& why)
 	g_viewer_event = (ViewerEventFn)dlsym(g_plugin_handle, "ProcessViewerEventW");
 	g_tokenize = (TokenizeFn)dlsym(g_plugin_handle, "ColorerTokenizeV1");
 	g_look = (LookFn)dlsym(g_plugin_handle, "ColorerRegionLookV1");
-	g_tokenize_v2 = (TokenizeV2Fn)dlsym(g_plugin_handle, "ColorerTokenizeV2");
 	if (g_module_open == nullptr || g_set_startup_info == nullptr || g_viewer_event == nullptr
-		|| g_tokenize == nullptr || g_look == nullptr || g_tokenize_v2 == nullptr) {
+		|| g_tokenize == nullptr || g_look == nullptr) {
 		const char* err = dlerror();
 		why = std::string("dlsym: ") + (err ? err : "a needed export is missing");
 		return false;
@@ -543,564 +535,6 @@ int look_bridge_real()
 		}
 	}
 	printf("ok look_bridge_real: generation 1, ten far2l.hrd rows\n");
-	return 0;
-}
-
-// ---- T1 cases: the V2 export (story markdown-colorer-fences) ----
-
-// The javascript fence: a keyword (`function`), a function name (the regexp
-// region of `function name (`), a string, a number, a boolean constant, an
-// operator, and a tail: the identifier and the semicolon of the third line,
-// regions with no class (plain code role, spec States).
-const wchar_t* const kJsFence[] = {
-	L"function tailSum(a, b) {",
-	L"  const s = \"\\lit\\n\" + 42 * true;",
-	L"  tailSum; // note",
-};
-constexpr int kJsFenceLines = 3;
-
-// One V2 call: the cells of `n` lines under the active scheme.  The words
-// past the count keep the sentinel 0xAB, so an over-write is visible.
-struct V2Out
-{
-	std::vector<uint64_t> w;
-	int rc = -99;
-	uint64_t gen = 0;
-	int Count() const { return rc > 0 ? rc : 0; }
-	const uint64_t* At(int i) const { return w.data() + static_cast<size_t>(i) * 8; }
-	// The last cell covering the 1-based column (the printer paints the
-	// inner region last, R2; single-line calls keep the cells on one line).
-	const uint64_t* Cover(int col) const
-	{
-		const uint64_t* hit = nullptr;
-		for (int i = 0; i < Count(); ++i) {
-			const uint64_t* c = At(i);
-			if (c[0] <= static_cast<uint64_t>(col) && static_cast<uint64_t>(col) <= c[1]) {
-				hit = c;
-			}
-		}
-		return hit;
-	}
-};
-
-V2Out CallV2(const wchar_t* const* lines, int n, int budget_ms = 5000, int capacity = 256,
-	int abi = 1, const wchar_t* lang = L"javascript")
-{
-	V2Out out;
-	out.w.assign(static_cast<size_t>(capacity) * 8 + 8, 0xAB);
-	out.rc = g_tokenize_v2(abi, lang, lines, n, budget_ms, out.w.data(), capacity, &out.gen);
-	return out;
-}
-
-// One expectation: a cell covering `col` of the one-line call, its 24-bit
-// foreground, its 4-bit foreground, its style word.  The look columns are the
-// active scheme's row: `fg`/`style` are far2l.hrd's (--rgb; the console
-// scheme's rows carry no style), `fg4` console default.hrd's (no --rgb).
-struct V2Want
-{
-	int line;
-	int col;
-	const wchar_t* what;
-	uint64_t fg;   // the far2l.hrd row (--rgb)
-	uint64_t fg4;  // the console scheme's 4-bit row (no --rgb)
-	uint64_t style; // far2l.hrd's style word (the console rows carry none)
-};
-
-// One expectation, by a row of the table below: the last cell covering the
-// row's column of a one-line call carries the row's 24-bit foreground, the
-// scheme's 4-bit foreground, the row's style word, and three zeros.  The
-// active scheme decides which side is measured: --rgb runs far2l.hrd (the
-// row's 24-bit and style columns), without it console default.hrd (the row's
-// 4-bit column).  The companions are the same scheme through the palette's
-// quantize: far2l.hrd's 24-bit value under the 16-color scheme, the console
-// row expanded back to 24 bits under the rgb scheme, both indexed by row.
-bool Expect(const V2Out& out, int idx, const V2Want& want)
-{
-	static const uint64_t s_rgb4[] = {15, 9, 15, 15, 14, 10, 15, 13, 9};
-	static const uint64_t s_console24[] = {
-		0xffffff, 0x55ffff, 0xffffff, 0xffff55, 0x00aaaa, 0x55ff55, 0xffffff, 0x55ffff,
-		0x00aaaa,
-	};
-	const uint64_t want_fg = g_rgb ? want.fg : s_console24[idx];
-	const uint64_t want_fg4 = g_rgb ? s_rgb4[idx] : want.fg4;
-	const uint64_t want_style = g_rgb ? want.style : 0;
-	const uint64_t* cell = out.Cover(want.col);
-	if (cell == nullptr) {
-		printf("FAILED tokens_v2: %S: no cell covers col %d\n", want.what, want.col);
-		for (int i = 0; i < out.Count(); ++i) {
-			const uint64_t* c = out.At(i);
-			printf("  cell %d: [%llu,%llu] 0x%llX/%llu style %llu\n", i,
-				(unsigned long long)c[0], (unsigned long long)c[1],
-				(unsigned long long)c[2], (unsigned long long)c[3],
-				(unsigned long long)c[4]);
-		}
-		return false;
-	}
-	if (cell[2] != want_fg || cell[3] != want_fg4 || cell[4] != want_style
-		|| cell[5] != 0 || cell[6] != 0 || cell[7] != 0) {
-		printf("FAILED tokens_v2: %S col %d is [0x%llX/%llu style %llu %llu,%llu,%llu], want [0x%llX/%llu style %llu 0,0,0]\n",
-			want.what, want.col,
-			(unsigned long long)cell[2], (unsigned long long)cell[3],
-			(unsigned long long)cell[4], (unsigned long long)cell[5],
-			(unsigned long long)cell[6], (unsigned long long)cell[7],
-			(unsigned long long)want_fg, (unsigned long long)want_fg4,
-			(unsigned long long)want_style);
-		return false;
-	}
-	printf("probe %S: [0x%llX/%llu style %llu] under %s\n", want.what,
-		(unsigned long long)cell[2], (unsigned long long)cell[3],
-		(unsigned long long)cell[4], g_rgb ? "far2l.hrd" : "console default.hrd");
-	return true;
-}
-
-// The javascript fence through the real plugin, V2: one call per line (the
-// cells keep their line), then the whole fence for the tail.  The 24-bit
-// values are the far2l.hrd rows (spec Done), the 4-bit values the console
-// scheme's rows; an unset color (def:Function on the console scheme) takes
-// def:Text, the F4 chain.
-int tokens_v2()
-{
-	std::string why;
-	if (!LoadModules(why) || !CreateEditorSet(why)) {
-		printf("FAILED tokens_v2: %s\n", why.c_str());
-		return 1;
-	}
-	// The rows the two schemes give (far2l.hrd / console default.hrd).  The
-	// function name's console fg is def:Text's #B: def:Function's assign
-	// leaves the fore unset, the F4 chain falls to def:Text.  The string's
-	// escape (`\n` in the literal) is the one row with a style word:
-	// far2l.hrd's def:StringContent writes style='1'.
-	static const V2Want s_want[] = {
-		{0, 4,  L"keyword",    0xffffff, 15, 0}, // def:Keyword
-		{0, 12, L"function",   0x6060f0, 11, 0}, // def:Function
-		{1, 5,  L"keyword2",   0xffffff, 15, 0}, // def:Keyword (const)
-		{1, 15, L"string",     0x88ee88, 14, 0}, // def:String (the whole literal)
-		{1, 18, L"escape",     0x999911,  3, 1}, // def:StringContent (\n)
-		{1, 24, L"number",     0x00e020, 10, 0}, // def:NumberDec -> def:Number (#A)
-		{1, 27, L"operator",   0xe0e0c0, 15, 0}, // def:Symbol (*)
-		{1, 30, L"constant",   0xa030ff, 11, 0}, // def:BooleanConstant
-		{2, 15, L"comment",    0x696989,  8, 0}, // def:Comment
-	};
-	for (int w = 0; w < 9; ++w) {
-		const V2Want& want = s_want[w];
-		V2Out out = CallV2(&kJsFence[want.line], 1);
-		if (out.rc < 1) {
-			printf("FAILED tokens_v2: line %d rc=%d, want cells\n", want.line, out.rc);
-			return 1;
-		}
-		if (out.gen == 0) {
-			printf("FAILED tokens_v2: generation=0 with a count\n");
-			return 1;
-		}
-		if (!Expect(out, w, want)) {
-			return 1;
-		}
-	}
-	// The tail line (`  tailSum; // note`): the identifier carries no cell
-	// (plain code role); the semicolon's Symbol match and the comment do.
-	{
-		V2Out tail = CallV2(&kJsFence[2], 1);
-		if (tail.Count() < 1) {
-			printf("FAILED tokens_v2: the tail line gave %d cells, want the comment\n",
-				tail.Count());
-			return 1;
-		}
-		for (int i = 0; i < tail.Count(); ++i) {
-			if (tail.At(i)[0] < 10) {
-				printf("FAILED tokens_v2: the tail line cell %d starts at %llu, want 10+\n",
-					i, (unsigned long long)tail.At(i)[0]);
-				return 1;
-			}
-		}
-		if (!Expect(tail, 8, s_want[8])) {
-			return 1;
-		}
-		if (tail.Cover(4) != nullptr) {
-			printf("FAILED tokens_v2: a cell covers the tail identifier (col 4)\n");
-			return 1;
-		}
-		printf("probe tail: no cell at col 4, the plain code role (def:Text)\n");
-	}
-	// The whole fence: the two token lines' cells plus the tail's two
-	// (the semicolon's Symbol, the comment block), the 1-based inclusive
-	// span of the keyword.
-	V2Out fence = CallV2(kJsFence, kJsFenceLines);
-	V2Out head2 = CallV2(kJsFence, 2);
-	if (fence.rc != head2.rc + 2) {
-		printf("FAILED tokens_v2: the fence gave %d cells, the first two lines %d, want two more\n",
-			fence.rc, head2.rc);
-		return 1;
-	}
-	// The fence's stream order: the function scheme's cell opens the
-	// fence (jsFunctionDef enters at its start keyword, its span is the
-	// name), the keyword's leaf writes after it, and the printer paints
-	// the leaf over the scheme (R2).  1-based inclusive.
-	const uint64_t* fn = fence.At(0);
-	if (fn[0] != 10 || fn[1] != 16) {
-		printf("FAILED tokens_v2: the fence cell 0 is [%llu,%llu], want [10,16] (the name)\n",
-			(unsigned long long)fn[0], (unsigned long long)fn[1]);
-		return 1;
-	}
-	const uint64_t* kw = fence.At(1);
-	if (kw[0] != 1 || kw[1] != 8) {
-		printf("FAILED tokens_v2: the fence cell 1 is [%llu,%llu], want [1,8] (the keyword)\n",
-			(unsigned long long)kw[0], (unsigned long long)kw[1]);
-		return 1;
-	}
-	// abi: the shape's abi is 1; a larger abi answers -2.
-	V2Out abi2 = CallV2(kJsFence, kJsFenceLines, 5000, 256, 2);
-	if (abi2.rc != -2 || abi2.gen != 0) {
-		printf("FAILED tokens_v2: abi 2 gave rc=%d gen=%llu, want -2/0\n",
-			abi2.rc, (unsigned long long)abi2.gen);
-		return 1;
-	}
-	printf("ok tokens_v2: fence cells under %s, the tail bare, abi 2 -> -2 (generation %llu)\n",
-		g_rgb ? "far2l.hrd" : "console default.hrd", (unsigned long long)fence.gen);
-	return 0;
-}
-
-// 32 lines, 256 cells, the deadline (spec: same input and limits as V1,
-// as look_codes).
-int tokens_v2_limits()
-{
-	std::string why;
-	if (!LoadModules(why) || !CreateEditorSet(why)) {
-		printf("FAILED tokens_v2_limits: %s\n", why.c_str());
-		return 1;
-	}
-	// The line cap: 34 lines answer as 32 (the extra lines add no cells),
-	// under the cell cap so the count shows the line cap at work.
-	static const wchar_t* kShort = L"1;";
-	std::vector<const wchar_t*> lines(34, kShort);
-	V2Out full32 = CallV2(lines.data(), 32);
-	V2Out full34 = CallV2(lines.data(), 34);
-	if (full32.rc <= 0 || full32.rc >= 256) {
-		printf("FAILED tokens_v2_limits: 32 short lines gave rc=%d, want 0 < rc < 256\n",
-			full32.rc);
-		return 1;
-	}
-	if (full34.rc != full32.rc) {
-		printf("FAILED tokens_v2_limits: 34 lines gave rc=%d, want rc=%d (the 32-line cap)\n",
-			full34.rc, full32.rc);
-		return 1;
-	}
-	printf("probe limits: %d cells from %d lines (cap 32 lines)\n", full32.rc, 34);
-	// The cell cap: a token-rich fence writes exactly capacity cells, and
-	// touches nothing past them (the sentinel word at 256*8 stays).
-	static const wchar_t* kRich =
-		L"1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1;";
-	std::vector<const wchar_t*> rich(120, kRich);
-	V2Out cap = CallV2(rich.data(), 120, 5000, 256);
-	if (cap.rc != 256) {
-		printf("FAILED tokens_v2_limits: a rich fence gave rc=%d, want 256 (the cell cap)\n",
-			cap.rc);
-		return 1;
-	}
-	if (cap.w[256 * 8] != 0xAB) {
-		printf("FAILED tokens_v2_limits: the word past the cap was written\n");
-		return 1;
-	}
-	// A small capacity answers its own count.
-	V2Out ten = CallV2(rich.data(), 120, 5000, 10);
-	if (ten.rc != 10 || ten.w[10 * 8] != 0xAB) {
-		printf("FAILED tokens_v2_limits: capacity 10 gave rc=%d\n", ten.rc);
-		return 1;
-	}
-	printf("probe limits: 256 cells written, a 10-capacity call stops at 10\n");
-	// The deadline: a spent budget answers the cells it wrote before the
-	// first check (a small count); a 1 ms budget over a fence with far
-	// more tokens than the cap answers a partial count; the viewer's
-	// 100 ms writes the full 256.
-	std::vector<const wchar_t*> many(32, kRich);
-	V2Out spent = CallV2(many.data(), 32, 0);
-	V2Out partial = CallV2(many.data(), 32, 1);
-	V2Out whole = CallV2(many.data(), 32, 100);
-	if (spent.rc <= 0 || spent.rc >= 256) {
-		printf("FAILED tokens_v2_limits: a spent budget gave rc=%d, want a small count\n",
-			spent.rc);
-		return 1;
-	}
-	if (spent.rc >= partial.rc || partial.rc > whole.rc || whole.rc != 256) {
-		printf("FAILED tokens_v2_limits: budgets gave %d/%d/%d, want a rise to 256\n",
-			spent.rc, partial.rc, whole.rc);
-		return 1;
-	}
-	if (partial.gen == 0) {
-		printf("FAILED tokens_v2_limits: a deadline stop lost the generation\n");
-		return 1;
-	}
-	printf("probe limits: budget 0 -> %d, 1 ms -> %d, 100 ms -> %d (generation %llu)\n",
-		spent.rc, partial.rc, whole.rc, (unsigned long long)whole.gen);
-	return 0;
-}
-
-// V1 keeps its shape beside V2: the four classes through the 4-word emit
-// callback, its own stride; V2 answers the same fence in 8-word cells.
-int tokens_v2_v1_callers()
-{
-	std::string why;
-	if (!LoadModules(why) || !CreateEditorSet(why)) {
-		printf("FAILED tokens_v2_v1_callers: %s\n", why.c_str());
-		return 1;
-	}
-	struct Emit { int line, start, end, cls; };
-	std::vector<Emit>* sink = new std::vector<Emit>(); // one case, no teardown (R49)
-	const int rc = g_tokenize(L"javascript", kJsFence, kJsFenceLines,
-		[](void* ctx, int line, int start, int end, int token_class) {
-			static_cast<std::vector<Emit>*>(ctx)->push_back({line, start, end, token_class});
-		},
-		sink, 5000);
-	if (rc != 0) {
-		printf("FAILED tokens_v2_v1_callers: V1 rc=%d, want 0\n", rc);
-		return 1;
-	}
-	// The four classes, on their spans (V1's 0-based half-open cells).
-	int seen[5] = {0, 0, 0, 0, 0};
-	for (const Emit& e : *sink) {
-		if (e.cls >= 1 && e.cls <= 4) {
-			++seen[e.cls];
-		}
-		if (e.line == 0 && e.cls == 1 && e.start == 0 && e.end == 8) {
-			seen[0] = 1; // `function` on line 0, cells [0,8)
-		}
-	}
-	for (int cls = 1; cls <= 4; ++cls) {
-		if (seen[cls] == 0) {
-			printf("FAILED tokens_v2_v1_callers: V1 gave no class %d\n", cls);
-			return 1;
-		}
-	}
-	if (seen[0] == 0) {
-		printf("FAILED tokens_v2_v1_callers: V1's keyword emit is not [0,8) on line 0\n");
-		return 1;
-	}
-	// The tail keeps no class (V1 emits nothing after the comment).
-	int tail_emits = 0;
-	for (const Emit& e : *sink) {
-		if (e.line == 2 && e.start < 10) {
-			++tail_emits; // `  tailSum;` carries no class
-		}
-	}
-	if (tail_emits != 0) {
-		printf("FAILED tokens_v2_v1_callers: the tail gave %d V1 emits, want 0\n", tail_emits);
-		return 1;
-	}
-	// V2 opens the fence with the function scheme's cell (the name's
-	// region, V1's second class-1 emit), then the keyword's leaf — the
-	// printer paints the leaf over the scheme, as in V1's R2.
-	V2Out v2 = CallV2(kJsFence, kJsFenceLines);
-	const uint64_t* fn = v2.At(0);
-	const uint64_t* kw = v2.At(1);
-	if (v2.rc <= 0 || fn[0] != 10 || fn[1] != 16 || kw[0] != 1 || kw[1] != 8) {
-		printf("FAILED tokens_v2_v1_callers: V2's cells are [%llu,%llu],[%llu,%llu], want [10,16],[1,8]\n",
-			(unsigned long long)fn[0], (unsigned long long)fn[1],
-			(unsigned long long)kw[0], (unsigned long long)kw[1]);
-		return 1;
-	}
-	if (v2.w[static_cast<size_t>(v2.rc) * 8] != 0xAB) {
-		printf("FAILED tokens_v2_v1_callers: V2 wrote past its count\n");
-		return 1;
-	}
-	printf("ok tokens_v2_v1_callers: V1's four classes on the 4-word emits, V2's 8-word cells\n");
-	return 0;
-}
-
-// UTF-8 to wide: the hostile fixture carries non-ASCII (CJK, emoji, the
-// Gothic 𐍈 surrogate pair); the viewer reads its file as wide text.
-std::wstring Utf8ToWide(const std::string &s)
-{
-	std::wstring out;
-	out.reserve(s.size());
-	size_t i = 0;
-	while (i < s.size()) {
-		const unsigned char c = static_cast<unsigned char>(s[i]);
-		uint32_t cp = c;
-		int extra = c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : c >= 0xC0 ? 1 : 0;
-		if (extra != 0 && i + extra < s.size()) {
-			cp = c & (0xFF >> (extra + 1));
-			for (int k = 1; k <= extra; ++k) {
-				cp = (cp << 6) | (static_cast<unsigned char>(s[i + k]) & 0x3F);
-			}
-		} else {
-			extra = 0;
-		}
-		i += static_cast<size_t>(extra) + 1;
-		if (cp >= 0x10000) {
-			cp -= 0x10000;
-			out.push_back(static_cast<wchar_t>(0xD800 + (cp >> 10)));
-			out.push_back(static_cast<wchar_t>(0xDC00 + (cp & 0x3FF)));
-		} else {
-			out.push_back(static_cast<wchar_t>(cp));
-		}
-	}
-	return out;
-}
-
-// A counting shell over the real plugin's fence source: the doc path's fence
-// cache, probed - one fetch per (language, hash, generation).
-class CountingFenceSource : public MdTokenSource
-{
-public:
-	MdTokenSource *m_real = nullptr;
-	int m_fetches = 0;
-	bool Tokenize(const std::string &lang, const std::vector<std::string> &lines,
-		int budget_ms, std::vector<MdToken> &out) override
-	{
-		return m_real->Tokenize(lang, lines, budget_ms, out);
-	}
-	bool TokenizeV2(const std::string &lang, const std::vector<std::string> &lines,
-		int budget_ms, std::vector<MdTokenRange> &out,
-		unsigned long long &generation) override
-	{
-		++m_fetches;
-		return m_real->TokenizeV2(lang, lines, budget_ms, out, generation);
-	}
-	bool Ready() override { return m_real->Ready(); }
-};
-
-// T4: the fences' cost through the real plugin.  Six 20k-line fences, each
-// salted unique, so every fence renders exactly once - the cache's cold key
-// (language, text hash, generation), one fetch per fence, counted.  A fence's
-// render is the doc's Render: the join, the parse, the fetch, the printer.
-// The deadline is the viewer's 100 ms per fence (spec, Runtime).
-int tokens_v2_cost()
-{
-	std::string why;
-	if (!LoadModules(why) || !CreateEditorSet(why)) {
-		printf("FAILED tokens_v2_cost: %s\n", why.c_str());
-		return 1;
-	}
-	auto src = std::make_unique<CountingFenceSource>();
-	CountingFenceSource *count = src.get();
-	count->m_real = &MdGetTokenSource();
-	MdSetTokenSourceForTest(std::move(src));
-	constexpr int kFences = 6;
-	constexpr int kFenceLines = 20000;
-	constexpr int kBudgetMs = 100;
-	double total_ms = 0, worst_ms = 0;
-	// One warm render, not counted: the first Render pays the cold pages of
-	// the doc and the plugin, the story's number is the steady cost.
-	{
-		std::wstring warm = L"```javascript\n";
-		for (int i = 0; i < 200; ++i) {
-			warm += kJsFence[i % 3];
-			warm += L" // warm\n";
-		}
-		warm += L"```\n";
-		MarkdownDoc doc;
-		doc.Render(warm, 80);
-	}
-	const int base = count->m_fetches;
-	for (int f = 0; f < kFences; ++f) {
-		std::wstring text = L"```javascript\n";
-		for (int i = 0; i < kFenceLines; ++i) {
-			text += kJsFence[i % 3];
-			text += L" // f";
-			text += std::to_wstring(f);
-			text += L'-';
-			text += std::to_wstring(i);
-			text += L'\n';
-		}
-		text += L"```\n";
-		MarkdownDoc doc;
-		const auto t0 = std::chrono::steady_clock::now();
-		doc.Render(text, 80);
-		const double ms = std::chrono::duration_cast<std::chrono::microseconds>(
-			std::chrono::steady_clock::now() - t0).count() / 1000.0;
-		bool any_range = false;
-		for (const MdTokenGroup &g : doc.TokenGroups()) {
-			if (!g.ranges.empty()) {
-				any_range = true;
-				break;
-			}
-		}
-		if (!any_range) {
-			printf("FAILED tokens_v2_cost: fence %d rendered no scheme ranges\n", f);
-			MdSetTokenSourceForTest(nullptr);
-			return 1;
-		}
-		if (ms > kBudgetMs) {
-			printf("FAILED tokens_v2_cost: fence %d rendered in %.1f ms, want under %d\n",
-				f, ms, kBudgetMs);
-			MdSetTokenSourceForTest(nullptr);
-			return 1;
-		}
-		total_ms += ms;
-		if (ms > worst_ms) {
-			worst_ms = ms;
-		}
-		printf("fence %d: %d javascript lines in %.1f ms\n", f, kFenceLines, ms);
-	}
-	if (count->m_fetches != base + kFences) {
-		printf("FAILED tokens_v2_cost: the fences fetched %d, want one per fence\n",
-			count->m_fetches - base);
-		MdSetTokenSourceForTest(nullptr);
-		return 1;
-	}
-	printf("tokens_v2_cost: %d fences x %d lines (javascript), mean %.1f ms, worst %.1f ms, deadline %d ms\n",
-		kFences, kFenceLines, total_ms / kFences, worst_ms, kBudgetMs);
-
-	// The hostile fixture: 1 MB of python - long lines, nested regions,
-	// unterminated strings, unicode - through the same fence path.  The first
-	// render fetches the fence; the second render of the same fence rides the
-	// cache, one fetch per (language, hash, generation).  look-driver.sh
-	// exports FAR2L_TESTING_DIR; the fallback serves a run from the root.
-	const char *dir = getenv("FAR2L_TESTING_DIR");
-	const std::string path = (dir != nullptr && *dir != '\0')
-		? std::string(dir) + "/fixture.py" : "testing/markdown/fixture.py";
-	std::ifstream in(path, std::ios::binary);
-	if (!in) {
-		printf("FAILED tokens_v2_cost: no fixture at %s\n", path.c_str());
-		MdSetTokenSourceForTest(nullptr);
-		return 1;
-	}
-	const std::string bytes((std::istreambuf_iterator<char>(in)),
-		std::istreambuf_iterator<char>());
-	if (bytes.size() < 1048576) {
-		printf("FAILED tokens_v2_cost: fixture is %zu bytes, want 1 MB\n", bytes.size());
-		MdSetTokenSourceForTest(nullptr);
-		return 1;
-	}
-	const std::wstring md = L"```python\n" + Utf8ToWide(bytes) + L"```\n";
-	MarkdownDoc hostile;
-	const int hostile_base = count->m_fetches;
-	const auto t1 = std::chrono::steady_clock::now();
-	hostile.Render(md, 80);
-	const double ms1 = std::chrono::duration_cast<std::chrono::microseconds>(
-		std::chrono::steady_clock::now() - t1).count() / 1000.0;
-	const auto t2 = std::chrono::steady_clock::now();
-	hostile.Render(md, 80); // the same fence again: the cache answers
-	const double ms2 = std::chrono::duration_cast<std::chrono::microseconds>(
-		std::chrono::steady_clock::now() - t2).count() / 1000.0;
-	bool hostile_range = false;
-	for (const MdTokenGroup &g : hostile.TokenGroups()) {
-		if (!g.ranges.empty()) {
-			hostile_range = true;
-			break;
-		}
-	}
-	if (!hostile_range) {
-		printf("FAILED tokens_v2_cost: the hostile fence rendered no scheme ranges\n");
-		MdSetTokenSourceForTest(nullptr);
-		return 1;
-	}
-	if (ms1 > kBudgetMs) {
-		printf("FAILED tokens_v2_cost: the hostile fence rendered in %.1f ms, want under %d\n",
-			ms1, kBudgetMs);
-		MdSetTokenSourceForTest(nullptr);
-		return 1;
-	}
-	if (count->m_fetches != hostile_base + 1) {
-		printf("FAILED tokens_v2_cost: the hostile fence fetched %d, want one (the cache refetched)\n",
-			count->m_fetches - hostile_base);
-		MdSetTokenSourceForTest(nullptr);
-		return 1;
-	}
-	printf("tokens_v2_cost: hostile fixture.py %zu bytes, first %.1f ms, cached %.1f ms, deadline %d ms\n",
-		bytes.size(), ms1, ms2, kBudgetMs);
-	printf("ok tokens_v2_cost: the 20k-line fences and the 1 MB fixture inside the deadline, fetches=%d\n",
-		count->m_fetches);
-	MdSetTokenSourceForTest(nullptr);
 	return 0;
 }
 
@@ -1508,243 +942,250 @@ int look_new_roles()
 	return 0;
 }
 
+// ---- T1 case (story markdown-code-tint): the field, the blend, the verdict ----
+
+// The 24-bit background of a far attribute: the truecolor bits when set, else the
+// palette's background slot (the base of MdCodeTint, the IndexedBackgroundRgb of
+// far2l/src/filediff.cpp).
+uint32_t AttrBack(uint64_t attr)
+{
+	if (attr & BACKGROUND_TRUECOLOR)
+		return (uint32_t)((attr >> 40) & 0xffffff);
+	return Palette::FARPalette[(attr & B_MASK) >> 4] & 0x00ffffff;
+}
+
+// The 24-bit foreground of a far attribute: the truecolor bits, else the palette's
+// foreground slot (extractColor reads a 4-bit index from slot 16).
+uint32_t AttrFore(uint64_t attr)
+{
+	if (attr & FOREGROUND_TRUECOLOR)
+		return (uint32_t)((attr >> 16) & 0xffffff);
+	return Palette::FARPalette[16 + (attr & 0x0f)] & 0x00ffffff;
+}
+
+// The palette's blend, the driver's copy: one eighth of `mix` into `base`, both
+// 0xBBGGRR (the BlendRgb pattern of far2l/src/filediff.cpp, alpha 32/256).
+uint32_t BlendEighth(uint32_t base, uint32_t mix)
+{
+	constexpr int alpha = 32;
+	constexpr int inv = 256 - alpha;
+	const uint32_t r = (uint32_t)(((base & 0xff) * inv + (mix & 0xff) * alpha) >> 8);
+	const uint32_t g = (uint32_t)((((base >> 8) & 0xff) * inv + ((mix >> 8) & 0xff) * alpha) >> 8);
+	const uint32_t b = (uint32_t)((((base >> 16) & 0xff) * inv + ((mix >> 16) & 0xff) * alpha) >> 8);
+	return r | (g << 8) | (b << 16);
+}
+
+// The code block tint (story markdown-code-tint, plan T1): a fence's rows (the code
+// rows and the hint row) carry the tint field, rows outside the block are plain; the
+// row's background is the blend of one eighth of the resolved code foreground into the
+// viewer background; a low-contrast pair (code foreground, tint) draws no tint; a
+// viewer background change is a new pair and answers a new blend (the cache key of
+// MdCodeTint - no time cache).
+int tint()
+{
+	EnsureTrueColor();
+	if (WriteOverrides("[markdown]\n", 81) != 0) {
+		return 1;
+	}
+	// All ten rows bright against a dark background: the Colorer look wins (story
+	// markdown-colorer-look, spec, Cache), so the code role is the scheme's
+	// markdown:Code fore, a color the driver owns.
+	static const unsigned int kFore[10] = {0xd0d0d0, 0xd8d8d8, 0xe0e0e0, 0xe8e8e8, 0xf0f0f0,
+		0xf8f8f8, 0xd0d0ff, 0xffd0d0, 0xd0ffd0, 0xffffd0};
+	static const unsigned int kStyle[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	const uint64_t saved = SaveBackground();
+	FakeScheme(61, kFore, kStyle);
+	SetBackground(0x101010);
+
+	// 1. The field: the fence's rows carry the tint, rows outside the block are plain.
+	MarkdownDoc doc;
+	doc.Render(L"para\n\n```cpp\nint x;\n```\n\nafter\n", 80);
+	{
+		const std::vector<MdLine> &lines = doc.Lines();
+		int code_rows = 0, plain = 0;
+		for (const MdLine &l : lines) {
+			bool is_code = false;
+			for (const MdRun &r : l.runs) {
+				if (r.role == MD_ROLE_CODE)
+					is_code = true;
+			}
+			if (is_code && l.tint < 0) {
+				printf("FAILED tint: a fence row has no tint\n");
+				return 1;
+			}
+			if (!is_code && l.tint >= 0) {
+				printf("FAILED tint: a row outside the block carries a tint\n");
+				return 1;
+			}
+			is_code ? ++code_rows : ++plain;
+		}
+		if (code_rows == 0 || plain == 0) {
+			printf("FAILED tint: the fixture has no fence row or no plain row\n");
+			return 1;
+		}
+		printf("ok tint: %d fence rows carry the tint, %d rows outside are plain\n",
+			code_rows, plain);
+	}
+
+	// The hint row under undrawn mermaid art carries the tint too (spec, Row tint).
+	MarkdownDoc mer;
+	mer.Render(L"```mermaid\ngraph XX\nA\n```\n", 80);
+	{
+		const std::vector<MdLine> &lines = mer.Lines();
+		if (lines.size() != 3) {
+			printf("FAILED tint: the mermaid fixture made %zu rows, want two code rows and the hint\n",
+				lines.size());
+			return 1;
+		}
+		for (size_t i = 0; i < lines.size(); ++i) {
+			if (lines[i].tint < 0) {
+				printf("FAILED tint: the undrawn fence row %zu lost the tint\n", i);
+				return 1;
+			}
+		}
+		printf("ok tint: the hint row under undrawn art carries the tint\n");
+	}
+
+	// 2. The blend: the row background equals the blend of the same inputs - the live
+	// viewer background and the resolved code color, mixed by the driver's copy of the
+	// palette's BlendRgb.
+	const uint64_t bg_attr = FarColorToReal(COL_VIEWERTEXT);
+	const uint64_t code_attr = MdRunColor(MD_ROLE_CODE);
+	const uint32_t want = BlendEighth(AttrBack(bg_attr), AttrFore(code_attr));
+	const int64_t got = MdCodeTint(bg_attr);
+	if (got != (int64_t)want) {
+		printf("FAILED tint: the code row draws 0x%06llx, want 0x%06x (code 0x%06x on bg 0x%06x)\n",
+			(unsigned long long)got, want, (unsigned)AttrFore(code_attr), (unsigned)AttrBack(bg_attr));
+		return 1;
+	}
+	printf("tint: code 0x%06x on bg 0x%06x draws 0x%06x\n", (unsigned)AttrFore(code_attr),
+		(unsigned)AttrBack(bg_attr), want);
+	if (MdCodeTint(bg_attr) != got) {   // the same pair answers the same verdict
+		printf("FAILED tint: the same pair answered a second value\n");
+		return 1;
+	}
+
+	// 3. A low-contrast pair draws no tint: the code foreground equals the viewer
+	// background, so the blend is the background and the pair sits at 1:1.
+	if (WriteOverrides("[markdown]\ncode = #808080\n", 82) != 0) {
+		SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+		return 1;
+	}
+	SetBackground(0x808080);
+	if (MdCodeTint(FarColorToReal(COL_VIEWERTEXT)) != -1) {
+		printf("FAILED tint: a low-contrast pair drew a tint\n");
+		return 1;
+	}
+	printf("ok tint: 0x808080 code on a 0x808080 background draws no tint\n");
+
+	// 4. A viewer background change: the same code color, a new pair, a new blend.
+	SetBackground(0x202020);
+	const uint64_t bg2 = FarColorToReal(COL_VIEWERTEXT);
+	const uint32_t want2 = BlendEighth(AttrBack(bg2), AttrFore(MdRunColor(MD_ROLE_CODE)));
+	const int64_t got2 = MdCodeTint(bg2);
+	if (got2 != (int64_t)want2) {
+		printf("FAILED tint: the new background draws 0x%06llx, want 0x%06x\n",
+			(unsigned long long)got2, want2);
+		return 1;
+	}
+	printf("ok tint: a background change redraws 0x%06x on the new pair\n", want2);
+
+	// 5. The runs ride the tint (review): a printed code row is one uniform tint
+	// background.  The cells the runs paint - a cell under a token, and the cells
+	// past the end of the text - carry the same 24-bit background: the driver's own
+	// BlendEighth of the code foreground into the viewer background, not the
+	// product's output.  The token slice keeps its foreground.
+	if (WriteOverrides("[markdown]\n", 83) != 0) {
+		return 1;
+	}
+	SetBackground(0x101010);
+	const uint64_t bg3 = FarColorToReal(COL_VIEWERTEXT);
+	const uint32_t want3 = BlendEighth(AttrBack(bg3), AttrFore(MdRunColor(MD_ROLE_CODE)));
+	// The virtual screen behind Text/GetText exists only after far2l's console
+	// init; the headless driver allocates the standard 80x25 here (idempotent)
+	// and sets the screen extents the console calls clip against.
+	ScrBuf.AllocBuf(80, 25);
+	COORD con_size{};
+	GetVideoMode(con_size);
+	{
+		size_t row = 0;
+		while (row < doc.Lines().size() && doc.Lines()[row].tint < 0)
+			++row;
+		if (row >= doc.Lines().size()) {
+			printf("FAILED tint: the fixture has no code row to print\n");
+			return 1;
+		}
+		const MdLine &code_line = doc.Lines()[row];
+		int text_end = 0;   // one past the last text cell (the runs' total width)
+		for (const MdRun &run : code_line.runs)
+			text_end += (int)run.text.size();
+		// A cell under a token: the group's first range on the tokenized path, the
+		// first cell of the code text (the 4-cell indent counted) on the plain one.
+		// V2 ranges carry the scheme's own color, so the expected foreground is
+		// the range's resolved color, not a role alias (ADR-010).
+		int token_col = 4;
+		uint64_t want_fore = MdRunColor(MD_ROLE_CODE) & ~kBack;
+		if (code_line.tokens >= 0
+			&& (size_t)code_line.tokens < doc.TokenGroups().size()
+			&& !doc.TokenGroups()[code_line.tokens].ranges.empty()) {
+			const MdTokenRange &rng = doc.TokenGroups()[code_line.tokens].ranges[0];
+			token_col = (int)rng.start;
+			want_fore = MdRangeColor(rng.fg, rng.fg4, rng.underline) & ~kBack;
+		}
+		MarkdownPrinter printer(FarColorToReal(COL_VIEWERSELECTEDTEXT),
+			&doc.Lines(), &doc.TokenGroups());
+		for (size_t i = 0; i <= row; ++i) {
+			GotoXY(0, 3 + (int)i);
+			printer.Print(0, 80, L"");
+		}
+		// The runs land in the virtual screen (ScrBuf), the fill straight on the
+		// console buffer; the flush merges them, the way ShowScreen does.
+		ScrBuf.Flush();
+		std::vector<CHAR_INFO> cells(80);
+		GetText(0, 3 + (int)row, 79, 3 + (int)row, cells.data(),
+			80 * (int)sizeof(CHAR_INFO));
+		static const int s_cols[] = {token_col, text_end, 79};
+		for (int col : s_cols) {
+			const CHAR_INFO &c = cells[col];
+			if (!(c.Attributes & BACKGROUND_TRUECOLOR)
+				|| (uint32_t)((c.Attributes >> 40) & 0xffffff) != want3) {
+				printf("FAILED tint: the cell at column %d draws back 0x%06llx (tc=%d), want 0x%06x\n",
+					col, (unsigned long long)((c.Attributes >> 40) & 0xffffff),
+					(c.Attributes & BACKGROUND_TRUECOLOR) ? 1 : 0, want3);
+				SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+				return 1;
+			}
+		}
+		// The slice under a token keeps its role's true-color foreground; the tint
+		// rides under it as the row background, one does not erase the other: the
+		// slice's color side must equal the role color the driver's own palette copy
+		// computes (want_fore, kBack's background side dropped), and the background
+		// loop above pins the slice, the cells past the text and the far corner to
+		// the tint.
+		if ((cells[token_col].Attributes & FOREGROUND_TRUECOLOR) == 0
+			|| ((cells[token_col].Attributes >> 16) & 0xffffff) == 0
+			|| (cells[token_col].Attributes & ~kBack) != (want_fore & ~kBack)) {
+			printf("FAILED tint: the cell under the token is 0x%llx, want the role "
+				"foreground on the tint (want 0x%llx)\n",
+				(unsigned long long)cells[token_col].Attributes,
+				(unsigned long long)want_fore);
+			SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+			return 1;
+		}
+		printf("ok tint: the code row (y=%d): the cell under the token (%d) and the cells "
+			"past the text (%d, 79) draw the tint 0x%06x; the token keeps its foreground\n",
+			3 + (int)row, token_col, text_end, want3);
+	}
+
+	SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+	return 0;
+}
+
 struct Case
 {
 	const char* name;
 	int (*fn)();
 };
-
-// T2: the render's token cache keyed on the scheme generation (spec.md,
-// Cache; story markdown-colorer-fences).  A fake look answers two
-// generations, a fake token source answers ranges; the second render
-// refetches every fence once, a resize does not.  The report prints the
-// fetch count.
-class FenceLookSource : public MdLookSource
-{
-public:
-	unsigned long long m_generation = 52;
-	unsigned long long Generation() override { return m_generation; }
-	unsigned long long Fetch(const char *const *names, int count, MdRegionLook *out) override
-	{
-		(void)names; (void)count; (void)out;
-		return m_generation;
-	}
-};
-
-// One range over each fence line, colored by the case's current fg.  The
-// generation rides the answer unchanged: the key of the entry equals the
-// generation the source answers (the real plugin answers its scheme's), so
-// the render's key-update path stays warm across a resize.
-class FenceTokenSource : public MdTokenSource
-{
-public:
-	int m_fetches = 0;
-	uint32_t m_fg = 0x00ff00;
-	unsigned long long m_generation = 52;   // the scheme the colors come from
-	bool Tokenize(const std::string &lang, const std::vector<std::string> &lines,
-		int budget_ms, std::vector<MdToken> &out) override
-	{
-		(void)lang; (void)budget_ms;
-		for (size_t i = 0; i < lines.size(); ++i) {
-			out.push_back(MdToken{0, 3, 1, static_cast<uint32_t>(i)});
-		}
-		return true;
-	}
-	bool TokenizeV2(const std::string &lang, const std::vector<std::string> &lines,
-		int budget_ms, std::vector<MdTokenRange> &out,
-		unsigned long long &generation) override
-	{
-		(void)lang; (void)budget_ms;
-		++m_fetches;
-		generation = m_generation;   // the key's generation: the scheme of the colors
-		for (size_t i = 0; i < lines.size(); ++i) {
-			out.push_back(MdTokenRange{0, 3, m_fg, 7, false, static_cast<uint32_t>(i)});
-		}
-		return true;
-	}
-};
-
-// Two fences, one language: the render fetches each once (the shared 40 ms
-// budget answers within a millisecond of work).
-int look_fence_generation()
-{
-	auto look = std::make_unique<FenceLookSource>();
-	FenceLookSource *probe = look.get();
-	MdSetLookSourceForTest(std::move(look));
-	auto src = std::make_unique<FenceTokenSource>();
-	FenceTokenSource *fake = src.get();
-	MdSetTokenSourceForTest(std::move(src));
-	const wchar_t *const md = L"```js\nvar x;\n```\n\n```js\nlet y;\n```\n";
-
-	MarkdownDoc doc;
-	doc.Render(md, 80);
-	if (fake->m_fetches != 2) {
-		printf("FAILED look_fence_generation: first render fetched %d, want 2\n",
-			fake->m_fetches);
-		MdSetTokenSourceForTest(nullptr);
-		MdSetLookSourceForTest(nullptr);
-		return 1;
-	}
-
-	doc.Invalidate(72); // a resize: the cache survives, no refetch (R30); the
-	// fake answers the look's generation, so the key the first render stored
-	// (the render updates it from the answer) re-hits: the fetches stay 2,
-	// pinning the key-update path.
-	if (fake->m_fetches != 2) {
-		printf("FAILED look_fence_generation: resize refetched (%d fetches)\n",
-			fake->m_fetches);
-		MdSetTokenSourceForTest(nullptr);
-		MdSetLookSourceForTest(nullptr);
-		return 1;
-	}
-
-	probe->m_generation = 0x12345678ULL; // a scheme change
-	fake->m_generation = 0x12345678ULL;   // the new scheme answers its generation
-	fake->m_fg = 0x00ffff;               // the new scheme's rows
-	doc.Render(md, 80);
-	if (fake->m_fetches != 4) {
-		printf("FAILED look_fence_generation: scheme change fetched %d total, want 4\n",
-			fake->m_fetches);
-		MdSetTokenSourceForTest(nullptr);
-		MdSetLookSourceForTest(nullptr);
-		return 1;
-	}
-	if (doc.Lines().size() < 3) {
-		printf("FAILED look_fence_generation: %zu lines\n", doc.Lines().size());
-		MdSetTokenSourceForTest(nullptr);
-		MdSetLookSourceForTest(nullptr);
-		return 1;
-	}
-	if (doc.Lines()[0].tokens < 0 || doc.Lines()[2].tokens < 0) {
-		printf("FAILED look_fence_generation: a fence line carries no group\n");
-		MdSetTokenSourceForTest(nullptr);
-		MdSetLookSourceForTest(nullptr);
-		return 1;
-	}
-	const MdTokenGroup &g0 = doc.TokenGroups()[doc.Lines()[0].tokens];
-	const MdTokenGroup &g1 = doc.TokenGroups()[doc.Lines()[2].tokens];
-	if (g0.ranges.size() != 1 || g0.ranges[0].start != 4 || g0.ranges[0].end != 7
-		|| g0.ranges[0].fg != 0x00ffff || g0.ranges[0].fg4 != 7
-		|| g1.ranges.size() != 1 || g1.ranges[0].fg != 0x00ffff) {
-		printf("FAILED look_fence_generation: refetch kept the old color or lost the range\n");
-		MdSetTokenSourceForTest(nullptr);
-		MdSetLookSourceForTest(nullptr);
-		return 1;
-	}
-
-	printf("ok look_fence_generation: generation-keyed cache, fetches=%d\n",
-		fake->m_fetches);
-	MdSetTokenSourceForTest(nullptr);
-	MdSetLookSourceForTest(nullptr);
-	return 0;
-}
-
-// T3: the one view-wide contrast verdict of spec.md, Contrast (story
-// markdown-colorer-fences).  The look's batch verdict, keyed (viewer
-// background, scheme generation), decides for the whole view: a scheme whose
-// foregrounds fail 3:1 sends the fences to the plain code role and the prose
-// to the fork table - the same verdict both paths consult, printed once per
-// round.  A passing scheme sends the scheme colors to the fences: the
-// range's 24-bit foreground, the scheme's 4-bit row as the companion, the
-// underline bit on the far attribute (the printer's span pass re-applies
-// it).  A 4-bit scheme answers the 4-bit path: the scheme's fg4, no 3:1
-// check.
-int look_fence_contrast()
-{
-	EnsureTrueColor();
-	static const unsigned int kLight[10] = {0xd0d0d0, 0xd8d8d8, 0xe0e0e0, 0xe8e8e8, 0xf0f0f0,
-		0xf8f8f8, 0xd0d0ff, 0xffd0d0, 0xd0ffd0, 0xffffd0};
-	static const unsigned int kFail[10] = {0xd0d0d0, 0xd8d8d8, 0xe0e0e0, 0xe8e8e8, 0xf0f0f0,
-		0xf8f8f8, 0xd0d0ff, 0xffd0d0, 0x303030, 0xffffd0};
-	static const unsigned int kStyle[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-	if (WriteOverrides("[markdown]\n", 9) != 0) {
-		return 1;
-	}
-	const uint64_t saved = SaveBackground();
-	SetBackground(0x101010);
-	const uint32_t fg = 0x123456;   // the region's row a fence range carries
-	const uint32_t fg4 = 9;         // the scheme's 4-bit row of the same region
-
-	// A passing scheme: the range paints the 24-bit foreground over the
-	// viewer background, the scheme's 4-bit row rides the low bits (a
-	// terminal that ignores RGB shows it), and the underline bit rides the
-	// far attribute for FinishRow's span pass.
-	FakeScheme(91, kLight, kStyle);
-	const uint64_t pass_range = MdRangeColor(fg, fg4, false);
-	if (pass_range != WithBack(TrueFore(fg) | fg4)) {
-		printf("FAILED look_fence_contrast: a passing range is 0x%llx, want 0x%llx\n",
-			(unsigned long long)pass_range,
-			(unsigned long long)WithBack(TrueFore(fg) | fg4));
-		SetBackground((uint32_t)((saved >> 40) & 0xffffff));
-		return 1;
-	}
-	if (MdRangeColor(fg, fg4, true) != (pass_range | kUnderline)) {
-		printf("FAILED look_fence_contrast: an underlined range is 0x%llx, want 0x%llx\n",
-			(unsigned long long)MdRangeColor(fg, fg4, true),
-			(unsigned long long)(pass_range | kUnderline));
-		SetBackground((uint32_t)((saved >> 40) & 0xffffff));
-		return 1;
-	}
-	printf("probe look_fence_contrast: verdict pass, fences 0x%llx, prose 0x%llx\n",
-		(unsigned long long)pass_range, (unsigned long long)MdRunColor(MD_ROLE_CODE));
-
-	// A scheme that fails 3:1 (row 8 at 0x303030), a new generation: the one
-	// verdict sends the fences to the plain code role and the prose to the
-	// fork table, and the fence's color is the code role's color - the same
-	// verdict, one recompute.
-	FakeScheme(92, kFail, kStyle);
-	const uint64_t plain = MdRunColor(MD_ROLE_CODE);
-	const uint64_t fail_range = MdRangeColor(fg, fg4, false);
-	if (fail_range != plain || plain != WantRgb(MD_ROLE_CODE)) {
-		printf("FAILED look_fence_contrast: a failing scheme gives fences 0x%llx prose 0x%llx, want the fork table 0x%llx\n",
-			(unsigned long long)fail_range, (unsigned long long)plain,
-			(unsigned long long)WantRgb(MD_ROLE_CODE));
-		SetBackground((uint32_t)((saved >> 40) & 0xffffff));
-		return 1;
-	}
-	if (MdRangeColor(fg, fg4, true) != (plain | kUnderline)) {
-		printf("FAILED look_fence_contrast: a failing underlined range is 0x%llx, want 0x%llx\n",
-			(unsigned long long)MdRangeColor(fg, fg4, true),
-			(unsigned long long)(plain | kUnderline));
-		SetBackground((uint32_t)((saved >> 40) & 0xffffff));
-		return 1;
-	}
-	printf("probe look_fence_contrast: verdict fail, fences 0x%llx = prose 0x%llx\n",
-		(unsigned long long)fail_range, (unsigned long long)plain);
-
-	// A 4-bit scheme (the same failing rows): the 4-bit path answers - the
-	// scheme's fg4, no 3:1 check.
-	EnsureNoTrueColor();
-	if (MdRangeColor(fg, fg4, false) != WithBack(fg4)) {
-		printf("FAILED look_fence_contrast: the 4-bit path gives 0x%llx, want 0x%llx\n",
-			(unsigned long long)MdRangeColor(fg, fg4, false),
-			(unsigned long long)WithBack(fg4));
-		SetBackground((uint32_t)((saved >> 40) & 0xffffff));
-		EnsureTrueColor();
-		return 1;
-	}
-	// The fail path's companion bits: the range carries the code role's RGB
-	// row in the truecolor bits and the code role's fallback16 (the 0x0d row)
-	// in the low nibble.  An fg/fg4 swap on the fail path splits to the other
-	// pair, where the equality with the prose color cannot see it.
-	RGB split_fg, split_bg;
-	extractColor(fail_range, split_fg, split_bg);
-	const iRGB split_rgb = toIRGB(split_fg);
-	if (split_rgb.r != 0xff || split_rgb.g != 0x87 || split_rgb.b != 0xff
-		|| (fail_range & 0x0f) != 13) {
-		printf("FAILED look_fence_contrast: the fail range splits to 0x%02X%02X%02X/%llu, want 0xFF87FF/13\n",
-			split_rgb.r, split_rgb.g, split_rgb.b,
-			(unsigned long long)(fail_range & 0x0f));
-		SetBackground((uint32_t)((saved >> 40) & 0xffffff));
-		EnsureTrueColor();
-		return 1;
-	}
-	printf("probe look_fence_contrast: the fail range is the code row 0xFF87FF with the 0x0d companion\n");
-	EnsureTrueColor();
-	SetBackground((uint32_t)((saved >> 40) & 0xffffff));
-	printf("ok look_fence_contrast: one view-wide verdict, fences with the prose\n");
-	return 0;
-}
 
 const Case s_cases[] = {
 	{"look_first_call", look_first_call},
@@ -1758,12 +1199,7 @@ const Case s_cases[] = {
 	{"look_ini", look_ini},
 	{"look_generation", look_generation},
 	{"look_new_roles", look_new_roles},
-	{"tokens_v2", tokens_v2},
-	{"tokens_v2_limits", tokens_v2_limits},
-	{"tokens_v2_v1_callers", tokens_v2_v1_callers},
-	{"tokens_v2_cost", tokens_v2_cost},
-	{"look_fence_generation", look_fence_generation},
-	{"look_fence_contrast", look_fence_contrast},
+	{"tint", tint},
 };
 } // namespace
 
@@ -1803,7 +1239,6 @@ int main(int argc, char** argv)
 		--argc;
 	}
 	EnsureConsoleOutput(rgb);
-	g_rgb = rgb;   // the tokens_v2 rows follow the active scheme
 	setvbuf(stdout, nullptr, _IONBF, 0);   // the crash trace keeps the case log
 	// Same startup as far2l main (main.cpp:431-437): the plugin manager scans
 	// `Plugins` next to the app binary (FAR2L_APP).
