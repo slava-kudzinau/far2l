@@ -1,6 +1,6 @@
 ---
 description: The Alt-F3 browser page looks like GitHub, highlights code, and has a width (60, 70 or 80 percent) and a theme (light, dark or auto) that the reader sets in a small page control or in a defaults file.
-status: in-progress
+status: in-review
 size: M
 risk: none
 depends-on: markdown-browser-view
