@@ -20,8 +20,8 @@ hash, so a resize does not re-tokenize. With no plugin, a fence shows the plain 
 
 - **R47** The token group is in cells of the code run (not source columns), so a horizontal
   scroll colors the right cells. Cost if wrong: none.
-- **R38** The cache key is the fence language and a 64-bit FNV-1a hash of the fence text; the
-  cache lives for the process. A resize reuses it.
+- **R38** The cache key is the fence language and a 64-bit FNV-1a hash of the fence text;
+  the cache lives in the viewer window's `MarkdownDoc`, across re-renders and resizes.
 - **R37** Tokenizing runs under four limits: 1000 characters per source line, 400 lines per
   fence, 65536 bytes per fence, 40 ms for all fences of one render. A fence that hits a limit
   shows the plain code role.
