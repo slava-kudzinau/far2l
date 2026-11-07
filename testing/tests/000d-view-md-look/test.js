@@ -87,8 +87,13 @@ var fence_y = h.Y + 2
 CheckTint("code cell", 4, fence_y)
 CheckTint("past the text", 16, fence_y)
 CheckTint("right edge", 79, fence_y)
-// The row after the block is plain: the viewer's own blue background, as on
-// the rows outside the block.
+// The blank gap row inside the block and the row after it are plain: the
+// viewer's own blue background, as on the rows outside the block.
+var gap = ReadCell(2, fence_y + 1)
+if (gap.BackTC != 0x800000 || gap.Back != 1 || !gap.IsBackTC) {
+	Log("gap back " + gap.Back + " tc " + gap.IsBackTC + " " + gap.BackTC.toString(16))
+	Panic("the gap row of the fence lost the viewer background")
+}
 var plain = ReadCell(2, fence_y + 2)
 if (plain.BackTC != 0x800000 || plain.Back != 1 || !plain.IsBackTC) {
 	Log("plain back " + plain.Back + " tc " + plain.IsBackTC + " " + plain.BackTC.toString(16))

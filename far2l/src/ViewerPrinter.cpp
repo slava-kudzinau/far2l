@@ -119,18 +119,6 @@ uint64_t MarkdownRunColor(uint64_t role)
 	const uint64_t body = FarColorToReal(COL_VIEWERTEXT);
 	return (MdRunColor(role) & ~kBackBits) | (body & kBackBits);
 }
-
-
-// The row fill of a tinted row (story markdown-code-tint): the viewer text color with
-// its background bits replaced by the palette's code tint (packed 0xBBGGRR).  The
-// foreground and the index nibble stay the viewer's: a backend that reads the 24-bit
-// background reads the truecolor bits, which SET_RGB_BACK sets.
-uint64_t TintFill(uint64_t tint_bgr)
-{
-	uint64_t attr = FarColorToReal(COL_VIEWERTEXT);
-	SET_RGB_BACK(attr, tint_bgr);
-	return attr;
-}
 }
 
 MarkdownPrinter::MarkdownPrinter(uint64_t sel_color, const std::vector<MdLine> *lines,

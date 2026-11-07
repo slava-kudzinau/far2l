@@ -26,7 +26,6 @@
 #include "ViewerPrinter.hpp"
 #include "interf.hpp"
 #include "scrbuf.hpp"
-#include "farcolors.hpp"
 
 #include <utils.h>
 
