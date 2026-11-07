@@ -119,4 +119,8 @@ endif ()
 install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/md-open.sh"
     DESTINATION "${MD_OPEN_DEST}" COMPONENT ${MD_OPEN_COMPONENT} ${MD_OPEN_OPTIONS})
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/marked.min.js" "${CMAKE_CURRENT_SOURCE_DIR}/marked.LICENSE.md"
+    "${CMAKE_CURRENT_SOURCE_DIR}/github-markdown-light.css" "${CMAKE_CURRENT_SOURCE_DIR}/github-markdown-dark.css"
+    "${CMAKE_CURRENT_SOURCE_DIR}/github-markdown.LICENSE.md"
+    "${CMAKE_CURRENT_SOURCE_DIR}/highlight.min.js" "${CMAKE_CURRENT_SOURCE_DIR}/hljs-github.min.css"
+    "${CMAKE_CURRENT_SOURCE_DIR}/hljs-github-dark.min.css" "${CMAKE_CURRENT_SOURCE_DIR}/highlight.LICENSE.md"
     DESTINATION "${MD_OPEN_DEST}" COMPONENT ${MD_OPEN_COMPONENT} ${MD_OPEN_OPTIONS})

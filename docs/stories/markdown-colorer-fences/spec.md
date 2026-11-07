@@ -24,24 +24,27 @@ style per token. The core's token group carries a color and an underline bit, no
 
 ### Plugin export `ColorerTokenizeV2`
 
-`plugins/colorer/src/pcolorer2/MdExport.cpp`, beside V1, in the same `GetPluginInfo` table.
+`plugins/colorer/src/pcolorer2/ColorerExport.cpp`, beside `ColorerTokenizeV1`, as a
+`SHAREDSYMBOL` export. The core binds it with `dlsym`, as V1.
 
-```cpp
-int ColorerTokenizeV2(int abi, const wchar_t *language, const wchar_t *const *lines,
-                      int nLines, long long budget_us,
-                      unsigned int *cells, int capacity, unsigned int *generation);
+```c++
+int ColorerTokenizeV2(int abi, const wchar_t* language, const wchar_t* const* lines,
+                      int nLines, int budget_ms,
+                      uint64_t* cells, int capacity, uint64_t* generation);
 ```
 
 - Same input and limits as V1: a line cap of 32 lines, a cell cap of 256 cells. The deadline is
-  in microseconds, 100 ms in the viewer.
+  in milliseconds, 40 ms shared for the fences in the viewer, 100 ms in the driver's cost case.
 - Cell stride: 8 words. `[0]` start column, `[1]` end column (1-based, inclusive). `[2]` the
   region's foreground as `0xRRGGBB`, `[3]` the scheme's 4-bit foreground (0..15). `[4]` the
   Colorer style word (bit 4 = underline). `[5]..[7]` zero.
 - The colors resolve through `HrcLibrary::getRegionDefine` for the active scheme, with the F4
   fallback chain: the region, then its parents, then `def:Text`.
-- Return codes as V1: 0 with a count in the return, -1 (no catalog), -2 (unknown language), -3
-  (fatal parse). `*generation` carries the scheme generation of the answer, and 0 on a code
-  other than 0.
+- Return codes as V1: the count of cells written. Zero is a fence with no tokens. -1 is no
+  catalog, -2 is an unknown language, -3 is a fatal parse. `*generation` carries the scheme
+  generation of the answer, and 0 on a code other than a count. A deadline stop returns the
+  cells written. The viewer paints that partial group and caches it as-is, like V1's code 1
+  path.
 - `abi == 1` for this shape; a larger abi answers -2.
 - The export never creates `FarEditorSet`: the same three-call shape as the look export (count
   the catalog, count the lines, load the scheme, tokenize).
@@ -57,7 +60,7 @@ int ColorerTokenizeV2(int abi, const wchar_t *language, const wchar_t *const *li
 
 ### The token group and the cache
 
-`far2l/src/markdown/MarkdownDoc.{hpp,cpp}`, `MarkdownRender.cpp`.
+`far2l/src/markdown/MarkdownRender.{hpp,cpp}` (the class `MarkdownDoc`).
 
 - A cached range: `{start, end, fg (0xRRGGBB), fg4 (0..15), underline (bool)}`, not a class. The
   class survives only as the fallback path's alias color.
@@ -106,14 +109,15 @@ contract for the render path.
 
 - `sh testing/markdown/look-driver.sh --case tokens_v2`: a `javascript` fence through the real
   plugin: keyword, function, string, number, constant, operator, tail. The per-word values equal
-  F4. On `far2l.hrd`: keyword `0x00ff00`, string `0x5fd7d7`, comment `0xb2b2b2`, number
-  `0x00d7ff`, constant `0x00ffff`, operator `0xc0c0c0`. On `console.hrd`: the scheme's 4-bit
-  rows. An unset color takes the F4 chain to `def:Text`.
+  F4. On `far2l.hrd`: keyword `0xffffff`, function `0x6060f0`, string `0x88ee88`, number
+  (`def:NumberDec`) `0x00e020`, constant (`def:BooleanConstant`) `0xa030ff`, operator
+  (`def:Symbol`) `0xe0e0c0`.
+  On `console.hrd`: the scheme's 4-bit rows. An unset color takes the F4 chain to `def:Text`.
 - `tokens_v2_limits`: 32 lines, 256 cells, the deadline, as V1's `look_codes`.
 - `tokens_v2_cost`: a 20k-line fence renders inside the budget; the report prints the mean and
   the worst.
-- `tokens_v2_v1_callers`: V1 answers the javascript fence as before (the four classes, 6-word
-  stride), so the old callers keep working.
+- `tokens_v2_v1_callers`: V1 answers the javascript fence as before (the four classes, the
+  4-word emit callback), so the old callers keep working.
 - `look_fence_contrast`: a fake scheme whose foregrounds fail 3:1: fences take the plain code
   role, prose the fork table, one verdict.
 - `look_fence_generation`: two generations: the second render refetches the ranges.

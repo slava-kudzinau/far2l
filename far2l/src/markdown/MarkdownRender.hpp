@@ -6,6 +6,7 @@
 #include <vector>
 #include <string>
 #include <chrono>
+#include <tuple>
 #include <cstdint>
 #include "MdColorer.hpp"
 
@@ -37,11 +38,13 @@ struct MdRun {
     uint64_t role = MD_ROLE_BODY;   // an MdRole
 };
 
-// The tokens of one screen row of a code fence, in cells of that row's
-// single code run (the 4-cell code indent counted), so the printer needs no
-// offset math and a horizontal scroll works on the same coordinates.
+// The token ranges of one fence: one group per fence, shared by its lines,
+// in cells of that row's single code run (the 4-cell code indent counted), so
+// the printer needs no offset math and a horizontal scroll works on the same
+// coordinates.  A range carries the scheme's look (fg, fg4, underline), not a
+// class (story markdown-colorer-fences): PrintCodeRuns paints it.
 struct MdTokenGroup {
-    std::vector<MdToken> tokens;
+    std::vector<MdTokenRange> ranges;
 };
 
 // One display line: an ordered sequence of styled runs plus its source offset: the file
@@ -115,9 +118,12 @@ private:
     std::vector<MdTokenGroup> m_token_groups;
 
     // Fence token cache keyed by (normalized fence language, FNV-1a of the
-    // cap-trimmed fence source), in the form of m_mermaid_cache: it survives
-    // Invalidate(width) and a resize.
-    std::map<std::pair<std::string, uint64_t>, std::vector<MdTokenGroup>> m_token_cache;
+    // cap-trimmed fence source, the Colorer scheme generation), in the form of
+    // m_mermaid_cache: a scheme change re-keys every fence, so the next render
+    // refetches it once; a resize does not (R30).  No eviction: entries live
+    // for the doc's life.
+    std::map<std::tuple<std::string, uint64_t, unsigned long long>,
+        std::vector<MdTokenGroup>> m_token_cache;
 };
 
 #endif // FAR2L_MARKDOWN_RENDER_HH

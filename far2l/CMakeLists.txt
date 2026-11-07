@@ -307,7 +307,7 @@ target_link_libraries(far2l_md PUBLIC qjs)
 target_link_libraries(far2l_md PRIVATE z)
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    SET (WINPORT -Wl,-force_load WinPort wineguts utils)
+    SET (WINPORT -Wl,-force_load WinPort -Wl,-force_load far2l_md wineguts utils)
 else()
     SET (WINPORT -Wl,--whole-archive WinPort -Wl,--no-whole-archive)
 endif()
