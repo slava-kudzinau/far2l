@@ -105,7 +105,7 @@ export BUILD=../far2l.markdown-colorer-look.build
 cmake --build "$BUILD" -j8            # far2l and all plugins, once
 sh testing/markdown/ascii-golden.sh
 sh testing/markdown/ascii-driver.sh
-sh testing/markdown/highlight-driver.sh
+HIGH_BUILD="$BUILD" sh testing/markdown/highlight-driver.sh
 sh testing/markdown/look-driver.sh
 (cd testing && pkill -9 -f -- '--test=/tmp/far2l'; sleep 1
  find tests -maxdepth 1 -type s -delete
