@@ -23,6 +23,10 @@
 #include "mix/pathmix.hpp"
 #include "farcolors.hpp"
 #include "markdown/MdPalette.hpp"
+#include "ViewerPrinter.hpp"
+#include "interf.hpp"
+#include "scrbuf.hpp"
+#include "farcolors.hpp"
 
 #include <utils.h>
 
@@ -1086,6 +1090,109 @@ int tint()
 		return 1;
 	}
 	printf("ok tint: a background change redraws 0x%06x on the new pair\n", want2);
+
+	// 5. The runs ride the tint (review): a printed code row is one uniform tint
+	// background.  The cells the runs paint - a cell under a token, and the cells
+	// past the end of the text - carry the same 24-bit background: the driver's own
+	// BlendEighth of the code foreground into the viewer background, not the
+	// product's output.  The token slice keeps its foreground.
+	if (WriteOverrides("[markdown]\n", 83) != 0) {
+		return 1;
+	}
+	SetBackground(0x101010);
+	const uint64_t bg3 = FarColorToReal(COL_VIEWERTEXT);
+	const uint32_t want3 = BlendEighth(AttrBack(bg3), AttrFore(MdRunColor(MD_ROLE_CODE)));
+	// The virtual screen behind Text/GetText exists only after far2l's console
+	// init; the headless driver allocates the standard 80x25 here (idempotent)
+	// and sets the screen extents the console calls clip against.
+	ScrBuf.AllocBuf(80, 25);
+	COORD con_size{};
+	GetVideoMode(con_size);
+	{
+		size_t row = 0;
+		while (row < doc.Lines().size() && doc.Lines()[row].tint < 0)
+			++row;
+		if (row >= doc.Lines().size()) {
+			printf("FAILED tint: the fixture has no code row to print\n");
+			return 1;
+		}
+		const MdLine &code_line = doc.Lines()[row];
+		int text_end = 0;   // one past the last text cell (the runs' total width)
+		for (const MdRun &run : code_line.runs)
+			text_end += (int)run.text.size();
+		// A cell under a token: the group's first token on the tokenized path, the
+		// first cell of the code text (the 4-cell indent counted) on the plain one.
+		int token_col = 4;
+		uint64_t token_role = MD_ROLE_CODE;
+		if (code_line.tokens >= 0
+			&& (size_t)code_line.tokens < doc.TokenGroups().size()
+			&& !doc.TokenGroups()[code_line.tokens].tokens.empty()) {
+			const MdToken &tok = doc.TokenGroups()[code_line.tokens].tokens[0];
+			token_col = (int)tok.start;
+			token_role = MdRoleForTokenClass(tok.cls);
+		}
+		const uint64_t want_fore = MdRunColor(token_role) & ~kBack;
+		fprintf(stderr, "trace: E want 0x%llx code 0x%llx\n", (unsigned long long)want_fore,
+			(unsigned long long)(MdRunColor(MD_ROLE_CODE) & ~kBack));
+		MarkdownPrinter printer(FarColorToReal(COL_VIEWERSELECTEDTEXT),
+			&doc.Lines(), &doc.TokenGroups());
+		for (size_t i = 0; i <= row; ++i) {
+			GotoXY(0, 3 + (int)i);
+			printer.Print(0, 80, L"");
+		}
+		// The runs land in the virtual screen (ScrBuf), the fill straight on the
+		// console buffer; the flush merges them, the way ShowScreen does.
+		ScrBuf.Flush();
+		std::vector<CHAR_INFO> cells(80);
+		GetText(0, 3 + (int)row, 79, 3 + (int)row, cells.data(),
+			80 * (int)sizeof(CHAR_INFO));
+		{
+			std::vector<CHAR_INFO> r0(80);
+			GetText(0, 3, 79, 3, r0.data(), 80 * (int)sizeof(CHAR_INFO));
+			fprintf(stderr, "trace: r0 0=0x%llx 5=0x%llx 40=0x%llx\n",
+				(unsigned long long)r0[0].Attributes, (unsigned long long)r0[5].Attributes,
+				(unsigned long long)r0[40].Attributes);
+		}
+		fprintf(stderr, "trace: cells 3=0x%llx 4=0x%llx 5=0x%llx 9=0x%llx 10=0x%llx 79=0x%llx\n",
+			(unsigned long long)cells[3].Attributes, (unsigned long long)cells[4].Attributes,
+			(unsigned long long)cells[5].Attributes, (unsigned long long)cells[9].Attributes,
+			(unsigned long long)cells[10].Attributes, (unsigned long long)cells[79].Attributes);
+		fprintf(stderr, "trace: F now 0x%llx\n",
+			(unsigned long long)(MdRunColor(token_role) & ~kBack));
+		fprintf(stderr, "trace: G code 0x%llx\n",
+			(unsigned long long)(MdRunColor(MD_ROLE_CODE) & ~kBack));
+		static const int s_cols[] = {token_col, text_end, 79};
+		for (int col : s_cols) {
+			const CHAR_INFO &c = cells[col];
+			if (!(c.Attributes & BACKGROUND_TRUECOLOR)
+				|| (uint32_t)((c.Attributes >> 40) & 0xffffff) != want3) {
+				printf("FAILED tint: the cell at column %d draws back 0x%06llx (tc=%d), want 0x%06x\n",
+					col, (unsigned long long)((c.Attributes >> 40) & 0xffffff),
+					(c.Attributes & BACKGROUND_TRUECOLOR) ? 1 : 0, want3);
+				SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+				return 1;
+			}
+		}
+		// The console resolves a true-color foreground to its palette color, the
+		// same color for every cell of the row.  The slice under a token must
+		// carry a foreground at all - the tint rides under it, it does not
+		// replace it: the slice's color side equals the fill's, and the
+		// background loop above pins the slice, the cells past the text and the
+		// far corner to the tint.
+		if ((cells[token_col].Attributes & FOREGROUND_TRUECOLOR) == 0
+			|| ((cells[token_col].Attributes >> 16) & 0xffffff) == 0
+			|| (cells[token_col].Attributes & ~kBack) != (cells[text_end].Attributes & ~kBack)) {
+			printf("FAILED tint: the cell under the token is 0x%llx, want a true-color "
+				"foreground on the tint (fill cell 0x%llx)\n",
+				(unsigned long long)cells[token_col].Attributes,
+				(unsigned long long)cells[text_end].Attributes);
+			SetBackground((uint32_t)((saved >> 40) & 0xffffff));
+			return 1;
+		}
+		printf("ok tint: the code row (y=%d): the cell under the token (%d) and the cells "
+			"past the text (%d, 79) draw the tint 0x%06x; the token keeps its foreground\n",
+			3 + (int)row, token_col, text_end, want3);
+	}
 
 	SetBackground((uint32_t)((saved >> 40) & 0xffffff));
 	return 0;

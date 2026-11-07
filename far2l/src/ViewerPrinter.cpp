@@ -197,10 +197,21 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 		for (const MdRun &run : line->runs) {
 			const bool tokenized = line->tokens >= 0 && _groups != nullptr &&
 				(size_t)line->tokens < _groups->size() && run.role == MD_ROLE_CODE;
-			const uint64_t run_color = _selection ? _sel_color : MarkdownRunColor(run.role);
+			// The runs ride the tint: a run keeps its foreground (and the underline
+			// bit), the background is the row's tint, not the plain viewer background -
+			// the run color must not punch plain-background holes through the fill
+			// (story markdown-code-tint, review).  The selection overlay wins over
+			// the tint: on a selection row the tint is already off.
+			uint64_t run_color = _selection ? _sel_color : MarkdownRunColor(run.role);
+			if (tint >= 0) {
+				SET_RGB_BACK(run_color, (uint64_t)tint);
+			}
+			fprintf(stderr, "probe-print: role %u color 0x%llx gen %llu\n", (unsigned)run.role,
+				(unsigned long long)run_color,
+				(unsigned long long)WINPORT(GetConsoleColorPalette)(NULL));
 			SetColor(run_color);
 			if (tokenized) {
-				PrintCodeRuns((*_groups)[line->tokens], run.text, pos, skip_len, print_len);
+				PrintCodeRuns((*_groups)[line->tokens], run.text, pos, skip_len, print_len, tint);
 				continue;
 			}
 
@@ -286,7 +297,7 @@ void MarkdownPrinter::Cells(const wchar_t *&p, int &pos, int &print_len, int64_t
 // Print one code run, coloring the token slices of `group` (plan T4).  Cells
 // past the last token keep the code role; the row padding keeps the text role.
 void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstring &text,
-	int &pos, int skip_len, int &print_len)
+	int &pos, int skip_len, int &print_len, int64_t tint)
 {
 	const wchar_t *p = text.c_str();
 	bool joining = false;
@@ -305,9 +316,23 @@ void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstrin
 	size_t ti = 0;   // index over the group's tokens, ascending
 	while (print_len > 0 && *p) {
 		if (ti < group.tokens.size() && (int64_t)pos >= (int64_t)group.tokens[ti].start) {
-			SetColor(_selection ? _sel_color : MarkdownRunColor(MdRoleForTokenClass(group.tokens[ti].cls)));
+			// Every color of this row rides the tint, the token slice and the plain
+			// code cells between tokens alike (story markdown-code-tint, review).
+			uint64_t token_color = _selection ? _sel_color :
+				MarkdownRunColor(MdRoleForTokenClass(group.tokens[ti].cls));
+			if (tint >= 0) {
+				SET_RGB_BACK(token_color, (uint64_t)tint);
+			}
+			fprintf(stderr, "probe-token: cls %u role %u color 0x%llx pos %d\n",
+				(unsigned)group.tokens[ti].cls, (unsigned)MdRoleForTokenClass(group.tokens[ti].cls),
+				(unsigned long long)token_color, pos);
+			SetColor(token_color);
 			Cells(p, pos, print_len, (int64_t)group.tokens[ti].end);
-			SetColor(_selection ? _sel_color : MarkdownRunColor(MD_ROLE_CODE));
+			uint64_t code_color = _selection ? _sel_color : MarkdownRunColor(MD_ROLE_CODE);
+			if (tint >= 0) {
+				SET_RGB_BACK(code_color, (uint64_t)tint);
+			}
+			SetColor(code_color);
 			++ti;
 			continue;
 		}
