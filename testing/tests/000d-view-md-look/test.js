@@ -45,9 +45,9 @@ ExpectString("left/fixture.md")
 // Session 1: the harness runs a truecolor terminal (COLORTERM), so the scheme is
 // far2l.hrd, and the 3:1 batch verdict against the blue Viewer.Text fails
 // (markdown:EmText) - one verdict decides for the whole view (story
-// markdown-colorer-fences, spec Contrast): the scheme rows decide (the scheme
-// rows are the driver's `look_real_hrd`); emphasis and body take the plain code
-// look's cyan 0xffff00 with the theme underline.
+// markdown-colorer-fences, spec Contrast): the scheme rows ride on the verdict
+// fail (they equal the driver's `look_real_hrd` rows); emphasis and body take
+// the plain code look's cyan 0xffff00 with the theme underline.
 // The table draws with box characters.
 var h = ExpectString("Heading")
 CheckLook("heading", h.X, h.Y, 0x5fffff, true)
@@ -94,8 +94,8 @@ ExpectAppExit(0);
 // --- Third run: the 16-color harness. Under --norgb the Colorer picks the
 // scheme's console.hrd, and a 4-bit scheme always passes the 3:1 gate, so the
 // fences print the scheme's 4-bit rows (V2's fg4); a cell with no scheme row
-// keeps the code role's plain look in the truecolor bits (R52). The console
-// scheme's attr carries the underline bit, so the scheme's rows ride underlined.
+// keeps the code role's plain look in the truecolor bits (R52). The code role's
+// theme attr underlines, and the span re-apply carries it onto the scheme rows.
 function CheckFence(name, x, y, fore, tc, underlined) {
  var cell = ReadCell(x, y)
  if (cell.Fore != fore || cell.ForeTC != tc) {

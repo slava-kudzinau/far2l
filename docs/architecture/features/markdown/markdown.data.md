@@ -37,7 +37,7 @@ flowchart LR
 | Top row, `m_md_top` | Index into `Lines()`. `m_md_top_pos` is the `FilePos` of the last sync. | `SetMarkdownTop` | While the file is open |
 | Screen rows, `m_md_screen`, `Strings` | The rows on screen. `Strings` holds the joined text for length and link scans. | `ReadStringMarkdown` | One redraw |
 | Mermaid cache, `m_mermaid_cache` | Art rows, keyed by source hash and width. An empty entry is a failed fence. | `MarkdownDoc::Render` | One render pass |
-| Token cache, `m_token_cache` | Fence tokens, keyed by the normalized language and a hash of the fence source. Survives `Invalidate(width)` and a resize. | `MarkdownDoc::Render` | The viewer window's `MarkdownDoc`, across file switches |
+| Token cache, `m_token_cache` | Fence token ranges, keyed by the normalized language, a hash of the fence source, and the scheme generation. Survives `Invalidate(width)` and a resize. | `MarkdownDoc::Render` | The viewer window's `MarkdownDoc`, across file switches |
 | Colorer look cache | The ten `MdRegionLook` rows of one scheme generation, plus the 3:1 batch verdict keyed on (viewer background, generation) | `MdPalette.cpp`, mutex-guarded; refresh on a generation change, probed with a count-0 export call | The process, across file switches |
 | JS runtime, `g_engine` | One quickjs-ng runtime and context | `build_engine` | The process, or until a timeout |
 
@@ -68,7 +68,7 @@ flowchart LR
 | `far2l/bootstrap/mermaid-ascii.js` | `beautiful-mermaid` 1.1.3, about 84 KB | Committed output of `far2l/bootstrap/mermaid-ascii/build.sh` | `AsciiMermaid` |
 | `far2l/bootstrap/marked.min.js` | marked v18.1.3 | Committed copy of the npm file | `md-open.sh` |
 | mermaid | 12.3.0 | `cdn.jsdelivr.net`, with a `sha384` hash, never in the repo | The browser page |
-| Colorer plugin exports | `ColorerTokenizeV1` (fence tokens), `ColorerRegionLookV1` (scheme colors and style for ten region names, plus a scheme generation) | The bundled Colorer plugin, module `colorer.far-plug-wide`, loaded with `FindPlugin` and `dlopen(RTLD_LAZY\|RTLD_NOLOAD)` | `MdColorer.{hpp,cpp}` |
+| Colorer plugin exports | `ColorerTokenizeV1` (fence token classes). `ColorerTokenizeV2` (token ranges with the scheme's 24-bit and 4-bit foregrounds and a style word, plus a scheme generation). `ColorerRegionLookV1` (scheme colors and style for ten region names, plus a scheme generation) | The bundled Colorer plugin, module `colorer.far-plug-wide`, loaded with `FindPlugin` and `dlopen(RTLD_LAZY\|RTLD_NOLOAD)` | `MdColorer.{hpp,cpp}` |
 
 ## Environment
 

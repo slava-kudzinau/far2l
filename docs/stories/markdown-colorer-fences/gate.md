@@ -40,7 +40,7 @@ flowchart LR
   the underline. A cell with no range keeps the plain code role.
 - The 3:1 contrast verdict of markdown-colorer-look decides for the whole view. On a failure,
   fences use the plain code role, and prose the fork table.
-- A 20k-line fence renders inside the 40 ms budget; task 4 measures it.
+- A 20k-line fence renders inside the 100 ms budget; task 4 measures it.
 
 ### Decisions the model made
 
