@@ -27,10 +27,10 @@ style per token. The core's token group carries a color and an underline bit, no
 `plugins/colorer/src/pcolorer2/ColorerExport.cpp`, beside `ColorerTokenizeV1`, as a
 `SHAREDSYMBOL` export. The core binds it with `dlsym`, as V1.
 
-```cpp
-int ColorerTokenizeV2(int abi, const wchar_t *language, const wchar_t *const *lines,
-                      int nLines, long long budget_ms,
-                      unsigned int *cells, int capacity, unsigned int *generation);
+```c++
+int ColorerTokenizeV2(int abi, const wchar_t* language, const wchar_t* const* lines,
+                      int nLines, int budget_ms,
+                      uint64_t* cells, int capacity, uint64_t* generation);
 ```
 
 - Same input and limits as V1: a line cap of 32 lines, a cell cap of 256 cells. The deadline is
