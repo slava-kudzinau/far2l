@@ -905,6 +905,46 @@ int slug_probe()
 	return rc;
 }
 
+// The bridge path of the four rows the story fixed: the name MdColorer
+// sends must be the name the export resolves (R11). A dead bridge row shows
+// here as an rc of -2 for the normalized name.
+int alias_probe()
+{
+	std::string why;
+	if (!LoadModules(why) || !CreateEditorSet(why)) {
+		printf("FAILED alias_probe: %s\n", why.c_str());
+		return 1;
+	}
+	struct Pair { const char* slug; const char* want; };
+	static const Pair s_pairs[] = {
+		{"gitignore", "gitignore"}, {"apacheconf", "apache"},
+		{"handlebars", "twig"}, {"brainfuck", "lisp"},
+	};
+	const wchar_t* line = L"int a = \"s\"; // c\n";
+	const wchar_t* lines[1] = {line};
+	int rc = 0;
+	for (const Pair& p : s_pairs) {
+		const std::string norm = MdNormalizeLangName(p.slug);
+		if (norm != p.want) {
+			printf("FAILED alias_probe: %s maps to %s\n", p.slug, norm.c_str());
+			rc = 1;
+		}
+		wchar_t w[64];
+		int n = 0;
+		for (; n < 62 && norm[n] != '\0'; ++n) {
+			w[n] = static_cast<wchar_t>(static_cast<unsigned char>(norm[n]));
+		}
+		w[n] = 0;
+		std::vector<Span> spans;
+		const int rc_one = g_tokenize(w, lines, 1, Collect, &spans, 2000);
+		printf("ALIAS %s %s %d\n", p.slug, norm.c_str(), rc_one);
+		if (rc_one != 0) {
+			rc = 1;
+		}
+	}
+	return rc;
+}
+
 const Case s_cases[] = {
 	{"alias_maps_cpp", alias_maps_cpp},
 	{"alias_maps_zsh", alias_maps_zsh},
@@ -923,6 +963,7 @@ const Case s_cases[] = {
 	{"layout_unchanged", layout_unchanged},
 	{"print_keyword", print_keyword},
 	{"slug_probe", slug_probe},
+	{"alias_probe", alias_probe},
 	{"print_string", print_string},
 	{"print_comment", print_comment},
 	{"print_number", print_number},
