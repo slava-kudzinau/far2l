@@ -16,7 +16,7 @@ Owner words, 2026-11-07: "use github markdown renderer with mermaid and code hig
 | # | Story | Size | Risk | Depends on | Outcome |
 |---|---|---|---|---|---|
 | 1 | [markdown-browser-github-look](markdown-browser-github-look/story.md) | M | none | markdown-browser-view | GitHub style, highlighted code and a mermaid theme that follows light and dark. A small gear control with a saved choice. `md-view.ini`, a browser setting and a page cache. |
-| 2 | [markdown-browser-linked-files](markdown-browser-linked-files/story.md) | M | security | story 1 | A link to a local `.md` file opens that file, rendered, in the same page. Bundle, limits, and a manifest cache. |
+| 2 | [markdown-browser-tree-panel](markdown-browser-tree-panel/story.md) | M | security | story 1 | A file-tree panel on the left of the page. A click on a tree file or on a local link shows that file in the same page. Settings `tree`, `root`, `tree_depth`, `tree_max_files`. |
 
 The stories run in series, not in parallel. Both edit `far2l/bootstrap/md-open.sh` and the page template, and story 2 reuses the page name and the cache rule of story 1.
 
@@ -39,6 +39,7 @@ The stories run in series, not in parallel. Both edit `far2l/bootstrap/md-open.s
 | 2026-11-07 | Mermaid stays on the CDN and follows the theme. | Offline mermaid reverses ADR-005 and is a separate decision. |
 | 2026-11-07 | The browser is a setting: `auto`, a name, or a path. | The default is Firefox, but it may be Chrome. |
 | 2026-11-07 | Linked files are a pre-rendered bundle, in a second story. | A `file://` page cannot fetch other files, and a local server needs a new ADR. |
+| 2026-11-07 | Story 2 shows a file tree of the root, not a link crawl. | Owner change: "like Zed's project panel". Links outside the root show as text with a note. |
 | 2026-11-07 | The page is cached by a hash of the file path. | Stable storage, several files in several tabs, and no crawl for an unchanged bundle. |
 
 ## Assumed

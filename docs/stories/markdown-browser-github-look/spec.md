@@ -93,4 +93,4 @@ No value goes through `eval`, `sh -c` or an unquoted expansion. A value with a s
 
 ## Out of scope
 
-The 5 MB offline mermaid bundle. A far2l Options dialog and `config.ini` keys. Any C++ change. The terminal Markdown view. Live reload and a local server. Links between local Markdown files (story `markdown-browser-linked-files`). Cleaning old pages from the cache folder.
+The 5 MB offline mermaid bundle. A far2l Options dialog and `config.ini` keys. Any C++ change. The terminal Markdown view. Live reload and a local server. Links between local Markdown files (story `markdown-browser-tree-panel`). Cleaning old pages from the cache folder.
