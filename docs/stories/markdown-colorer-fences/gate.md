@@ -103,8 +103,8 @@ scan=yes verifier=none
 ## Spend
 
 - Budget: M story. $15 spend, $20 hard stop.
-- Last recorded: build start, before the first dispatch; the harness task costs ride on this
-  line at close-out.
+- Last recorded: at merge. The harness task costs ride on this line. Story agents (T1-T4 plus
+  four reviews, T5/T6 in the main session): $2.99 of the $15 budget.
 
 ## Check
 
@@ -163,22 +163,50 @@ story's Done list.
 
 ### What was built
 
-_To fill at close-out: same as "What it builds", plus one paragraph on what the finished thing
-does, from the close-out report._
+Same as "What it builds", plus: a javascript fence in F3 shows the scheme's function name,
+boolean constant, operator, number and string colors, with the underline where the scheme
+underlines, matching F4 on the same file. Pressing F4 shows the same colors. Changing the scheme
+recolors fences and prose together. A scheme under 3:1 sends fences to the plain code role in
+one verdict. A 20k-line fence renders in 9.5 ms mean, 10.9 ms worst; a 1 MB hostile python
+fence in 12.7 ms.
 
 ### What changed
 
-_To fill at close-out: the commit list, one line each: what changed, and why._
+- `782d918ad` docs: brief the fences story with gate, spec and plan.
+- `1423d5f0e` docs: fix the fences brief against the sources.
+- `004c6b045` docs: clean the smoke sockets before each test in the gate check.
+- `215367a07` docs: fill the fences gate with the fresh read and the scan.
+- `0c2dc3174` colorer: add ColorerTokenizeV2, the fence export with real colors.
+- `95d092da2` docs: pin the V2 signature in the spec to the built shape.
+- `e712d2fc6` test: keep both case sets in the merged look driver.
+- `4f56f8d5e` docs: pin the number token to def:NumberDec in the spec Done row.
+- `0691ddf33` fix(colorer): the V2 export never creates FarEditorSet; pin the driver rows.
+- `fa75d065b` feat(markdown): the fence cache keys on the scheme generation, ranges not classes.
+- `59a0fb072` docs: run the fences gate drivers on this story's build.
+- `2317cfafe` docs: a fence with no tokens gives a zero count in the spec.
+- `035952c1c` feat(markdown): one view-wide contrast verdict gates fences and prose.
+- `ed99f16e1` test(markdown): the fence colors on the F3 screen, a hostile fixture, the budget.
+- `5c68cc8ad` docs: record the V2 tokenize contract in the durable docs (ADR-010).
+- `5501844ee` docs: fold the final review findings.
 
 ### Decisions changed during the build
 
-_To fill at close-out: rows of the decision table that moved during the build. If none:
-"None of the decision table's rows."_
+The cache-key row moved: the key gains the generation (the table's "refetch on every render"
+lost). The string-edge row is new: the quotes take the block region's color, because the handler
+writes leaves over the block span. The 40 ms viewer budget stays (R29); the driver probes the
+export with 100 ms.
 
 ### What the reviews caught
 
-_To fill at close-out: the one-line summary of each review, for the owner who reads this page
-instead of the findings file._
+- T1: the export must not create `FarEditorSet` (the three-call shape); the spec signature now
+  matches the built one; the driver keeps both case sets on merge.
+- T2: the generation rides every V2 answer, not only the counts; the 4-bit path stays live.
+- T3: the verdict is keyed (viewer background, generation); the fail range takes the code row
+  with its 4-bit companion; `-force_load far2l_md` on macOS.
+- T4: the cache is proven by a fetch count, not by timing; the console.hrd rows match
+  `console/default.hrd` cell by cell.
+- Final: ship; five doc-precision nits (budget number, gate path, demo colors, ini qualifier,
+  one long sentence), folded in `5501844ee`.
 
 ### Run it
 
@@ -187,11 +215,16 @@ Run the Check section above; expect all PASS except the two known Mac failures (
 
 ### How to verify
 
-_To fill at close-out: the command or demo, and what you should see._
+`HIGH_BUILD=$(cd ../far2l.build && pwd) sh testing/markdown/highlight-driver.sh`,
+`LOOK_BUILD=$(cd ../far2l.build && pwd) sh testing/markdown/look-driver.sh`: both print `DONE`.
+Open `testing/tests/000d-view-md-look/initdir/left/fixture.md` in F3 from the built app: the
+javascript fence shows white keywords, violet constants, olive operators, the underline on the
+scheme's regions; F4 on the same file shows the same words in the same colors.
 
 ### Spend
 
-_To fill at close-out: the `check_requests` total, and the money at merge._
+Story agents $2.99 (spend.mjs, request-priced). The build used incremental cmake; each task's
+rebuild took 20-25 s.
 
 ## Before build
 
