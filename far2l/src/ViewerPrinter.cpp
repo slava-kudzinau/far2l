@@ -175,22 +175,14 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 	if (!_selection)
 		_spans.clear();
 
-	// The row fill of a code block (story markdown-code-tint): a fence row paints the
-	// block's tint as the row background for the full row width, before the runs; the
-	// runs paint over it and keep their own colors, cells without a run keep the tint.
-	// The palette resolves the tint for the live viewer background - a theme change
-	// shows on the next redraw - and true color gates it (spec, States).  The fill is
-	// a paint of the row's cells; the selection overlay rides it as the plain
-	// background does.
+	// The row fill of a code block (story markdown-code-tint): the runs print first,
+	// riding the block's tint as their background, and the row's blank tail is padded
+	// with the same tint - one write pass, exactly the row width (one console row per
+	// Print, the plain printer's contract).  The palette resolves the tint for the live
+	// viewer background - a theme change shows on the next redraw - and true color
+	// gates it (spec, States).  The selection overlay rides its own plain background.
 	int64_t tint = (line && line->tint >= 0 && !_selection)
 		? MdCodeTint(FarColorToReal(COL_VIEWERTEXT)) : -1;
-	if (tint >= 0) {
-		SHORT x, y;
-		GetCursorPos(x, y);
-		SetColor(TintFill((uint64_t)tint));
-		PrintSpaces(print_len);
-		GotoXY(x, y);
-	}
 
 	int pos = 0;   // cell coordinate in the row, counted over all runs
 	if (line) {
@@ -206,9 +198,6 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 			if (tint >= 0) {
 				SET_RGB_BACK(run_color, (uint64_t)tint);
 			}
-			fprintf(stderr, "probe-print: role %u color 0x%llx gen %llu\n", (unsigned)run.role,
-				(unsigned long long)run_color,
-				(unsigned long long)WINPORT(GetConsoleColorPalette)(NULL));
 			SetColor(run_color);
 			if (tokenized) {
 				PrintCodeRuns((*_groups)[line->tokens], run.text, pos, skip_len, print_len, tint);
@@ -251,21 +240,20 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 			}
 		}
 	}
-
 	// Blank cells (past the line end, or an empty line) take the viewer text
 	// color, not whatever color the last run or the arrows left behind.  A row
-	// with a token group pads with the code role (spec.md, Token roles).
+	// with a token group pads with the code role (spec.md, Token roles); a tinted
+	// row rides the block's tint as its background (story markdown-code-tint), so
+	// the padded cells complete the fill to the screen width in one write pass.
 	if (print_len > 0) {
+		const bool tokenized_row = line && line->tokens >= 0 && _groups != nullptr &&
+			(size_t)line->tokens < _groups->size();
+		uint64_t pad_color = _selection ? _sel_color :
+			(tokenized_row ? MarkdownRunColor(MD_ROLE_CODE) : FarColorToReal(COL_VIEWERTEXT));
 		if (tint >= 0) {
-			// The fill covers the full row width: the cells past the last run take
-			// the tint, not the viewer background.
-			SetColor(TintFill((uint64_t)tint));
-		} else {
-			const bool tokenized_row = line && line->tokens >= 0 && _groups != nullptr &&
-				(size_t)line->tokens < _groups->size();
-			SetColor(_selection ? _sel_color :
-				(tokenized_row ? MarkdownRunColor(MD_ROLE_CODE) : FarColorToReal(COL_VIEWERTEXT)));
+			SET_RGB_BACK(pad_color, (uint64_t)tint);
 		}
+		SetColor(pad_color);
 		PrintSpaces(print_len);
 	}
 }
@@ -323,9 +311,6 @@ void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstrin
 			if (tint >= 0) {
 				SET_RGB_BACK(token_color, (uint64_t)tint);
 			}
-			fprintf(stderr, "probe-token: cls %u role %u color 0x%llx pos %d\n",
-				(unsigned)group.tokens[ti].cls, (unsigned)MdRoleForTokenClass(group.tokens[ti].cls),
-				(unsigned long long)token_color, pos);
 			SetColor(token_color);
 			Cells(p, pos, print_len, (int64_t)group.tokens[ti].end);
 			uint64_t code_color = _selection ? _sel_color : MarkdownRunColor(MD_ROLE_CODE);

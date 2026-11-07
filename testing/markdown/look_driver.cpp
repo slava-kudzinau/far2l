@@ -1132,8 +1132,6 @@ int tint()
 			token_role = MdRoleForTokenClass(tok.cls);
 		}
 		const uint64_t want_fore = MdRunColor(token_role) & ~kBack;
-		fprintf(stderr, "trace: E want 0x%llx code 0x%llx\n", (unsigned long long)want_fore,
-			(unsigned long long)(MdRunColor(MD_ROLE_CODE) & ~kBack));
 		MarkdownPrinter printer(FarColorToReal(COL_VIEWERSELECTEDTEXT),
 			&doc.Lines(), &doc.TokenGroups());
 		for (size_t i = 0; i <= row; ++i) {
@@ -1146,21 +1144,6 @@ int tint()
 		std::vector<CHAR_INFO> cells(80);
 		GetText(0, 3 + (int)row, 79, 3 + (int)row, cells.data(),
 			80 * (int)sizeof(CHAR_INFO));
-		{
-			std::vector<CHAR_INFO> r0(80);
-			GetText(0, 3, 79, 3, r0.data(), 80 * (int)sizeof(CHAR_INFO));
-			fprintf(stderr, "trace: r0 0=0x%llx 5=0x%llx 40=0x%llx\n",
-				(unsigned long long)r0[0].Attributes, (unsigned long long)r0[5].Attributes,
-				(unsigned long long)r0[40].Attributes);
-		}
-		fprintf(stderr, "trace: cells 3=0x%llx 4=0x%llx 5=0x%llx 9=0x%llx 10=0x%llx 79=0x%llx\n",
-			(unsigned long long)cells[3].Attributes, (unsigned long long)cells[4].Attributes,
-			(unsigned long long)cells[5].Attributes, (unsigned long long)cells[9].Attributes,
-			(unsigned long long)cells[10].Attributes, (unsigned long long)cells[79].Attributes);
-		fprintf(stderr, "trace: F now 0x%llx\n",
-			(unsigned long long)(MdRunColor(token_role) & ~kBack));
-		fprintf(stderr, "trace: G code 0x%llx\n",
-			(unsigned long long)(MdRunColor(MD_ROLE_CODE) & ~kBack));
 		static const int s_cols[] = {token_col, text_end, 79};
 		for (int col : s_cols) {
 			const CHAR_INFO &c = cells[col];
@@ -1173,19 +1156,19 @@ int tint()
 				return 1;
 			}
 		}
-		// The console resolves a true-color foreground to its palette color, the
-		// same color for every cell of the row.  The slice under a token must
-		// carry a foreground at all - the tint rides under it, it does not
-		// replace it: the slice's color side equals the fill's, and the
-		// background loop above pins the slice, the cells past the text and the
-		// far corner to the tint.
+		// The slice under a token keeps its role's true-color foreground; the tint
+		// rides under it as the row background, one does not erase the other: the
+		// slice's color side must equal the role color the driver's own palette copy
+		// computes (want_fore, kBack's background side dropped), and the background
+		// loop above pins the slice, the cells past the text and the far corner to
+		// the tint.
 		if ((cells[token_col].Attributes & FOREGROUND_TRUECOLOR) == 0
 			|| ((cells[token_col].Attributes >> 16) & 0xffffff) == 0
-			|| (cells[token_col].Attributes & ~kBack) != (cells[text_end].Attributes & ~kBack)) {
-			printf("FAILED tint: the cell under the token is 0x%llx, want a true-color "
-				"foreground on the tint (fill cell 0x%llx)\n",
+			|| (cells[token_col].Attributes & ~kBack) != (want_fore & ~kBack)) {
+			printf("FAILED tint: the cell under the token is 0x%llx, want the role "
+				"foreground on the tint (want 0x%llx)\n",
 				(unsigned long long)cells[token_col].Attributes,
-				(unsigned long long)cells[text_end].Attributes);
+				(unsigned long long)want_fore);
 			SetBackground((uint32_t)((saved >> 40) & 0xffffff));
 			return 1;
 		}
