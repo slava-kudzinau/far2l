@@ -902,12 +902,8 @@ extern "C"
 		{
 
 			if (!Statocaster((root + mask).c_str(), mask.c_str()).FillWFD(lpFindFileData)) {
-				fprintf(stderr, "[find] exact-miss %s%ls\n", root.c_str(), mask.c_str());
 				return INVALID_HANDLE_VALUE;
 			}
-			fprintf(stderr, "[find] exact-hit %s%ls attr=%x\n", root.c_str(), mask.c_str(),
-				lpFindFileData->dwFileAttributes);
-
 			LPCWSTR last_slash = wcsrchr(lpFileName, GOOD_SLASH);
 			wcsncpy(lpFindFileData->cFileName, last_slash ? last_slash + 1 : lpFileName, MAX_NAME);
 			return (HANDLE)&g_unix_found_file_dummy;
@@ -915,8 +911,6 @@ extern "C"
 
 
 		UnixFindFile *uff = new UnixFindFile(root, mask, dwFlags);
-		fprintf(stderr, "[find] opendir %s mask=%s open=%d\n", root.c_str(), mask.c_str(),
-			uff->IsOpened() ? 1 : 0);
 		if (!uff->IsOpened()) {
 			ErrnoSaver es;
 			delete uff;
