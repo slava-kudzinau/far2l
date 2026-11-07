@@ -120,6 +120,17 @@ uint64_t MarkdownRunColor(uint64_t role)
 	return (MdRunColor(role) & ~kBackBits) | (body & kBackBits);
 }
 
+
+// The row fill of a tinted row (story markdown-code-tint): the viewer text color with
+// its background bits replaced by the palette's code tint (packed 0xBBGGRR).  The
+// foreground and the index nibble stay the viewer's: a backend that reads the 24-bit
+// background reads the truecolor bits, which SET_RGB_BACK sets.
+uint64_t TintFill(uint64_t tint_bgr)
+{
+	uint64_t attr = FarColorToReal(COL_VIEWERTEXT);
+	SET_RGB_BACK(attr, tint_bgr);
+	return attr;
+}
 }
 
 MarkdownPrinter::MarkdownPrinter(uint64_t sel_color, const std::vector<MdLine> *lines,
@@ -163,6 +174,23 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 	// its spans join the row's underline spans, they do not replace them.
 	if (!_selection)
 		_spans.clear();
+
+	// The row fill of a code block (story markdown-code-tint): a fence row paints the
+	// block's tint as the row background for the full row width, before the runs; the
+	// runs paint over it and keep their own colors, cells without a run keep the tint.
+	// The palette resolves the tint for the live viewer background - a theme change
+	// shows on the next redraw - and true color gates it (spec, States).  The fill is
+	// a paint of the row's cells; the selection overlay rides it as the plain
+	// background does.
+	int64_t tint = (line && line->tint >= 0 && !_selection)
+		? MdCodeTint(FarColorToReal(COL_VIEWERTEXT)) : -1;
+	if (tint >= 0) {
+		SHORT x, y;
+		GetCursorPos(x, y);
+		SetColor(TintFill((uint64_t)tint));
+		PrintSpaces(print_len);
+		GotoXY(x, y);
+	}
 
 	int pos = 0;   // cell coordinate in the row, counted over all runs
 	if (line) {
@@ -217,10 +245,16 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 	// color, not whatever color the last run or the arrows left behind.  A row
 	// with a token group pads with the code role (spec.md, Token roles).
 	if (print_len > 0) {
-		const bool tokenized_row = line && line->tokens >= 0 && _groups != nullptr &&
-			(size_t)line->tokens < _groups->size();
-		SetColor(_selection ? _sel_color :
-			(tokenized_row ? MarkdownRunColor(MD_ROLE_CODE) : FarColorToReal(COL_VIEWERTEXT)));
+		if (tint >= 0) {
+			// The fill covers the full row width: the cells past the last run take
+			// the tint, not the viewer background.
+			SetColor(TintFill((uint64_t)tint));
+		} else {
+			const bool tokenized_row = line && line->tokens >= 0 && _groups != nullptr &&
+				(size_t)line->tokens < _groups->size();
+			SetColor(_selection ? _sel_color :
+				(tokenized_row ? MarkdownRunColor(MD_ROLE_CODE) : FarColorToReal(COL_VIEWERTEXT)));
+		}
 		PrintSpaces(print_len);
 	}
 }
