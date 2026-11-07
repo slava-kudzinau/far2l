@@ -53,7 +53,27 @@ band ends with the block. Run with `--norgb`: no tint, the text stays readable.
 
 ### A fresh reader's paraphrase
 
-_To fill after the fresh read._
+**T1 - The field, the blend, the printer.** `MdLine` gains `int64_t tint = -1`. The fence
+builder sets it on the fence's code rows and the hint row. `MdCodeTint(viewer_bg)` blends the
+viewer background with the code role's resolved foreground, the pattern of `BlendRgb` in
+`far2l/src/filediff.cpp`. True color gates the tint, and 3:1 on (code foreground, tint) gates
+it, with `wcagComputeContrast`. One verdict, cached on (viewer background, code color).
+`Print` paints the fill for the full row width, before the runs. Driver case `tint`: a code
+row's background equals the blend, and a row outside the block is plain. A low-contrast pair
+draws no tint; a background change redraws with the new blend.
+
+**T2 - Smoke, `--norgb`.** `000d` reads the javascript fence. A code row's background is the
+tint. One cell past the end of the text is the tint, so the fill reaches the right edge. The
+row after the block is plain. Read the values from a sweep run, not by guess. The harness runs
+16 colors, so assert the code cell's background as the run prints it.
+
+**T3 - Durable docs.** ADR-004 gains the exception row: the block background is the tint, not
+the viewer background. The spec's fence row names the tint. The data view names the `MdLine`
+field. The invariants gain the tint rule with its contrast gate.
+
+**T4 - Close-out.** The orchestrator writes the close-out draft (the records commit). The main
+session fills the gate close-out rows and commits the durable docs. It opens the pull request
+into `next/2.9.1-ovr.1`, merges, and pulls into the main checkout.
 
 ## Flow
 
