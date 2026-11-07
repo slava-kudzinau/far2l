@@ -1302,6 +1302,7 @@ int look_new_roles()
 		return 1;
 	SetBackground((uint32_t)((saved >> 40) & 0xffffff));
 	printf("ok look_new_roles: emphasis and listmark resolve on the fork path\n");
+	return 0;
 }
 
 struct Case
