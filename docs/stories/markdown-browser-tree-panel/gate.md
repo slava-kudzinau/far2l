@@ -78,16 +78,39 @@ Terms. The **opened file** is the file that Alt-F3 opens. The **root** is the fo
 
 _Pasted from the fresh read before the build._
 
-**What this builds.** Alt-F3 on a Markdown file opens the reading page with a file tree docked on the left, like the project panel of Zed. A click on a file in the tree, or on a link to such a file, shows that file in the same page, and Back returns. A link that leaves the tree shows as text with the note "not in this tree". `tree=off` gives the page of today.
+**What this builds.** Alt-F3 on a Markdown file opens the reading page. It has a file tree docked on the left, like the project panel of Zed. A click on a file in the tree shows that file in the same page. A click on a link to such a file does the same. Back returns. A link that leaves the tree shows as text with the note "not in this tree". `tree=off` gives the page of today.
 
-**How the parts fit, per this page.** Alt-F3 runs the changed `md-open.sh`, which reads the new settings in `md-view.ini`. It runs a new scan, one `find` from the root, over the Markdown files under that root. The scan feeds one cache page that holds every file of the tree inline, with a tree index. The page gets the new tree panel and toggle, and a changed page script that handles routing, links, images and anchors, so Back and Forward work through browser history. Two test scripts check it: the extended `browser-page.sh` and the new `browser-links-dom.sh`, which uses headless Chrome.
+**How the parts fit, per this page.** Alt-F3 runs the changed `md-open.sh`, which reads the new settings in `md-view.ini`. It runs a new scan, one `find` from the root, over the Markdown files under that root. The scan feeds one cache page that holds every file of the tree inline, with a tree index. The page gets the new tree panel and toggle, and a changed page script. The script handles routing, links, images and anchors. So Back and Forward work through browser history. Two test scripts check it: the extended `browser-page.sh` and the new `browser-links-dom.sh`, which uses headless Chrome.
 
 ## At merge
 
 ### What was built
 
+Alt-F3 on a Markdown file now opens the reading page of the root. It holds the opened file and the other Markdown files under the root, in one page. A file tree is docked on the left. The panel has the root name, `details` folders and one link per file. The shown file is marked, and its folders are open. The toggle button and the key `b` open and close the panel, and the browser keeps the state after a reload. A click in the tree, or on a link in the text, shows that file at the same address, so Back and Forward work. A link that leaves the root becomes text with `not in this tree`. A file over 1 MiB or over the page limit stays in the tree and shows a note. `tree=off`, `--tree off` or a root of `$HOME` or `/` gives the page of one file, as story 1 made it.
+
+New keys in `md-view.ini`: `tree`, `root`, `tree_depth`, `tree_max_files`. New flags: `--tree on|off` and `--list-tree`.
+
 ### Decisions changed during the build
+
+1. The one-file page tests name `--tree off`. Tree mode is the default, so the one-file page is now a mode, not the only page. This keeps the assertions of story 1 on the page they describe.
+2. The panel CSS and markup are written only in tree mode. The one-file page is byte-for-byte the page of story 1.
+3. Each name of the tree is an encoded path in an attribute and a decoded text node. A name never becomes an element or an attribute name.
+4. A saved panel state cannot open a panel that `tree=off` removed.
 
 ### What the reviews caught
 
+- T1 Important: a folder name that ends in a newline gave the tree and the text of a sibling folder. The `pwd -P` result lost the newline. A sentinel at the end of each `pwd -P` keeps it, and a test covers it.
+- T2 Critical: the escape function was quadratic. One file with a long line of `\` stopped the build. It now runs one linear `sed` pass. A test with a 400 KB line covers it.
+- T2 Minor: the reuse step of the scan passes when `find` cannot stat the page. Accepted; the `cksum` line still guards the reuse.
+- T1 Minor: two test assertions prove less than their names say. Accepted as polish.
+- Final review: see the row below.
+
+The review yield is in `closeout.md`.
+
 ### Run it
+
+1. Add the Alt-F3 association one time: `sh far2l/bootstrap/md-open.sh --print-association`.
+2. Open a folder of notes with Alt-F3 on one file. The tree is on the left. Click a file, click a link, press Back, press Forward, press `b`.
+3. Reload: the panel state stays. Narrow the window below 700 px: the panel is hidden.
+4. Set `width=60` and `theme=dark` in `md-view.ini`: the text column takes 60 percent of the space right of the panel.
+5. Check the manual items in `closeout.md` in Firefox and Chrome.

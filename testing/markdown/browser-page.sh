@@ -352,12 +352,12 @@ case_init_config_writes() {
     [ "$rc" = 0 ] || bad "exit $rc"
     [ -f "$ini" ] || bad "no file at $ini"
     grep -qxF "$ini" "$d/out" || bad "path not printed: $(cat "$d/out")"
-    for l in '[View]' 'width=70' 'theme=auto' 'browser=auto'; do
+    for l in '[View]' 'width=70' 'theme=auto' 'browser=auto' 'tree=on' 'root=dir' 'tree_depth=6' 'tree_max_files=500'; do
         grep -qxF "$l" "$ini" || bad "sample has no line $l"
     done
     grep -q '^# .*found' "$ini" || bad "sample has no line with the browsers found"
     # Every other line is a comment or empty.
-    others=$(grep -v -x -e '\[View\]' -e 'width=70' -e 'theme=auto' -e 'browser=auto' -e '' -e '[#;].*' "$ini")
+    others=$(grep -v -x -e '\[View\]' -e 'width=70' -e 'theme=auto' -e 'browser=auto' -e 'tree=on' -e 'root=dir' -e 'tree_depth=6' -e 'tree_max_files=500' -e '' -e '[#;].*' "$ini")
     [ -z "$others" ] || bad "sample has lines that are not comments: $others"
     # The sample gives the defaults and no message.
     md --no-open --out "$page" "$sample"
