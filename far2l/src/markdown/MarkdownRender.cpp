@@ -326,7 +326,90 @@ struct Builder {
     void close_block(Gap kind = GAP_SOFT) { if (gap < kind) gap = kind; }
     void force_gap() { gap = GAP_HARD; }
     void drop_soft_gap() { if (gap == GAP_SOFT) gap = GAP_NONE; }
+
+    // Fence tokens (story markdown-code-highlight): the source, the render
+    // budget and the document cache, set by Render before the parse.
+    MdTokenSource *token_source = nullptr;
+    std::chrono::steady_clock::time_point token_deadline{};
+    std::map<std::pair<std::string, uint64_t>, std::vector<MdTokenGroup>> *token_cache = nullptr;
+    std::vector<MdTokenGroup> token_groups;   // indexed by MdLine::tokens
 };
+
+// One 64-bit FNV-1a: the hash half of a fence token cache key, the form of
+// mermaid_key (plan T3).
+uint64_t fnv1a64(const std::string &s)
+{
+    uint64_t h = 1469598103934665603ULL;
+    for (const char c : s) {
+        h ^= (uint64_t)(unsigned char)c;
+        h *= 1099511628211ULL;
+    }
+    return h;
+}
+
+// Tokenize one fence (plan T3): the caps of spec.md (400 lines, 65536 source
+// bytes; R32), the shared 40 ms render budget (R29), the document cache
+// (R28, R30, R31).  Appends one group per tokenized line to b.token_groups,
+// in cells of the code-run text (the 4-cell indent counted), and links
+// `count` rows starting at `first_line` to them; rows the source does not
+// reach keep the plain code role.
+void tokenize_fence(Builder &b, const std::string &lang, const std::wstring &fence_src,
+    size_t first_line, size_t count)
+{
+    if (b.token_source == nullptr || b.token_cache == nullptr || count == 0)
+        return;
+    std::wstring src = fence_src;
+    if (!src.empty() && src.back() == L'\n')
+        src.pop_back();
+    std::vector<std::string> lines;
+    std::string joined;
+    size_t start = 0;
+    while (lines.size() < 400 && start <= src.size()) {
+        size_t nl = src.find(L'\n', start);
+        const size_t end = (nl == std::wstring::npos) ? src.size() : nl;
+        std::string u8 = wide_to_utf8(src.substr(start, end - start));
+        const size_t add = u8.size() + (joined.empty() ? 0 : 1);
+        if (!joined.empty() && joined.size() + add > 65536)
+            break;
+        if (!joined.empty())
+            joined += '\n';
+        joined += u8;
+        lines.push_back(std::move(u8));
+        if (nl == std::wstring::npos)
+            break;
+        start = nl + 1;
+    }
+    if (lines.empty())
+        return;
+    const std::pair<std::string, uint64_t> key(lang, fnv1a64(joined));
+    std::vector<MdTokenGroup> groups;
+    auto hit = b.token_cache->find(key);
+    if (hit != b.token_cache->end()) {
+        groups = hit->second;
+    } else {
+        const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
+            b.token_deadline - std::chrono::steady_clock::now()).count();
+        const int budget = left > 0 ? (int)left : 1;   // at least 1 ms (plan T3.3)
+        std::vector<MdToken> flat;
+        b.token_source->Tokenize(lang, lines, budget, flat);   // false: plain code role
+        groups.resize(lines.size());
+        for (const MdToken &t : flat) {
+            if (t.line < groups.size())
+                groups[t.line].tokens.push_back(t);
+        }
+        for (MdTokenGroup &g : groups) {
+            for (MdToken &t : g.tokens) {
+                t.start += CODE_INDENT;
+                t.end += CODE_INDENT;
+            }
+        }
+        b.token_cache->emplace(key, groups);   // a deadline-trimmed group is cached as is (R29)
+    }
+    const size_t base = b.token_groups.size();
+    b.token_groups.insert(b.token_groups.end(), groups.begin(), groups.end());
+    for (size_t gi = 0; gi + base < b.token_groups.size() && gi < count; ++gi)
+        b.out[first_line + gi].tokens = (int)(base + gi);
+}
 
 // File offset of the first source text in the code line [s, e) of code_text, or -1 when the line
 // has none (a blank line; the indent is not source text).
@@ -492,6 +575,8 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_HTML: {
             b.in_code = false;
             bool is_mermaid = is_mermaid_lang(b.code_lang);
+            // The cache key language: the name the bridge of T2 reports (R28).
+            const std::string fence_lang = MdNormalizeLangName(wide_to_utf8(b.code_lang));
             std::wstring fence_src = b.code_text;
             b.code_text.clear();
             b.code_lang.clear();
@@ -520,6 +605,9 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                 if (nl == std::wstring::npos) break;
                 start = nl + 1;
             }
+            // One call per fence, with the remaining render budget (plan T3).
+            // A mermaid fence is tokenized like any fence (R33).
+            tokenize_fence(b, fence_lang, fence_src, first_line, count);
             if (is_mermaid)
                 b.fences.push_back(Builder::Fence{fence_pos, fence_src, first_line, count, b.row_lead()});
             b.close_block(Builder::GAP_HARD);   // a code block keeps its blank row next to a list
@@ -708,6 +796,7 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width)
     m_block_starts.clear();
     m_block_first_line.clear();
     m_mermaid_cache.clear();
+    m_token_groups.clear();
     m_cursor = 0;
     m_first_pos = 0;
     m_valid = false;
@@ -722,6 +811,9 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width)
     b.width = width;
     b.base = utf8.data();
     b.base_size = utf8.size();
+    b.token_source = &MdGetTokenSource();
+    b.token_cache = &m_token_cache;
+    b.token_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(40);
 
     MD_PARSER parser = {};
     parser.flags = MD_FLAG_TABLES | MD_FLAG_TASKLISTS | MD_FLAG_STRIKETHROUGH
@@ -738,6 +830,7 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width)
     b.flush();
 
     m_lines = std::move(b.out);
+    m_token_groups = std::move(b.token_groups);   // shift and link survive the mermaid art swap (R31)
     m_valid = true;
 
     // Draw each mermaid fence with AsciiMermaid, once per source and width.  An empty entry is a
@@ -812,5 +905,6 @@ bool MarkdownDoc::NextLines(std::vector<MdLine> &out, int64_t at_file_pos)
 void MarkdownDoc::Invalidate(int width)
 {
     m_mermaid_cache.clear();
+    // The token cache outlives a resize: a key is language plus fence hash (R30).
     Render(m_text, width);
 }

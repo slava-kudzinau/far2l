@@ -44,7 +44,7 @@ if [ ! -f "$cand" ] || [ "$src" -nt "$cand" ] || [ "$app_bin" -nt "$cand" ]; the
     echo "FAILED compile: $(cat "$build/testing/highlight-driver.log")"; exit 1; }
   inputs=$(sed -e 's/^[^ ]*//' -e 's/ -o [^ ]*//' -e 's|CMakeFiles/far2l.dir/src/main.cpp.o ||' "$link_file")
   ( cd "$build/far2l" && c++ -o "$cand" "$obj" \
-      $inputs -Wl,-undefined,dynamic_lookup ) \
+      $inputs -Wl,-undefined,dynamic_lookup -Wl,-undefined,dynamic_lookup ) \
     2>>"$build/testing/highlight-driver.log" || {
     echo "FAILED link: $(cat "$build/testing/highlight-driver.log")"; exit 1; }
 fi

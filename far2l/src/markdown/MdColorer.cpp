@@ -80,11 +80,11 @@ struct CollectCtx
 	std::vector<MdToken> *out;
 };
 
-void Collect(void *ctx, int, int start, int end, int cls)
+void Collect(void *ctx, int line, int start, int end, int cls)
 {
 	CollectCtx *c = static_cast<CollectCtx *>(ctx);
 	c->out->push_back(MdToken{static_cast<uint32_t>(start), static_cast<uint32_t>(end),
-		static_cast<uint8_t>(cls)});
+		static_cast<uint8_t>(cls), static_cast<uint32_t>(line)});
 }
 
 // A fence name: at most 32 characters of [A-Za-z0-9+#_-], non-empty
@@ -103,20 +103,6 @@ bool ValidName(const std::string &lang, std::string &lower)
 		}
 	}
 	return true;
-}
-
-std::string MdNormalizeLangName(const std::string &lang)
-{
-	std::string name;
-	if (!ValidName(lang, name)) {
-		return std::string();
-	}
-	for (const LangAlias &alias : s_aliases) {
-		if (name == alias.fence) {
-			return alias.type;
-		}
-	}
-	return name;
 }
 
 // The token source that calls the plugin export.  The module is located once
@@ -195,6 +181,20 @@ public:
 std::unique_ptr<MdTokenSource> g_test_source;
 
 } // namespace
+
+MD_COLORER_API extern std::string MdNormalizeLangName(const std::string &lang)
+{
+	std::string name;
+	if (!ValidName(lang, name)) {
+		return std::string();
+	}
+	for (const LangAlias &alias : s_aliases) {
+		if (name == alias.fence) {
+			return alias.type;
+		}
+	}
+	return name;
+}
 
 MdTokenSource &MdGetTokenSource()
 {

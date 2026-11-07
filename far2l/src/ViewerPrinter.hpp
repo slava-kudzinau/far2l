@@ -48,14 +48,24 @@ struct MarkdownPrinter : ViewerPrinter
 	// Print() is called once per screen row, in row order, consuming `_lines`
 	// sequentially; the `str` argument (the concatenation of the runs, kept in
 	// the viewer's Strings[] for poscache/length) is ignored in favour of runs.
-	MarkdownPrinter(uint64_t sel_color, const std::vector<MdLine> *lines);
+	// `_groups` (story markdown-code-highlight): the fence token groups, indexed by
+	// MdLine::tokens.  Null, or tokens == -1, draws the plain code role.
+	MarkdownPrinter(uint64_t sel_color, const std::vector<MdLine> *lines,
+		const std::vector<MdTokenGroup> *groups = nullptr);
 	virtual ~MarkdownPrinter();
 
 	virtual int Length(const wchar_t *str, int limit = -1);
 	virtual void Print(int skip_len, int print_len, const wchar_t *str);
 
 private:
+	// Print one run cell by cell, up to `cell_stop` (cell coordinates of the row).
+	void Cells(const wchar_t *&p, int &pos, int &print_len, int64_t cell_stop);
+	// Print one code run, coloring the token slices of `group`.
+	void PrintCodeRuns(const MdTokenGroup &group, const std::wstring &text,
+		int &pos, int skip_len, int print_len);
+
 	uint64_t _sel_color;
 	const std::vector<MdLine> *_lines;
+	const std::vector<MdTokenGroup> *_groups;
 	size_t _row = 0;
-};
+ };

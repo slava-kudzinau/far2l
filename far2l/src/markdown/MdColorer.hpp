@@ -14,6 +14,7 @@ struct MdToken
 	uint32_t start;
 	uint32_t end;
 	uint8_t cls;
+	uint32_t line = 0;   // 0-based index into the lines of the Tokenize call
 };
 
 // Token source for fence lines: the Colorer plugin export, or a fake for tests.
@@ -33,7 +34,14 @@ public:
 // The fence name the export call gets: lower-cased and alias-mapped (c++ ->
 // cpp, tsx -> jsx, zsh -> sh).  Empty when the name is not usable: at most
 // 32 characters of [A-Za-z0-9+#_-], non-empty (spec.md, Language names).
-std::string MdNormalizeLangName(const std::string &lang);
+#if defined(__GNUC__)
+#define MD_COLORER_API \
+	__attribute__((visibility("default"), used))
+#else
+#define MD_COLORER_API
+#endif
+
+MD_COLORER_API std::string MdNormalizeLangName(const std::string &lang);
 
 // The plugin source, or the source installed for the test.
 MdTokenSource &MdGetTokenSource();
