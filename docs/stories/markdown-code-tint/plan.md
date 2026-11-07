@@ -45,7 +45,7 @@ the values from a sweep run, not by guess. The harness runs 16 colors, so the ti
 4-bit path; assert the code cell's background as the run prints it.
 
 **Done check:** smoke `000d` PASS with the new rows, and the gate's Run-it command prints
-`check ok` (the two known Mac failures allowed).
+`PASS` for every test (the two known Mac failures allowed).
 
 ## T3: Durable docs
 
@@ -68,8 +68,8 @@ the tint rule with its contrast gate.
 **Depends on:** T3
 **Role:** implementer — review final
 
-The orchestrator writes the close-out draft (the records commit): the story ledger rows, the T1
-measurements, and the gate's At-merge rows. The main session fills the gate close-out rows and
+The orchestrator writes the close-out draft (the records commit): the story ledger rows and the
+gate's At-merge rows. The main session fills the gate close-out rows and
 commits the durable docs. It opens the pull request into `next/2.9.1-ovr.1`, merges, and pulls
 into the main checkout. The check runs once more on the merge.
 

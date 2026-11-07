@@ -83,7 +83,17 @@ sh testing/markdown/look-driver.sh
  for t in $(ls tests); do o=$(./far2l-smoke-run.sh "$APP" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && echo "PASS $t" || echo "FAIL $t"; done)
 ```
 
-`check ok` with all PASS (the two known Mac failures allowed), and the story's Done list.
+Every test prints `PASS` (the two known Mac failures allowed), every driver exits 0, and the
+story's Done list.
+
+## Plan
+
+| Task | Scope | Depends | Done check |
+|---|---|---|---|
+| T1 | `MdLine.tint`, the fence builder, `MdCodeTint`, the printer fill, the `tint` driver case | - | `look-driver.sh --case tint` exits 0; the whole look driver is green; the full build exits 0 |
+| T2 | The 000d smoke rows: the tinted code cell, the cell past the text, the `--norgb` run | T1 | smoke `000d` PASS with the new rows; the gate's Run-it command: all `PASS` |
+| T3 | ADR-004's exception row, the viewer spec, the data view, the invariants | T2 | the four files show the new rows; `check_ste.py` prints nothing |
+| T4 | The records commit, the close-out, the pull request | T3 | the records commit exists; the merge shows the story's tip |
 
 ## Done
 
