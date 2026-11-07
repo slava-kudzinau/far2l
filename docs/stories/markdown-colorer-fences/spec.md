@@ -34,16 +34,17 @@ int ColorerTokenizeV2(int abi, const wchar_t* language, const wchar_t* const* li
 ```
 
 - Same input and limits as V1: a line cap of 32 lines, a cell cap of 256 cells. The deadline is
-  in milliseconds, 100 ms in the viewer.
+  in milliseconds, 40 ms shared for the fences in the viewer, 100 ms in the driver's cost case.
 - Cell stride: 8 words. `[0]` start column, `[1]` end column (1-based, inclusive). `[2]` the
   region's foreground as `0xRRGGBB`, `[3]` the scheme's 4-bit foreground (0..15). `[4]` the
   Colorer style word (bit 4 = underline). `[5]..[7]` zero.
 - The colors resolve through `HrcLibrary::getRegionDefine` for the active scheme, with the F4
   fallback chain: the region, then its parents, then `def:Text`.
-- Return codes as V1: the count of cells written, zero for a fence with no tokens. -1 is no
+- Return codes as V1: the count of cells written. Zero is a fence with no tokens. -1 is no
   catalog, -2 is an unknown language, -3 is a fatal parse. `*generation` carries the scheme
   generation of the answer, and 0 on a code other than a count. A deadline stop returns the
-  cells written: a partial group, painted and cached as-is, like V1's code 1 path.
+  cells written. The viewer paints that partial group and caches it as-is, like V1's code 1
+  path.
 - `abi == 1` for this shape; a larger abi answers -2.
 - The export never creates `FarEditorSet`: the same three-call shape as the look export (count
   the catalog, count the lines, load the scheme, tokenize).

@@ -51,8 +51,9 @@ fallback.
   change repaints fences and prose together.
 - The stride is a data contract: a change needs a new version name (ADR-008 precedent).
 - One fetch serves each (language, hash, generation) pair. A 20k-line fence renders in 9.5 ms
-  mean and 10.9 ms worst. A 1 MB hostile python file renders in 12.7 ms. The deadline is
-  100 ms. Story markdown-colorer-fences measured these.
+  mean and 10.9 ms worst. A 1 MB hostile python file renders in 12.7 ms. The cost case probes
+  with a 100 ms deadline; the viewer gives the fences 40 ms shared. Story
+  markdown-colorer-fences measured these.
 - On macOS the executable needs `-Wl,-force_load far2l_md`: the markdown library is the sole
   compile of the Markdown sources, and `dlsym` lookups do not pin static members.
 - String edges (quotes) take the block region's color, not `def:StringEdge`. The handler writes

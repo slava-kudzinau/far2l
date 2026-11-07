@@ -40,7 +40,7 @@ flowchart LR
   the underline. A cell with no range keeps the plain code role.
 - The 3:1 contrast verdict of markdown-colorer-look decides for the whole view. On a failure,
   fences use the plain code role, and prose the fork table.
-- A 20k-line fence renders inside the 100 ms budget; task 4 measures it.
+- The fences share the 40 ms render budget; task 4 probes the export with 100 ms.
 
 ### Decisions the model made
 
@@ -56,8 +56,8 @@ flowchart LR
 
 Open a `.md` file in F3 from the built app: `../far2l.markdown-colorer-fences.build/install/
 far2l.app/Contents/MacOS/far2l`. Go down to the javascript fence. The keyword, a function name,
-a string, a constant and an operator show the scheme's colors (far2l.hrd: keyword `#00ff00`,
-constant `#00ffff`, operator `#c0c0c0`). Press F4 on the same file: the same words carry the
+a string, a constant and an operator show the scheme's colors (far2l.hrd: keyword `#ffffff`,
+constant `#a030ff`, operator `#e0e0c0`). Press F4 on the same file: the same words carry the
 same colors. Change the scheme (F4, Ctrl-F7, pick a scheme, reopen F3): the fences recolor.
 `sh testing/markdown/look-driver.sh` prints `DONE`.
 
@@ -121,7 +121,7 @@ LOOK_BUILD="$BUILD" sh testing/markdown/look-driver.sh
  for s in tests/*; do [ -S "$s" ] && rm -f "$s"; done
  for t in $(ls tests); do pkill -9 -f -- '--test=/tmp/far2l'; sleep 0.5
   find tests -maxdepth 1 -type s -delete; for s in tests/*; do [ -S "$s" ] && rm -f "$s"; done
-  o=$(./far2l-smoke-run.sh "$PWD/../far2l.markdown-colorer-fences.build/install/far2l.app/Contents/MacOS/far2l" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && echo "PASS $t" || echo "FAIL $t"; done)
+  o=$(./far2l-smoke-run.sh "$PWD/../../far2l.markdown-colorer-fences.build/install/far2l.app/Contents/MacOS/far2l" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && echo "PASS $t" || echo "FAIL $t"; done)
 ```
 
 Every test prints `PASS` (the two known Mac failures allowed), every driver exits 0, and the

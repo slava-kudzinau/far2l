@@ -7,7 +7,7 @@ Tasks for the build. The gate page holds the deal; spec.md holds the contract.
 - Code style: `CODESTYLE.md`; the Markdown rules in `docs/architecture/features/markdown/markdown.invariants.md`.
 - Keep the fork's changes to upstream files small; new code in `far2l/src/markdown/`.
 - Treat Markdown and mermaid text as untrusted: a render has a time limit and a stack limit.
-- Cell caps stay: 32 lines, 256 cells, the deadline in milliseconds (100 ms in the viewer).
+- Cell caps stay: 32 lines, 256 cells, the deadline in milliseconds (40 ms shared in the viewer).
 - V1 keeps its 4-word emits and its codes; V2 is additive: 8 words per cell, codes -1..-3,
   `abi` 1.
 - The export never creates `FarEditorSet`: the same three-call shape as the look export.
