@@ -10,6 +10,11 @@ Commits:
 Commits after the review: the `--init-config` sample lists the four keys, and the sample test checks them.
 Check: the AGENTS.md check with `sh testing/markdown/browser-page.sh` added before `echo "check ok"`, run through `sh`: exit 0, `check ok`. The smoke tests 0007, 0008 and 0009 pass. `browser-page.sh` 80 ok, 0 fail. `browser-links-dom.sh` 36 ok, 0 fail.
 
+Regression copies that the acceptance criteria name:
+- With the root rule removed, `browser-links-dom.sh` fails `dom_link_in_tree`, `dom_link_big`, `dom_other_link` and `dom_anchor_other_file`.
+- With `find -L`, `browser-page.sh` fails `scan_symlinks`.
+- The T2 review put the old quadratic escape back, and the long-line case failed on time.
+
 ## Rulings
 
 1. One page holds every file of the tree as an inline `script` element. A `file://` page cannot read another file, and the page policy allows no `script src` from `file:`. The owner confirmed the mock.
