@@ -4,8 +4,9 @@ description: Close-out record for markdown-code-highlight: what shipped, the las
 # Close-out: markdown-code-highlight
 
 Branch `feat/markdown-code-highlight` (base `origin/next/2.9.1-ovr.1` at `54bd9cc79`),
-35 commits, `8e452d972..75e5f4b7f`. Check: golden + ascii + fence driver + four smoke tests,
-exit 0, rerun green at `75e5f4b7f`. Full tier, tier kept (no promotions, no demotions).
+35 commits, `8e452d972..3b89a328f`, merged in PR #11 (`c7b612286`). Check: golden + ascii
+fence driver + four smoke tests, exit 0, green on the merged tip. Full tier, tier kept
+(no promotions, no demotions).
 
 ## What the story built
 

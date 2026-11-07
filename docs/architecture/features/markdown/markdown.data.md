@@ -37,7 +37,7 @@ flowchart LR
 | Top row, `m_md_top` | Index into `Lines()`. `m_md_top_pos` is the `FilePos` of the last sync. | `SetMarkdownTop` | While the file is open |
 | Screen rows, `m_md_screen`, `Strings` | The rows on screen. `Strings` holds the joined text for length and link scans. | `ReadStringMarkdown` | One redraw |
 | Mermaid cache, `m_mermaid_cache` | Art rows, keyed by source hash and width. An empty entry is a failed fence. | `MarkdownDoc::Render` | One render pass |
-| Token cache, `m_token_cache` | Fence tokens, keyed by the normalized language and a hash of the fence source. Fills during one render, keeps their tokens across renders and file switches; the process owns them until far2l exits. | `MarkdownDoc::Render` | The process |
+| Token cache, `m_token_cache` | Fence tokens, keyed by the normalized language and a hash of the fence source. Survives `Invalidate(width)` and a resize (R38). | `MarkdownDoc::Render` | The viewer window's `MarkdownDoc`, across file switches |
 | JS runtime, `g_engine` | One quickjs-ng runtime and context | `build_engine` | The process, or until a timeout |
 
 **Offset rules.** Offsets never decrease down the doc. A row with no source text takes the offset of the row before it: the table separator, blank rows. All art rows of a fence take the fence offset. The hint row takes the offset of the last code row.
