@@ -1119,18 +1119,19 @@ int tint()
 		int text_end = 0;   // one past the last text cell (the runs' total width)
 		for (const MdRun &run : code_line.runs)
 			text_end += (int)run.text.size();
-		// A cell under a token: the group's first token on the tokenized path, the
+		// A cell under a token: the group's first range on the tokenized path, the
 		// first cell of the code text (the 4-cell indent counted) on the plain one.
+		// V2 ranges carry the scheme's own color, so the expected foreground is
+		// the range's resolved color, not a role alias (ADR-010).
 		int token_col = 4;
-		uint64_t token_role = MD_ROLE_CODE;
+		uint64_t want_fore = MdRunColor(MD_ROLE_CODE) & ~kBack;
 		if (code_line.tokens >= 0
 			&& (size_t)code_line.tokens < doc.TokenGroups().size()
-			&& !doc.TokenGroups()[code_line.tokens].tokens.empty()) {
-			const MdToken &tok = doc.TokenGroups()[code_line.tokens].tokens[0];
-			token_col = (int)tok.start;
-			token_role = MdRoleForTokenClass(tok.cls);
+			&& !doc.TokenGroups()[code_line.tokens].ranges.empty()) {
+			const MdTokenRange &rng = doc.TokenGroups()[code_line.tokens].ranges[0];
+			token_col = (int)rng.start;
+			want_fore = MdRangeColor(rng.fg, rng.fg4, rng.underline) & ~kBack;
 		}
-		const uint64_t want_fore = MdRunColor(token_role) & ~kBack;
 		MarkdownPrinter printer(FarColorToReal(COL_VIEWERSELECTEDTEXT),
 			&doc.Lines(), &doc.TokenGroups());
 		for (size_t i = 0; i <= row; ++i) {

@@ -289,18 +289,26 @@ void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstrin
 		++p;
 	}
 
-	size_t ti = 0;   // index over the group's tokens, ascending
+	size_t ti = 0;   // index over the group's ranges, ascending
 	while (print_len > 0 && *p) {
-		if (ti < group.tokens.size() && (int64_t)pos >= (int64_t)group.tokens[ti].start) {
-			// Every color of this row rides the tint, the token slice and the plain
-			// code cells between tokens alike (story markdown-code-tint, review).
-			uint64_t token_color = _selection ? _sel_color :
-				MarkdownRunColor(MdRoleForTokenClass(group.tokens[ti].cls));
+		if (ti < group.ranges.size() && (int64_t)pos >= (uint64_t)group.ranges[ti].start) {
+			// The scheme's 24-bit foreground under the view's contrast verdict,
+			// the scheme's 4-bit row on the 16-color path (spec, PrintCodeRuns
+			// and Contrast); the range's underline bit rides the far attribute
+			// and joins the row's spans, the way the runs' underline does.
+			// Every color of this row rides the tint, the token slice and the
+			// plain code cells between ranges alike (story markdown-code-tint).
+			uint64_t range_color = _selection ? _sel_color
+				: MdRangeColor(group.ranges[ti].fg, group.ranges[ti].fg4,
+					group.ranges[ti].underline);
 			if (tint >= 0) {
-				SET_RGB_BACK(token_color, (uint64_t)tint);
+				SET_RGB_BACK(range_color, (uint64_t)tint);
 			}
-			SetColor(token_color);
-			Cells(p, pos, print_len, (int64_t)group.tokens[ti].end);
+			SetColor(range_color);
+			const int run_start = pos;
+			Cells(p, pos, print_len, (int64_t)group.ranges[ti].end);
+			if (range_color & COMMON_LVB_UNDERSCORE)
+				_spans.emplace_back(run_start, pos);
 			uint64_t code_color = _selection ? _sel_color : MarkdownRunColor(MD_ROLE_CODE);
 			if (tint >= 0) {
 				SET_RGB_BACK(code_color, (uint64_t)tint);
@@ -309,7 +317,7 @@ void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstrin
 			++ti;
 			continue;
 		}
-		const int64_t stop = ti < group.tokens.size() ? (int64_t)group.tokens[ti].start : INT64_MAX;
+		const int64_t stop = ti < group.ranges.size() ? (int64_t)group.ranges[ti].start : INT64_MAX;
 		Cells(p, pos, print_len, stop);
 	}
 }
