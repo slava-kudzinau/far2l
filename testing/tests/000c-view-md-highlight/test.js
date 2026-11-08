@@ -50,7 +50,7 @@ var js_line = ExpectString("const x")
 CheckTok("js keyword", ReadCell(js_line.X, js_line.Y), 0xffffff, 15)
 var ts_kw = ExpectString("const y")
 CheckTok("ts keyword", ReadCell(ts_kw.X, ts_kw.Y), 0xffffff, 15)
-var js_str = ExpectString("\"wjs")
+var js_str = ExpectString("wjs")
 CheckTok("js string", ReadCell(js_str.X, js_str.Y), 0x88ee88, 15)
 // The js scheme's '//' block reports its start leaf; the '41' past the comment
 // start and the ';' tail keep the comment row (R49).
@@ -72,20 +72,19 @@ CheckTok("python string", ReadCell(py_str.X, py_str.Y), 0x88ee88, 15)
 var py_com = ExpectString("cpy")
 CheckTok("python comment", ReadCell(py_com.X, py_com.Y), 0x896969, 9)
 
-// bash: keyword, string, comment.  The bash scheme has no hrd row of its own,
-// so the keyword and the string fall to the Text row (#99EEEE).
+// bash: keyword, string, comment.
 var bash_kw = ExpectString("if [ -f")
-CheckTok("bash keyword", ReadCell(bash_kw.X, bash_kw.Y), 0xeeee99, 15)
+CheckTok("bash keyword", ReadCell(bash_kw.X, bash_kw.Y), 0xffffff, 15)
 var bash_str = ExpectString("wbash")
-CheckTok("bash string", ReadCell(bash_str.X, bash_str.Y), 0xeeee99, 15)
+CheckTok("bash string", ReadCell(bash_str.X, bash_str.Y), 0xd7b995, 15)
 var bash_com = ExpectString("b5")
 CheckTok("bash comment", ReadCell(bash_com.X, bash_com.Y), 0x896969, 9)
 
-// json: string, number - also the Text row under this scheme.
+// json: object key (def:Keyword), float number (def:NumberFloat).
 var json_str = ExpectString("key")
-CheckTok("json string", ReadCell(json_str.X, json_str.Y), 0xeeee99, 15)
+CheckTok("json string", ReadCell(json_str.X, json_str.Y), 0xffffff, 15)
 var json_num = ExpectString("3.14")
-CheckTok("json number", ReadCell(json_num.X, json_num.Y), 0xeeee99, 15)
+CheckTok("json number", ReadCell(json_num.X, json_num.Y), 0x80e000, 11)
 
 // c: keyword, number, comment.
 var c_kw = ExpectString("int c")
@@ -93,7 +92,7 @@ CheckTok("c keyword", ReadCell(c_kw.X, c_kw.Y), 0xffffff, 15)
 var c_num = ExpectString("44")
 CheckTok("c number", ReadCell(c_num.X, c_num.Y), 0x20e000, 10)
 var c_com = ExpectString("cc */")
-CheckTok("c comment", ReadCell(c_com.X - 3, c_com.Y), 0x896969, 9)
+CheckTok("c comment", ReadCell(c_com.X, c_com.Y), 0x896969, 9)
 
 // cpp: comment.
 var cpp_com = ExpectString("cc2")
@@ -101,23 +100,23 @@ CheckTok("cpp comment", ReadCell(cpp_com.X, cpp_com.Y), 0x896969, 9)
 
 // go: string.
 var go_str = ExpectString("wgo")
-CheckTok("go string", ReadCell(go_str.X, go_str.Y), 0xeeee99, 15)
+CheckTok("go string", ReadCell(go_str.X, go_str.Y), 0x88ee88, 15)
 
 // rust: string.
 var rust_str = ExpectString("wrust")
 CheckTok("rust string", ReadCell(rust_str.X, rust_str.Y), 0x88ee88, 15)
 
-// zsh: the keyword 'if' at the start of the zsh line - the Text row.
+// zsh: the keyword 'if' at the start of the zsh line.
 var zsh_str = ExpectString("wzsh")
-CheckTok("zsh keyword", ReadCell(zsh_str.X - 10, zsh_str.Y), 0xeeee99, 15)
+CheckTok("zsh keyword", ReadCell(zsh_str.X - 10, zsh_str.Y), 0xffffff, 15)
 
 // java: string.
 var java_str = ExpectString("wjava")
-CheckTok("java string", ReadCell(java_str.X, java_str.Y), 0xeeee99, 15)
+CheckTok("java string", ReadCell(java_str.X, java_str.Y), 0x88ee88, 15)
 
 // css: number.
 var css_num = ExpectString("10;")
-CheckTok("css number", ReadCell(css_num.X, css_num.Y), 0xeeee99, 15)
+CheckTok("css number", ReadCell(css_num.X, css_num.Y), 0x00e000, 10)
 
 // The plain-code fallback: a fence with no language shows its text in the code role.
 var plain_code = ExpectString("no language, no tokens")
@@ -130,17 +129,17 @@ TypeFKey(2)
 TypePageDown()
 var long_kw = ExpectString("const t = \"z")
 CheckTok("long fence keyword", ReadCell(long_kw.X, long_kw.Y), 0xffffff, 15) // const is the first token (R49)
-CheckTok("long fence tail", ReadCell(78, long_kw.Y), 0x77e9ff, 0) // the code role (R49)
+CheckTok("long fence tail", ReadCell(78, long_kw.Y), 0x88ee88, 15) // the open string block (R49)
 // Horizontal scroll (spec.md, Core bridge): the row shows the slice at
 // LeftPos, and every cell of the slice keeps the color of its token.  F2
 // unwraps so Right moves LeftPos; four cells right the row starts at the
-// 't' of const, inside the keyword token; the tail keeps the plain code role.
+// 't' of const, inside the keyword token; the tail keeps the string role.
 TypeRight(4)
-var scrolled = ExpectString("t = \"zzzzzzzz")   // 'const' is cut to its last cell
-CheckTok("scrolled keyword", ReadCell(scrolled.X - 5, scrolled.Y), 0xffffff, 15) // the 't' of const: cell 4, inside the keyword token
-CheckTok("scrolled code", ReadCell(scrolled.X - 1, scrolled.Y), 0x77e9ff, 0) // the gap before the string keeps the code role
-CheckTok("scrolled string", ReadCell(scrolled.X + 4, scrolled.Y), 0x88ee88, 15) // the string quote takes the string role (R49)
-CheckTok("scrolled tail", ReadCell(78, scrolled.Y), 0x77e9ff, 0) // the code role, as above (R49)
+var scrolled = ExpectString("«onst t = \"z")   // 'const' is cut to '«onst'
+CheckTok("scrolled keyword", ReadCell(scrolled.X + 4, scrolled.Y), 0xffffff, 15) // the 't' of const: cell 4, inside the keyword token
+CheckTok("scrolled code", ReadCell(scrolled.X + 6, scrolled.Y), 0x77e9ff, 0) // the 't' of 'const t = "z' keeps the code role
+CheckTok("scrolled string", ReadCell(scrolled.X + 11, scrolled.Y), 0x88ee88, 15) // the string body takes the string role (R49)
+CheckTok("scrolled tail", ReadCell(78, scrolled.Y), 0x88ee88, 15) // the open string block (R49)
 TypeFKey(2)
 TypePageUp()
 
