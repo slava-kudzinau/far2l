@@ -66,3 +66,5 @@ One source file, one contract section, one large smoke-test rework. Most 0007 sp
 - Budget $15, hard stop $20 (size M).
 - BASE: `feat/markdown-blank-lines` at `4bdffebbe`, off `master` (the brief commit). Worktree `.worktrees/markdown-blank-lines`, build `.worktrees/far2l.markdown-blank-lines.build`.
 - Gate page: stop before build (G2-design, full tier, risk contract).
+
+- G2-design waived by owner, 2026-11-08: "go in auto mod". Autonomous run started.
