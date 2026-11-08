@@ -110,6 +110,7 @@ var h3_cell = ReadCell(h3.X, h3.Y)
 CheckForeSame("heading four", ReadCell(h4.X, h4.Y), h3_cell, "h3")
 CheckForeSame("h3", h3_cell, heading_cell, "h1")
 var bullet = ExpectString("bullet one")
+var body_cell = ReadCell(bullet.X, bullet.Y)
 CheckRowOf("list after the h3 heading and its blank row", bullet, h3.Y + 2)
 // Code takes its own palette entry, different from the heading and from the body.
 var code = ExpectString("Code Fence Body")
@@ -124,7 +125,7 @@ CheckBack("table box glyph", ReadCell(table.X, table.Y))
 CheckBack("table cell", ReadCell(table.X + 2, table.Y))
 // Table body text carries the body role: the scheme's def:Text row (#99EEEE -> 0xeeee99),
 // the color of the viewer's body text, not the plain-mode blank cell.
-CheckForeSame("table cell text", ReadCell(table.X + 2, table.Y), ReadCell(bullet.X, bullet.Y), "body")
+CheckForeSame("table cell text", ReadCell(table.X + 2, table.Y), body_cell, "body")
 // Table header text takes the strong color; the borders take the rule color, read from the line
 // glyph of the separator row under the header.
 var table_head = ExpectString("Col A")
@@ -162,7 +163,7 @@ if (hint.Y != swim_last.Y + 2) {
 	Panic("the hint does not follow the swimlane code after its end line");
 }
 // The hint row is body text: the scheme's def:Text row, like all body cells.
-CheckForeSame("diagram hint", ReadCell(hint.X, hint.Y), ReadCell(bullet.X, bullet.Y), "body")
+CheckForeSame("diagram hint", ReadCell(hint.X, hint.Y), body_cell, "body")
 TypeEnd()
 // Quote text and the quote bar take the quote role: today the viewer text, so the check reads
 // the first quote and keeps the cell for the later pairs.

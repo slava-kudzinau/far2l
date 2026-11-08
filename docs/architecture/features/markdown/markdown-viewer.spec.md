@@ -111,18 +111,14 @@ Other viewer functions act on the source file:
 
 ### Spacing
 
-- A block that ends queues one blank row. The next block emits it before its first row.
-- Thus repeated blanks collapse into one, and the document never starts with a blank row.
-- Source blank lines give no rows, except inside code.
-- A heading has one blank row before it, except at the top of the document.
-- An H1 has one blank row after it. An H2 to H6 has no blank row after it. If another heading follows, the rule above gives one blank row.
-- A code block or an HTML block has one blank row before it and after it. It has no blank row before it directly after an H2 to H6.
-- An outermost list has no blank row before it or after it. A heading, a code block or an HTML block next to a list keeps its own blank row. An H1 before a list keeps its blank row.
-- Items stay tight, and a nested list has no blank row.
-- A paragraph, a quote, a table and a thematic break have one blank row between them.
-- A block inside a list item is spaced like a top-level block. A code block in an item keeps its blank row when another item follows.
-- A heading, a code block or an HTML block as the first block of an item has no blank row before it. It stays on the row of the bullet.
-- A blank row inside a list or a quote keeps its lead.
+- Each empty source line between two blocks gives one blank row. Two empty source lines in a row give two blank rows, and N empty lines give N blank rows.
+- When two blocks have no empty source line between them, they have no blank row between them. The renderer adds no blank row of its own and removes none.
+- A leading empty line of the file gives one blank row before the first content row. A trailing empty line gives one blank row after the last content row.
+- An empty line inside a list or a quote gives one blank row that keeps the lead of that list or quote.
+- An empty list item (`-` with no text) gives no row of its own.
+- A fence marker line, a table rule line and a thematic break line are not empty lines, so they give no blank row.
+- An empty line inside a code fence gives a code row, because the fence body is verbatim.
+- Each blank row takes the file position of the row before it, or 0 before the first content row. Thus `nFilePos` never decreases.
 
 ### Palette roles
 

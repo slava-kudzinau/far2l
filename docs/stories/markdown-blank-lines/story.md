@@ -1,6 +1,6 @@
 ---
 description: Show a blank row for each empty source line in the F3 Markdown view, with no rows added or removed by the renderer.
-status: in-progress
+status: done
 size: M
 risk: contract
 ---

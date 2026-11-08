@@ -50,8 +50,22 @@ Open a file like `~/react-native-interview-questions.md` in F3: `### Q1` and `**
 
 ### What was built
 
+- `far2l/src/markdown/MarkdownRender.cpp` (`0436339c7`, `862a10666`): deleted the gap queue and added `blank_rows(up_to)` with `last_text_end`, `line_end`, `line_is_blank` and `first_nonblank_line`.
+- `testing/tests/0007-view-file-markdown/initdir/left/spacing.md` and `test.js` (`9b0b5f547`): updated `spacing.md` and rewrote the spacing assertions for the source-driven blank rows.
+- `docs/architecture/features/markdown/markdown-viewer.spec.md`: replaced the Spacing section with the source-driven rules.
+
 ### Decisions changed during the build
+
+1. In `in_code` text callbacks, `blank_rows` runs on the first text callback (`b_code.text.empty()`). `last_text_end` also advances past verbatim empty fence lines.
+2. Four row-offset assertions in `test.js` on `sample.md` and `long.md` checked old renderer blank-row offsets. T2 updated those four lines too.
+3. The orchestrator model (`glm-5.3`) hit a 14-day monthly quota cap. The main session ran the remaining dispatches directly on `google-antigravity/gemini-3.8-flash` per your order.
 
 ### What the reviews caught
 
+- The T1 review (`task-reviewer-critical`, opus) found 1 Critical, 1 Important and 4 Minor issues. Commit `862a10666` fixed all six, and the scoped re-review passed with 0 findings.
+- The final review (`final-reviewer`, `google-antigravity/gemini-3.8-flash`) returned `Ready for close-out` with 0 Critical, 0 Important and 2 Minor parked findings.
+
 ### Run it
+
+1. Run the check from `.worktrees/markdown-blank-lines`: `BUILD=../far2l.markdown-blank-lines.build; APP=$(cd "$BUILD" && pwd)/install/far2l.app/Contents/MacOS/far2l; TESTS="0007-view-file-markdown 0008-view-md-default 0009-view-md-setting-off"; cmake --build "$BUILD" --target far2l -j8 && sh testing/markdown/ascii-golden.sh && sh testing/markdown/ascii-driver.sh && (cd testing && for t in $(echo $TESTS); do for s in tests/*; do [ -S "$s" ] && rm -f "$s"; done; o=$(./far2l-smoke-run.sh "$APP" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && ! echo "$o" | grep -q FAILED || { echo "FAILED: $t"; exit 1; }; done) && echo "check ok"`.
+2. Open `../far2l.markdown-blank-lines.build/install/far2l.app/Contents/MacOS/far2l`, view `testing/tests/0007-view-file-markdown/initdir/left/spacing.md` with F3, and compare the empty lines with F4.
