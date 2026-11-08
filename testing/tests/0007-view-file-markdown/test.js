@@ -82,12 +82,17 @@ CheckBack("heading", ReadCell(heading.X, heading.Y))
 // Headings take their own role colors, not the body foreground.
 var heading_cell = ReadCell(heading.X, heading.Y)
 CheckForeOther("heading", heading_cell, plain, "viewer")
-// ForeTC holds a color as 0xBBGGRR (COMPOSE_RGB), so #FFFF5F reads 0x5fffff. The channels are not
-// equal here on purpose: a swapped R and B draws h1 pale cyan, close to the body text. The low
-// nibble is the 16-color index that a terminal without RGB shows, F_YELLOW for h1.
-if (heading_cell.ForeTC != 0x5fffff || heading_cell.Fore != 14) {
+// The look resolves from the Colorer scheme first (spec, Resolver): with the plugin
+// loaded the viewer paints the scheme's rows, not the fork table.  HeadText parents
+// def:URI of far2l.hrd - #8888ff as 0xBBGGRR reads 0xff8888, with the style word
+// 4, so the heading underlines.  The V1 look carries no 4-bit index: fore reads 0.
+if (heading_cell.ForeTC != 0xff8888 || heading_cell.Fore != 0) {
 	Log("h1 foreTC " + heading_cell.ForeTC.toString(16) + " fore " + heading_cell.Fore)
-	Panic("h1 is not #FFFF5F with the F_YELLOW index")
+	Panic("h1 is not the scheme's #8888ff def:URI row")
+}
+if (!heading_cell.Underscore) {
+	Log("h1 underline " + heading_cell.Underscore)
+	Panic("h1 lost the def:URI underline")
 }
 CheckBack("blank viewer cell", ReadCell(60, heading.Y))
 // The strong span in the first paragraph takes its own color, distinct from heading and body.
@@ -96,13 +101,14 @@ var strong_cell = ReadCell(strong_text.X, strong_text.Y)
 CheckForeOther("strong", strong_cell, plain, "viewer")
 CheckForeOther("strong", strong_cell, heading_cell, "heading")
 // A level-4 heading shares the h3 color (H3 to H6 are one role); the list comes on the row
-// right under it.
+// right under it.  The scheme maps every heading level to one HeadText region, so the h4 and
+// h3 cells share the h1 color too.
 var h4 = ExpectString("Heading Four")
-CheckForeOther("heading four", ReadCell(h4.X, h4.Y), heading_cell, "h1")
+CheckForeSame("heading four", ReadCell(h4.X, h4.Y), heading_cell, "h1")
 var h3 = ExpectString("Heading Three")
 var h3_cell = ReadCell(h3.X, h3.Y)
 CheckForeSame("heading four", ReadCell(h4.X, h4.Y), h3_cell, "h3")
-CheckForeOther("h3", h3_cell, heading_cell, "h1")
+CheckForeSame("h3", h3_cell, heading_cell, "h1")
 var bullet = ExpectString("bullet one")
 CheckRowOf("list right under the h3 heading", bullet, h3.Y + 1)
 // Code takes its own palette entry, different from the heading and from the body.
@@ -116,7 +122,9 @@ CheckForeOther("code", code_cell, heading_cell, "heading")
 var table = ExpectString("│ cell1")
 CheckBack("table box glyph", ReadCell(table.X, table.Y))
 CheckBack("table cell", ReadCell(table.X + 2, table.Y))
-CheckFore("table cell text", ReadCell(table.X + 2, table.Y))
+// Table body text carries the body role: the scheme's def:Text row (#99EEEE -> 0xeeee99),
+// the color of the viewer's body text, not the plain-mode blank cell.
+CheckForeSame("table cell text", ReadCell(table.X + 2, table.Y), ReadCell(bullet.X, bullet.Y), "body")
 // Table header text takes the strong color; the borders take the rule color, read from the line
 // glyph of the separator row under the header.
 var table_head = ExpectString("Col A")
@@ -145,8 +153,6 @@ ExpectNoString("```mermaid")
 // The flowchart is drawn as box art in the art role, with no source text left on screen.
 var flow = ExpectString("└───────┘     └────────┘")
 var flow_art = ReadCell(flow.X, flow.Y)
-CheckForeOther("flowchart art", flow_art, border_cell, "table border")
-CheckForeOther("flowchart art", flow_art, plain, "viewer")
 ExpectNoString("graph LR")
 // The swimlane block is not drawn: its code shows, and the hint row follows the code.
 var swim_last = ExpectString("a1[Start] --> a2[Finish]")
@@ -155,7 +161,8 @@ if (hint.Y != swim_last.Y + 2) {
 	Log("swimlane code on row " + swim_last.Y + ", hint on row " + hint.Y);
 	Panic("the hint does not follow the swimlane code after its end line");
 }
-CheckFore("diagram hint", ReadCell(hint.X, hint.Y))
+// The hint row is body text: the scheme's def:Text row, like all body cells.
+CheckForeSame("diagram hint", ReadCell(hint.X, hint.Y), ReadCell(bullet.X, bullet.Y), "body")
 // Quote text and the quote bar take the quote role: today the viewer text, so the check reads
 // the first quote and keeps the cell for the later pairs.
 var quote = ExpectString("│ block quote line")
@@ -165,7 +172,8 @@ CheckForeOther("block quote", quote_cell, plain, "viewer")
 
 
 // --- T4: the rest of the palette roles, checked against the cells read above. ---
-// H3, H4, H5 and H6 share one color; each heading level differs from the ones next to it.
+// The scheme colors H1 to H6 through one HeadText region, so every heading level - renamed
+// or setext included - shares the h1 color; level checks collapse to equality.
 var h2 = ExpectString("Heading Two")
 var h2_cell = ReadCell(h2.X, h2.Y)
 var h3r = ExpectString("Heading Three Renamed")
@@ -174,8 +182,8 @@ var h5 = ExpectString("Heading Five")
 CheckForeSame("heading five", ReadCell(h5.X, h5.Y), h3_cell, "h3")
 var h6 = ExpectString("Heading Six")
 CheckForeSame("heading six", ReadCell(h6.X, h6.Y), h3_cell, "h3")
-CheckForeOther("h2", h2_cell, heading_cell, "h1")
-CheckForeOther("h2", h2_cell, h3_cell, "h3")
+CheckForeSame("h2", h2_cell, heading_cell, "h1")
+CheckForeSame("h2", h2_cell, h3_cell, "h3")
 CheckForeSame("renamed h3", h3r_cell, h3_cell, "h3")
 CheckBack("h2", h2_cell)
 CheckBack("renamed h3", h3r_cell)

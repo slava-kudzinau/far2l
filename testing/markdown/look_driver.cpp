@@ -647,16 +647,20 @@ void EnsureNoTrueColor()
 	}
 }
 
-// The viewer background of the contrast rule: extractColor takes it from the background
+// The viewer background of the contrast rule: the resolver reads it from the background
 // bits of COL_VIEWERTEXT, so a truecolor entry of the color table sets it.
 uint64_t SaveBackground()
 {
 	return FarColors::setcolors[COL_VIEWERTEXT];
 }
 
+// The rgb is a written #RRGGBB color packed the way the app packs a
+// background (COMPOSE_RGB, low byte red), so a round can use the scheme's
+// real rows on the real navy background.
 void SetBackground(uint32_t rgb)
 {
-	FarColors::setcolors[COL_VIEWERTEXT] = TrueFore(0xffffff) | (uint64_t(rgb) << 40)
+	const uint32_t bgr = ((rgb & 0xff) << 16) | (rgb & 0xff00) | ((rgb >> 16) & 0xff);
+	FarColors::setcolors[COL_VIEWERTEXT] = TrueFore(0xffffff) | (uint64_t(bgr) << 40)
 		| BACKGROUND_TRUECOLOR;
 }
 
@@ -770,6 +774,21 @@ int look_contrast()
 			return 1;
 		}
 	}
+
+	// The real decode (the byte-order regression, 2026-11-07): the rows are the
+	// far2l.hrd parents of the markdown regions, written #RRGGBB in an attribute;
+	// a decoder that reads the high byte as red fails EmText and drops the whole
+	// look.  Every row must clear 3:1 on the navy viewer background.
+	static const unsigned int kScheme[10] = {0x99eeee, 0x8888ff, 0x8888ff, 0x40a000, 0xff20a0,
+		0xffe977, 0x6699ff, 0xffffff, 0xffffff, 0x99eeee};
+	FakeScheme(34, kScheme, kStyle);
+	SetBackground(0x000080);
+	for (uint64_t role : s_scheme_roles) {
+		if (!CheckRole("look_contrast", role, WantScheme(kScheme[SchemeRoleIndex(role)], 0))) {
+			return 1;
+		}
+	}
+
 	// One row below 3.0, in a new generation: every role takes the fork table.
 	FakeScheme(32, kFail, kStyle);
 	for (uint64_t role : s_scheme_roles) {

@@ -761,6 +761,7 @@ int cb_enter_span(MD_SPANTYPE type, void *detail, void *userdata)
         }
         case MD_SPAN_STRONG: b.span_strong++; break;
         case MD_SPAN_EM: b.span_em++; break;
+        case MD_SPAN_U: b.span_em++; break; // md4c parses _text_ as U under MD_FLAG_UNDERLINE
         case MD_SPAN_CODE: b.span_code++; break;
         default: break;
     }
@@ -785,6 +786,7 @@ int cb_leave_span(MD_SPANTYPE type, void *detail, void *userdata)
             break;
         case MD_SPAN_STRONG: if (b.span_strong > 0) b.span_strong--; break;
         case MD_SPAN_EM: if (b.span_em > 0) b.span_em--; break;
+        case MD_SPAN_U: if (b.span_em > 0) b.span_em--; break;
         case MD_SPAN_CODE: if (b.span_code > 0) b.span_code--; break;
         default: break;
     }

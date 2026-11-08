@@ -3,7 +3,7 @@
 #include "MarkdownRender.hpp"
 
 #include "headers.hpp"   // WinPort: WINPORT(GetConsoleColorPalette)
-#include "farcolors.hpp" // FarColorToReal, extractColor
+#include "farcolors.hpp" // FarColorToReal
 #include "farcolorexp.h" // ExprToFarColor
 #include "KeyFileHelper.h"
 #include "utils.h"       // InMyConfig
@@ -32,6 +32,24 @@ constexpr uint64_t TrueForeColor(uint32_t rgb)
 {
 	const uint64_t bgr = ((rgb & 0xff) << 16) | (rgb & 0xff00) | ((rgb >> 16) & 0xff);
 	return (bgr << 16) | FOREGROUND_TRUECOLOR;
+}
+
+// The 24-bit channels of a far attribute as an RGB of the contrast rule.  A far
+// attribute holds its color as 0xBBGGRR (COMPOSE_RGB in VT256ColorTable.h), so
+// the low byte is red; extractColor reads the high byte as red and swaps the
+// channels of every two-color pair it decodes.
+RGB AttrForeRgb(uint64_t attr)
+{
+	const uint32_t f = (attr & FOREGROUND_TRUECOLOR) ? (uint32_t)((attr >> 16) & 0xffffff)
+		: Palette::FARPalette[16 + (attr & 0x0f)] & 0x00ffffff;
+	return toRGB((int)(f & 0xff), (int)((f >> 8) & 0xff), (int)((f >> 16) & 0xff));
+}
+
+RGB AttrBackRgb(uint64_t attr)
+{
+	const uint32_t b = (attr & BACKGROUND_TRUECOLOR) ? (uint32_t)((attr >> 40) & 0xffffff)
+		: Palette::FARPalette[(attr & B_MASK) >> 4] & 0x00ffffff;
+	return toRGB((int)(b & 0xff), (int)((b >> 8) & 0xff), (int)((b >> 16) & 0xff));
 }
 
 // The user ini: read-only, one key per role in the [markdown] section.
@@ -290,13 +308,11 @@ uint64_t RgbRealColor(const RoleDefault &def)
 // a mid-luminance background must never show a mix of RGB defaults and today's look.
 bool RgbDefaultsPass()
 {
-	RGB bg, fg;
-	extractColor(FarColorToReal(COL_VIEWERTEXT), fg, bg);
+	const RGB bg = AttrBackRgb(FarColorToReal(COL_VIEWERTEXT));
 	for (size_t i = 0; i < kRoleDefaults.size(); ++i) {
 		if (i == MD_ROLE_ART - 1)
 			continue;   // art has no RGB default row (the placeholder is not a color)
-		RGB def_fg, def_bg;
-		extractColor(RgbRealColor(kRoleDefaults[i]), def_fg, def_bg);
+		const RGB def_fg = AttrForeRgb(RgbRealColor(kRoleDefaults[i]));
 		if (wcagComputeContrast(def_fg, bg) < 3.0)
 			return false;
 	}
@@ -369,14 +385,13 @@ bool LookAllowed(unsigned long long gen, const LookCache &cache)
 
 	std::lock_guard<std::mutex> lock(s_mutex);
 	if (!s_computed || s_bg_real != bg_real || s_gen != gen) {
-		RGB row_fg, row_bg, bg;
-		extractColor(bg_real, bg, bg);
+		const RGB bg = AttrBackRgb(bg_real);
 		s_verdict = true;
 		for (int i = 0; i < 10; ++i) {
 			if (!cache.have[i]) {
 				continue; // a missing region takes the fork default (spec, Fallback)
 			}
-			extractColor(TrueForeColor(cache.rows[i].fore), row_fg, row_bg);
+			const RGB row_fg = AttrForeRgb(TrueForeColor(cache.rows[i].fore));
 			if (wcagComputeContrast(row_fg, bg) < 3.0) {
 				s_verdict = false;
 				break;
@@ -610,12 +625,11 @@ int64_t MdCodeTint(uint64_t viewer_bg)
 	if (WINPORT(GetConsoleColorPalette)(NULL) >= 24) {
 		const uint32_t tint = BlendOneEighth(BackRgb(viewer_bg), ForeRgb(code));
 		// 3:1 on (code foreground, tint): the pair's one verdict (spec, The gate).
-		// Both sides decode through the same 0xBBGGRR -> RGB mapping extractColor
-		// uses, so the comparison is channel-consistent.
-		RGB fg, bg;
-		extractColor(code, fg, bg);
-		const RGB tint_rgb = toRGB((int)((tint >> 16) & 0xff), (int)((tint >> 8) & 0xff),
-			(int)(tint & 0xff));
+		// Both sides decode through AttrForeRgb and the tint's own 0xBBGGRR
+		// packing (low byte red), so the comparison is channel-consistent.
+		const RGB fg = AttrForeRgb(code);
+		const RGB tint_rgb = toRGB((int)(tint & 0xff), (int)((tint >> 8) & 0xff),
+			(int)((tint >> 16) & 0xff));
 		if (wcagComputeContrast(fg, tint_rgb) >= 3.0)
 			s_tint = (int64_t)tint;
 	}
