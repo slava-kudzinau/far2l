@@ -280,8 +280,8 @@ struct Builder {
         MdLine line;
         line.runs = std::move(cur);
         // A line with no source text of its own (a table rule, a blank code line, a blank row
-        // from the source) takes the position of the line before it, so it groups with that line and never ties
-        // with a source line.
+        // from the source) takes the position of the line before it, so it groups with that line
+        // and never ties with a source line.
         line.nFilePos = cur_pos_set ? cur_pos : (out.empty() ? 0 : out.back().nFilePos);
         out.push_back(std::move(line));
         cur.clear();
@@ -297,7 +297,7 @@ struct Builder {
     // at the anchor line, so it counts only whole empty lines strictly between the blocks; a text
     // on the same line as the last text counts nothing.  A blank row keeps the lead of the
     // enclosing list or quote; the renderer adds no blank row of its own.
-    int64_t last_text_end = -1;   // end offset of the last source text, -1 before the first one
+    int64_t last_text_end = -1;   // start offset of the next unconsumed line, -1 before any
 
     // End offset of the line that starts at `at` (past its LF, else base_size).
     size_t line_end(size_t at) const
@@ -321,12 +321,17 @@ struct Builder {
         return true;
     }
 
-    // The start of the line after the line that holds `at`.
-    size_t next_line_start(size_t at) const
+    // Start offset of the first non-empty line at or after `from` (else base_size).
+    size_t first_nonblank_line(size_t from) const
     {
-        while (at < base_size && base[at] != '\n')
-            ++at;
-        return at < base_size ? at + 1 : at;
+        size_t scan = from;
+        while (scan < base_size) {
+            const size_t end = line_end(scan);
+            if (!line_is_blank(scan, end))
+                break;
+            scan = end;
+        }
+        return scan;
     }
 
     // Emit one blank row per whole empty source line between the last source text and the start of
@@ -339,18 +344,21 @@ struct Builder {
     void blank_rows(int64_t up_to)
     {
         const size_t stop = (up_to < 0) ? base_size : (size_t)up_to;
+        const size_t start = (last_text_end < 0) ? 0 : (size_t)last_text_end;
+        if (stop <= start)
+            return;
         const std::wstring lead = row_lead();   // a blank inside a list or a quote keeps its lead
-        for (size_t i = (last_text_end < 0) ? 0 : next_line_start((size_t)last_text_end);
-                i < stop; i = line_end(i)) {
+        for (size_t i = start; i < stop; ) {
             const size_t end = line_end(i);
-            if (!line_is_blank(i, end))
-                continue;
-            MdLine blank;
-            blank.nFilePos = out.empty() ? 0 : out.back().nFilePos;
-            if (!lead.empty())
-                blank.runs.push_back(MdRun{lead, lead_role()});
-            out.push_back(std::move(blank));
-            last_text_end = (int64_t)end;
+            if (line_is_blank(i, end)) {
+                MdLine blank;
+                blank.nFilePos = out.empty() ? 0 : out.back().nFilePos;
+                if (!lead.empty())
+                    blank.runs.push_back(MdRun{lead, lead_role()});
+                out.push_back(std::move(blank));
+                last_text_end = (int64_t)end;
+            }
+            i = end;
         }
     }
 
@@ -563,14 +571,10 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             // A thematic break fires no text callback: anchor its blank rows by a scan of the
             // source from the end of the last source text.  The scan stops at the first line that
             // is not empty: the break's own line; the count stops there too.
-            size_t scan = (b.last_text_end < 0) ? 0 : b.next_line_start((size_t)b.last_text_end);
-            while (scan < b.base_size) {
-                const size_t end = b.line_end(scan);
-                if (!b.line_is_blank(scan, end))
-                    break;
-                scan = end;
-            }
-            b.blank_rows((int64_t)scan);
+            const size_t from = (b.last_text_end < 0) ? 0 : (size_t)b.last_text_end;
+            const size_t hr_line = b.first_nonblank_line(from);
+            b.blank_rows((int64_t)hr_line);
+            b.last_text_end = (int64_t)b.line_end(hr_line);
             b.begin_line();
             std::wstring hr;
             int n = std::max(1, b.width - (int)(2 * b.list_stack.size()));
@@ -823,21 +827,39 @@ int cb_text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *userdata)
     b.pos += size;
     const int64_t off = at >= 0 ? b.line_start_of((size_t)at) : -1;
     if (b.in_code) {
-        if (off >= 0)
+        if (b.code_text.empty()) {
+            // First callback of a code/HTML block: count the empty lines before the block.
+            // If the first line of the fence is non-empty, `off >= 0` is its line start;
+            // if the first line of the fence is empty (`at < 0`), `first_nonblank_line` finds
+            // the opening fence marker line so pre-fence empty lines still count.
+            const size_t from = (b.last_text_end < 0) ? 0 : (size_t)b.last_text_end;
+            const int64_t anchor = (off >= 0) ? off : (int64_t)b.first_nonblank_line(from);
+            b.blank_rows(anchor);
+            if (off < 0) {
+                // Opening fence line + this first empty verbatim line:
+                const size_t fence_open = b.first_nonblank_line(from);
+                b.last_text_end = (int64_t)b.line_end(fence_open);
+            }
+        }
+        if (off >= 0) {
             b.code_marks.emplace_back(b.code_text.size(), off);
+            b.last_text_end = (int64_t)b.line_end((size_t)at);
+        } else if (w == L"\n" && (b.code_text.empty() || b.code_text.back() == L'\n')
+                && b.last_text_end >= 0) {
+            // Empty verbatim line inside the code block (`md4c.c:4738` static "\n"):
+            // advance past this empty fence line so it is not counted again after the fence.
+            b.last_text_end = (int64_t)b.line_end((size_t)b.last_text_end);
+        }
         b.code_text += w;
-        if (at >= 0)
-            b.last_text_end = at + (int64_t)size;   // a fence's text is source text too
         return 0;
     }
     // The empty source lines before this text: the count runs at the anchor of this text's line,
     // so a text on the same display line (a styled span: cb_text fires more than once per line)
     // counts nothing.  Leading empty lines count from offset 0 (`last_text_end == -1`).
-    if (off >= 0
-            && (size_t)off > ((b.last_text_end < 0) ? (size_t)0 : b.next_line_start((size_t)b.last_text_end)))
+    if (off >= 0)
         b.blank_rows(off);
     if (at >= 0)
-        b.last_text_end = at + (int64_t)size;   // the end offset of this source text
+        b.last_text_end = (int64_t)b.line_end((size_t)at);
     switch (type) {
         case MD_TEXT_SOFTBR:
         case MD_TEXT_BR:
