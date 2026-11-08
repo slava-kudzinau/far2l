@@ -1,52 +1,55 @@
-// The F3 look of the Colorer scheme (story markdown-colorer-look, plan T5/T6).
-// Needs the full build: the colorer plugin is loaded and the far2l.hrd scheme
-// paints the runs; a run on the far2l-only build shows the fork colors.
+// The Colorer look in the F3 viewer: with the colorer plugin the viewer paints
+// a Markdown file with the scheme's regions (story markdown-colorer-look).
+// Session 1 opens the file, pays the first render, closes and reopens from
+// the cache.  Session 2 opens the editor on the same file from the panels and
+// reopens the viewer.  The --norgb run gates the tint and keeps the scheme's
+// 4-bit codes.
+
+// A cell of the scheme look: the truecolor foreground (ForeTC is 0xBBGGRR)
+// and the underline bit of the raw attributes (spec, Underline).  The JS
+// number is a float64 that rounds the 64-bit attribute word, so the bit
+// reads here from ReadCell's Underscore, which the harness computes from
+// the whole word.
+function CheckLook(name, x, y, tc, underlined) {
+	var cell = ReadCell(x, y)
+	if (cell.ForeTC != tc) {
+		Log(name + ": fore tc " + cell.ForeTC.toString(16) + ", expected " + tc.toString(16))
+		Panic(name + " shows the wrong color")
+	}
+	if (cell.Underscore != underlined) {
+		Log(name + ": underline " + cell.Underscore + ", expected " + underlined)
+		Panic(name + " shows the wrong underline")
+	}
+}
+
+// A cell of the code block's tint (story markdown-code-tint): the fill's
+// blended background rides the row - one eighth of the scheme's code yellow
+// (#ffe977) in the viewer's navy (0x7e1d1f, one eighth of the pair).  The
+// scheme's 4-bit index rides along under the truecolor field.
+function CheckTint(name, x, y) {
+	var cell = ReadCell(x, y)
+	if (cell.BackTC != 0x7e1d1f || cell.Back != 1 || !cell.IsBackTC) {
+		Log(name + ": back " + cell.Back + " tc " + cell.IsBackTC + " " + cell.BackTC.toString(16))
+		Panic(name + " shows the wrong tint background")
+	}
+}
+
 mydir=WorkDir()
 profile=mydir + "/profile"
 left=mydir + "/left"
 right=mydir + "/right"
 config = profile + "/.config"
 
-// A cell of the scheme look: the truecolor foreground (ForeTC is 0xBBGGRR)
-// and the underline bit 0x8000 of the raw attributes (spec, Underline).
-function CheckLook(name, x, y, tc, underlined) {
-	var cell = ReadCell(x, y)
-	if (cell.ForeTC != tc) {
-		Log(name + ": foreTC " + cell.ForeTC.toString(16) + ", expected " + tc.toString(16))
-		Panic(name + " shows the wrong foreground")
-	}
-	var raw = ReadCellRaw(x, y)
-	var under = (raw.Attributes & 0x8000) != 0
-	if (under != underlined) {
-		Log(name + ": underline " + under + ", expected " + underlined)
-		Panic(name + " shows the wrong underline")
-	}
-}
-
-// A cell of the code block's tint (story markdown-code-tint): the fill's
-// blended background rides the row - one eighth of the code role's magenta in
-// the viewer's blue (0x8f101f, the driver's BlendEighth of the same pair).
-// The scheme's 4-bit index rides along under the truecolor field.
-function CheckTint(name, x, y) {
-	var cell = ReadCell(x, y)
-	if (cell.BackTC != 0x8f101f || cell.Back != 1 || !cell.IsBackTC) {
-		Log(name + ": back " + cell.Back + " tc " + cell.IsBackTC + " " + cell.BackTC.toString(16))
-		Panic(name + " shows the wrong tint background")
-	}
-}
-
-// A fresh profile shows the help screen on start; a reused one would not.
-// The white Viewer.Text keeps the ten scheme rows above 3:1 (spec, Resolver
-// order): the scheme look, not the fork table, paints the screen.
-
-// 80x28: the fixture fits on one screen.
+RemoveAll(profile)
 StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 28);
 ExpectString("Help - FAR2L");
 TypeEscape()
 ExpectString("OSC52");
 TypeEscape()
+// The history keeps the last position; empty it so the run starts at the top.
+if (Exists(config + "/history/viewer.pos"))
+	Remove(config + "/history/viewer.pos")
 TypeDown(1)
-// Open the fixture in the viewer (F3; Markdown mode is the default).
 TypeFKey(3)
 ExpectString("left/fixture.md")
 // The first render pays the scheme loads; the reopen re-renders from cache.
@@ -55,28 +58,33 @@ TypeFKey(3)
 ExpectString("left/fixture.md")
 
 // Session 1: with the plugin loaded the viewer shows the Colorer look: the
-// scheme's regions paint the runs and the scheme's style words underline them
-// (the harness runs a 16-color terminal, so the scheme is console.hrd - the
-// 4-bit path of the resolver, spec "Resolver order"; the truecolor rows are
-// the driver's `look_real_hrd`). The table draws with box characters.
+// scheme's regions paint the runs and the scheme's style words underline them.
+// The harness runs a truecolor terminal, so the scheme is far2l.hrd and each
+// value below is that file's row for the region's parent (markdown.hrc):
+// HeadText and LinkText parent def:URI (#8888ff, style 4 = underline),
+// StrongText parents def:StringEdge (#40a000), EmText def:Label (#ff20a0),
+// Code def:TypeKeyword (#ffe977), QuoteText def:Prefix (#6699ff), Text
+// def:Text (#99eeee); ListMark and Rule parent def:Keyword (#ffffff) through
+// ShownMark.  Only def:URI carries a style word, so only the heading and link
+// cells underline.  The table draws with box characters.
 var h = ExpectString("Heading")
-CheckLook("heading", h.X, h.Y, 0x5fffff, true)
+CheckLook("heading", h.X, h.Y, 0xff8888, true)
 var l = ExpectString("the link")
-CheckLook("link", l.X, l.Y, 0x87ff87, true)
+CheckLook("link", l.X, l.Y, 0xff8888, true)
 var st = ExpectString("strong")
-CheckLook("strong", st.X, st.Y, 0xffffff, true)
+CheckLook("strong", st.X, st.Y, 0x00a040, false)
 var em = ExpectString("emphasis")
-CheckLook("emphasis", em.X, em.Y, 0xffff00, true)
+CheckLook("emphasis", em.X, em.Y, 0xa020ff, false)
 var co = ExpectString("inline code")
-CheckLook("code", co.X, co.Y, 0xff87ff, true)
+CheckLook("code", co.X, co.Y, 0x77e9ff, false)
 var q = ExpectString("quote text")
-CheckLook("quote", q.X, q.Y, 0xd7afaf, true)
+CheckLook("quote", q.X, q.Y, 0xff9966, false)
 var it = ExpectString("item one")
 // The bullet of a list item sits two cells left of the text (spec, New roles).
-CheckLook("listmark", it.X - 2, it.Y, 0xaf8787, true)
-CheckLook("body", it.X, it.Y, 0xffff00, true)
+CheckLook("listmark", it.X - 2, it.Y, 0xffffff, false)
+CheckLook("body", it.X, it.Y, 0xeeee99, false)
 var bd = ExpectString("───┼───")
-CheckLook("rule", bd.X, bd.Y, 0xaf8787, true)
+CheckLook("rule", bd.X, bd.Y, 0xffffff, false)
 
 // The javascript fence's code row (story markdown-code-tint): the block's tint
 // fills the whole row - the code cell, the cell past the end of the text and
@@ -100,23 +108,20 @@ if (plain.BackTC != 0x800000 || plain.Back != 1 || !plain.IsBackTC) {
 	Panic("the row after the fence lost the viewer background")
 }
 
-// Session 2: F4 opens the editor on the same file (the F4/F6 parity of the
-// goal), Escape returns, and the reopen shows the same look (the cache, spec
-// "Cache").  A scheme change moving the look is the driver's `look_bridge_real`.
+// Session 2: close the viewer, open the editor on the same file (F4 from the
+// panels; in the viewer F4 ticks hex mode), leave the editor, and reopen the
+// viewer: the same look returns (the cache keyed on the viewer background and
+// the scheme generation, spec "Cache").  A scheme change moving the look is
+// the driver's `look_bridge_real`.
+TypeEscape()
 TypeFKey(4)
 ExpectString("fixture.md")
 TypeEscape()
 TypeFKey(3)
 var h2 = ExpectString("Heading")
-CheckLook("heading after reopen", h2.X, h2.Y, 0xffff00, true)
-
-TypeFKey(4)
-ExpectString("fixture.md")
+CheckLook("heading after reopen", h2.X, h2.Y, 0xff8888, true)
 TypeFKey(6)
 ExpectString("fixture.md")
-TypeFKey(1)
-ExpectString("Help - FAR2L")
-TypeEscape()
 TypeEscape()
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")

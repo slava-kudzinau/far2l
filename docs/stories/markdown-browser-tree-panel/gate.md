@@ -84,6 +84,8 @@ _Pasted from the fresh read before the build._
 
 ## At merge
 
+Owner gate G4: the owner said "merge it" on 2026-11-07 and PR #16 was merged into `next/2.9.1-ovr.1` as `019c8ffda`. The heading ids in the one-file page are in, as listed above. The Linux scan is still not run; the `find` line is proven on this Mac only.
+
 ### What was built
 
 Alt-F3 on a Markdown file now opens the reading page of the root. It holds the opened file and the other Markdown files under the root, in one page. A file tree is docked on the left. The panel has the root name, `details` folders and one link per file. The shown file is marked, and its folders are open. The toggle button and the key `b` open and close the panel, and the browser keeps the state after a reload. A click in the tree, or on a link in the text, shows that file at the same address, so Back and Forward work. A link that leaves the root becomes text with `not in this tree`. A file over 1 MiB or over the page limit stays in the tree and shows a note. `tree=off`, `--tree off` or a root of `$HOME` or `/` gives the page of one file, as story 1 made it.
