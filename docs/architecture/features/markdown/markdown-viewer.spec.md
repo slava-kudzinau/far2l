@@ -78,7 +78,8 @@ The viewer scrolls by rendered line. The top row is `m_md_top`, an index into `M
 |---|---|---|
 | Plain | Hex | Markdown |
 | Hex, Markdown off | Text | Markdown |
-| Markdown on, also with hex | Markdown | Text |
+| Markdown on, Hex off | Hex | Text |
+| Markdown on, Hex on | Text | Text |
 
 Other viewer functions act on the source file:
 
@@ -295,8 +296,6 @@ Closed items: broken scrolling and the ignored `mermaid.min.js` asset (story mar
 | HTML entities show as source: `&amp;` stays `&amp;`. | Smoke probe. `cb_text` does not decode `MD_TEXT_ENTITY`. |
 | F8 and Shift-F8 change the code page in the status line, but the rows stay the same. `m_md_ready` stays true. | Smoke probe |
 | A file that changes on disk keeps the old render. `KEY_IDLE` does not clear `m_md_ready`. | Code |
-| In Markdown mode the F4 label says Markdown, but F4 goes to hex. | Smoke probe, `ChangeViewKeyBar` |
-| After Shift-F4 in Quick View, the panel key bar does not update. `QuickView::ProcessKey` lists F2, F4, F8 and Shift-F2 only. | Code |
 | Source offsets are UTF-8 offsets of the decoded text. On other code pages the top row after a toggle is wrong. | Code |
 | The hint says Alt-F3 opens the browser. Only a panel handles Alt-F3, and only after the user adds the association. The viewer ignores the key. | `far2l/src/panels/filelist.cpp` |
 | The help files have no text about Markdown mode, Shift-F4 or the new check box. | `far2l/bootstrap/scripts/*.hlf.m4` |

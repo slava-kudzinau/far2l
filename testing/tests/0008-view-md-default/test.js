@@ -86,6 +86,25 @@ ExpectString("left/plain.txt")
 CheckMarkdownPlainTxt()
 TypeEscape()
 
+// Quick View (Ctrl+Q on the right panel, then Tab to focus Quick View):
+// plain.txt has a saved Markdown choice, so Quick View opens it in Markdown mode.
+// Main F4 says Hex; Shift+F4 says Text, and after Shift+F4 toggles to plain, Shift+F4 says Markdown.
+ToggleLCtrl(true)
+TypeText("q")
+ToggleLCtrl(false)
+TypeTab()
+ExpectString("4Hex   ", 0, 23, 80, 1)
+ToggleShift(true)
+ExpectString("4Text  ", 0, 23, 80, 1)
+TypeFKey(4)
+ExpectString("4Markdo", 0, 23, 80, 1)
+ToggleShift(false)
+ExpectString("4Hex   ", 0, 23, 80, 1)
+TypeTab()
+ToggleLCtrl(true)
+TypeText("q")
+ToggleLCtrl(false)
+
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
 TypeEnter()

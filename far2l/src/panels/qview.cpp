@@ -337,7 +337,7 @@ int QuickView::ProcessKey(FarKey Key)
 	if (QView && !Directory && Key >= 256) {
 		int ret = QView->ProcessKey(Key);
 
-		if (Key == KEY_F4 || Key == KEY_F8 || Key == KEY_F2 || Key == KEY_SHIFTF2) {
+		if (Key == KEY_F4 || Key == KEY_SHIFTF4 || Key == KEY_F8 || Key == KEY_F2 || Key == KEY_SHIFTF2) {
 			DynamicUpdateKeyBar();
 			CtrlObject->MainKeyBar->Redraw();
 		}
@@ -612,15 +612,19 @@ void QuickView::DynamicUpdateKeyBar()
 		KB->Change(L"", 4 - 1);
 		KB->Change(L"", 8 - 1);
 		KB->Change(KBL_SHIFT, L"", 2 - 1);
+		KB->Change(KBL_SHIFT, L"", 4 - 1);
 		KB->Change(KBL_SHIFT, L"", 8 - 1);
 		KB->Change(KBL_ALT, Msg::AltF8, 8 - 1);		//
 	} else {
-		if (QView->GetMarkdownMode())
-			KB->Change(Msg::ViewF4Markdown, 4 - 1);
-		else if (QView->GetHexMode())
+		if (QView->GetHexMode())
 			KB->Change(Msg::ViewF4Text, 4 - 1);
 		else
 			KB->Change(Msg::QViewF4, 4 - 1);
+
+		if (QView->GetMarkdownMode())
+			KB->Change(KBL_SHIFT, Msg::ViewF4Text, 4 - 1);
+		else
+			KB->Change(KBL_SHIFT, Msg::ViewF4Markdown, 4 - 1);
 
 		if (QView->GetCodePage() != WINPORT(GetOEMCP)())
 			KB->Change(Msg::ViewF8DOS, 8 - 1);

@@ -2968,22 +2968,8 @@ void Viewer::ChangeViewKeyBar()
 		ViewKeyBar->Change(VM.Wrap ? Msg::ViewF2Unwrap : (VM.WordWrap ? Msg::ViewShiftF2 : Msg::ViewF2), 1);
 		ViewKeyBar->Change(KBL_SHIFT, VM.WordWrap ? Msg::ViewF2 : Msg::ViewShiftF2, 1);
 
-		if (VM.Markdown)
-		{
-			ViewKeyBar->Change(Msg::ViewF4Markdown, 3);
-			ViewKeyBar->Change(KBL_SHIFT, Msg::ViewF4Text, 3);
-		}
-		else if (VM.Hex)
-		{
-			ViewKeyBar->Change(Msg::ViewF4Text, 3);
-			ViewKeyBar->Change(KBL_SHIFT, Msg::ViewF4Markdown, 3);
-		}
-		else
-		{
-			ViewKeyBar->Change(Msg::ViewF4, 3);
-			ViewKeyBar->Change(KBL_SHIFT, Msg::ViewF4Markdown, 3);
-		}
-
+		ViewKeyBar->Change(VM.Hex ? Msg::ViewF4Text : Msg::ViewF4, 3);
+		ViewKeyBar->Change(KBL_SHIFT, VM.Markdown ? Msg::ViewF4Text : Msg::ViewF4Markdown, 3);
 
 		if (VM.CodePage == CP_UTF8)
 			ViewKeyBar->Change(Msg::ViewF8, 7);
