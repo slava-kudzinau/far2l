@@ -126,6 +126,7 @@ CheckTok("plain fence code", ReadCell(plain_code.X, plain_code.Y), 0x77e9ff, 0) 
 // The long fence: the token at its start keeps its role; cells at the far end of
 // the visible prefix keep the plain code role (the screen shows the first 80
 // cells of the line). One page down, then the first screen shows it.
+TypeFKey(2)
 TypePageDown()
 var long_kw = ExpectString("const t = \"z")
 CheckTok("long fence keyword", ReadCell(long_kw.X, long_kw.Y), 0xffffff, 15) // const is the first token (R49)
@@ -134,8 +135,6 @@ CheckTok("long fence tail", ReadCell(78, long_kw.Y), 0x77e9ff, 0) // the code ro
 // LeftPos, and every cell of the slice keeps the color of its token.  F2
 // unwraps so Right moves LeftPos; four cells right the row starts at the
 // 't' of const, inside the keyword token; the tail keeps the plain code role.
-TypeFKey(2)
-ExpectString("const t = \"z")   // F2 re-laid the page: the row is where it is now
 TypeRight(4)
 var scrolled = ExpectString("t = \"zzzzzzzz")   // 'const' is cut to its last cell
 CheckTok("scrolled keyword", ReadCell(scrolled.X - 5, scrolled.Y), 0xffffff, 15) // the 't' of const: cell 4, inside the keyword token

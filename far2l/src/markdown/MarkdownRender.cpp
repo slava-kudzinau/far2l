@@ -279,9 +279,9 @@ struct Builder {
             return;
         MdLine line;
         line.runs = std::move(cur);
-        // A line with no source text of its own (a table rule, a blank code line, a queued blank
-        // row) takes the position of the line before it, so it groups with that line and never ties
-        // with a source line.
+        // A line with no source text of its own (a table rule, a blank code line, a blank row
+        // from the source) takes the position of the line before it, so it groups with that line
+        // and never ties with a source line.
         line.nFilePos = cur_pos_set ? cur_pos : (out.empty() ? 0 : out.back().nFilePos);
         out.push_back(std::move(line));
         cur.clear();
@@ -290,49 +290,83 @@ struct Builder {
 
     void line_break() { flush(); }   // paragraph soft/hard break = new display line
 
-    // --- spacing ------------------------------------------------------------
-    // A block that ends queues one blank row, and the block that comes next emits it before its
-    // first row.  So repeated blanks collapse into one, and no blank row comes before the first
-    // row.  Source blank lines never produce rows here, so only code fences keep theirs.  A queued
-    // blank is soft by default, and a list drops it.  Heading level 1 and code or HTML blocks make
-    // it hard, so a list keeps it.  A heading, a code block or an HTML block gets a hard blank before
-    // it (force_gap).  A block that starts a list item gets none, and a code or HTML block gets none
-    // after a heading of level 2 to 6.  Items of a list stay tight (an item start drops the queued
-    // blank), a nested list is part of its outer list, and the outermost list has no blank row around it.
-    enum Gap { GAP_NONE, GAP_SOFT, GAP_HARD };
-    Gap gap = GAP_NONE;
-    size_t spacer_row = (size_t)-1;         // index in out of the last blank row queued here
-    size_t tight_heading_row = (size_t)-1;  // index in out of the last heading row of level 2 to 6
+    // --- blank rows from the source -------------------------------------------------
+    // One blank row per empty source line.  md4c gives no block offsets, so the count runs at the
+    // first text of the block that comes next (cb_text) or, for a thematic break, at a scan of the
+    // source (cb_enter_block).  The count starts after the rest of the last text's line and stops
+    // at the anchor line, so it counts only whole empty lines strictly between the blocks; a text
+    // on the same line as the last text counts nothing.  A blank row keeps the lead of the
+    // enclosing list or quote; the renderer adds no blank row of its own.
+    int64_t last_text_end = -1;   // start offset of the next unconsumed line, -1 before any
 
-    bool last_row_is_spacer() const { return !out.empty() && spacer_row == out.size() - 1; }
-    bool after_tight_heading() const { return !out.empty() && tight_heading_row == out.size() - 1; }
+    // End offset of the line that starts at `at` (past its LF, else base_size).
+    size_t line_end(size_t at) const
+    {
+        size_t e = at;
+        while (e < base_size && base[e] != '\n')
+            ++e;
+        if (e < base_size)
+            ++e;
+        return e;
+    }
+
+    // A line is empty when it holds no character other than CR, LF, space and tab.
+    bool line_is_blank(size_t at, size_t end) const
+    {
+        for (size_t i = at; i < end; ++i) {
+            const char c = base[i];
+            if (c != '\r' && c != '\n' && c != ' ' && c != '\t')
+                return false;
+        }
+        return true;
+    }
+
+    // Start offset of the first non-empty line at or after `from` (else base_size).
+    size_t first_nonblank_line(size_t from) const
+    {
+        size_t scan = from;
+        while (scan < base_size) {
+            const size_t end = line_end(scan);
+            if (!line_is_blank(scan, end))
+                break;
+            scan = end;
+        }
+        return scan;
+    }
+
+    // Emit one blank row per whole empty source line between the last source text and the start of
+    // the source line that holds `up_to` (the anchor: the start of the next text's line, the line
+    // of a thematic break, base_size for the trailing empty lines).  Leading empty lines count
+    // from offset 0 (`last_text_end == -1`).  A row takes the nFilePos of the row before it, so the
+    // offsets never decrease (see flush()).  The scan consumes each counted line: `last_text_end`
+    // moves to its end, so no empty line counts twice; a fence's text is source text (the in_code
+    // path of cb_text advances `last_text_end`), so the empty lines inside a fence stay fence rows.
+    void blank_rows(int64_t up_to)
+    {
+        const size_t stop = (up_to < 0) ? base_size : (size_t)up_to;
+        const size_t start = (last_text_end < 0) ? 0 : (size_t)last_text_end;
+        if (stop <= start)
+            return;
+        const std::wstring lead = row_lead();   // a blank inside a list or a quote keeps its lead
+        for (size_t i = start; i < stop; ) {
+            const size_t end = line_end(i);
+            if (line_is_blank(i, end)) {
+                MdLine blank;
+                blank.nFilePos = out.empty() ? 0 : out.back().nFilePos;
+                if (!lead.empty())
+                    blank.runs.push_back(MdRun{lead, lead_role()});
+                out.push_back(std::move(blank));
+                last_text_end = (int64_t)end;
+            }
+            i = end;
+        }
+    }
 
     void open_block()
     {
-        if (cur_started) {            // text of a tight list item: a block of its own before this one
+        if (cur_started)            // text of a tight list item: a block of its own before this one
             flush();
-            if (gap < GAP_SOFT)
-                gap = GAP_SOFT;
-        }
-        if (gap == GAP_NONE)
-            return;
-        gap = GAP_NONE;
-        if (out.empty() || last_row_is_spacer())
-            return;
-        // Offset of the row before, so the offsets never decrease (see flush()).
-        MdLine blank;
-        blank.nFilePos = out.back().nFilePos;
-        const std::wstring lead = row_lead();   // a blank inside a list or a quote keeps its lead
-        if (!lead.empty())
-            blank.runs.push_back(MdRun{lead, lead_role()});
-        out.push_back(std::move(blank));
-        spacer_row = out.size() - 1;
     }
-
-    // A hard gap survives a list; a soft gap does not.
-    void close_block(Gap kind = GAP_SOFT) { if (gap < kind) gap = kind; }
-    void force_gap() { gap = GAP_HARD; }
-    void drop_soft_gap() { if (gap == GAP_SOFT) gap = GAP_NONE; }
 
     // Fence tokens (story markdown-code-highlight): the source, the render
     // budget and the document cache, set by Render before the parse.
@@ -469,15 +503,15 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_QUOTE: b.open_block(); b.quote_depth++; break;
         case MD_BLOCK_UL: {
             auto *d = (MD_BLOCK_UL_DETAIL *)detail;
-            // The outermost list has no blank row before it; a nested one is part of its outer list.
-            if (b.list_stack.empty()) { b.drop_soft_gap(); b.open_block(); } else b.flush();
+            // A nested list is part of its outer list.
+            if (b.list_stack.empty()) b.open_block(); else b.flush();
             b.list_stack.push_back(0);
             (void)d;
             break;
         }
         case MD_BLOCK_OL: {
             auto *d = (MD_BLOCK_OL_DETAIL *)detail;
-            if (b.list_stack.empty()) { b.drop_soft_gap(); b.open_block(); } else b.flush();
+            if (b.list_stack.empty()) b.open_block(); else b.flush();
             b.list_stack.push_back(1);
             b.ol_counter.push_back(d ? (long)d->start : 1);
             break;
@@ -485,8 +519,7 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_LI: {
             auto *d = (MD_BLOCK_LI_DETAIL *)detail;
             b.li_open = true;
-            b.drop_soft_gap();   // items stay tight: no blank row between two items
-            b.open_block();      // a hard blank left by a code block that ended the previous item stays
+            b.open_block();      // flush the text of a tight item before this one
             std::wstring pfx;
             if (!b.list_stack.empty() && b.list_stack.back() == 1) {
                 pfx += std::to_wstring(b.ol_counter.back());
@@ -507,8 +540,6 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         }
         case MD_BLOCK_H: {
             auto *d = (MD_BLOCK_H_DETAIL *)detail;
-            if (!b.li_prefix_pending)
-                b.force_gap();   // a heading keeps its blank row next to a list
             b.open_block();
             b.heading_level = d ? (int)d->level : 1;
             b.begin_line();
@@ -520,9 +551,6 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             break;
         case MD_BLOCK_CODE: {
             auto *d = (MD_BLOCK_CODE_DETAIL *)detail;
-            // A heading of level 2 to 6 and a list item keep their code block on the row right under them.
-            if (!b.after_tight_heading() && !b.li_prefix_pending)
-                b.force_gap();
             b.open_block();
             b.in_code = true;
             b.code_text.clear();
@@ -532,9 +560,6 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             break;
         }
         case MD_BLOCK_HTML:
-            // A heading of level 2 to 6 and a list item keep their HTML block on the row right under them.
-            if (!b.after_tight_heading() && !b.li_prefix_pending)
-                b.force_gap();
             b.open_block();
             b.in_code = true;   // verbatim, same treatment as code
             b.code_text.clear();
@@ -543,13 +568,19 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             break;
         case MD_BLOCK_HR: {
             b.open_block();
+            // A thematic break fires no text callback: anchor its blank rows by a scan of the
+            // source from the end of the last source text.  The scan stops at the first line that
+            // is not empty: the break's own line; the count stops there too.
+            const size_t from = (b.last_text_end < 0) ? 0 : (size_t)b.last_text_end;
+            const size_t hr_line = b.first_nonblank_line(from);
+            b.blank_rows((int64_t)hr_line);
+            b.last_text_end = (int64_t)b.line_end(hr_line);
             b.begin_line();
             std::wstring hr;
             int n = std::max(1, b.width - (int)(2 * b.list_stack.size()));
             hr.append((size_t)n, BoxSymbols[BS_H1]);
             b.append(hr, MD_ROLE_RULE);
             b.flush();
-            b.close_block();
             break;
         }
         case MD_BLOCK_TABLE:
@@ -582,17 +613,14 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
     switch (type) {
         case MD_BLOCK_QUOTE:
             if (b.quote_depth) b.quote_depth--;
-            b.close_block();
             break;
         case MD_BLOCK_UL:
             if (!b.list_stack.empty()) b.list_stack.pop_back();
             if (!b.ol_counter.empty() && b.list_stack.empty()) b.ol_counter.clear();
-            if (b.list_stack.empty()) b.drop_soft_gap();   // the outermost list has no blank row after it
             break;
         case MD_BLOCK_OL:
             if (!b.list_stack.empty()) b.list_stack.pop_back();
             if (!b.ol_counter.empty() && b.list_stack.empty()) b.ol_counter.clear();
-            if (b.list_stack.empty()) b.drop_soft_gap();
             break;
         case MD_BLOCK_LI:
             b.flush();
@@ -602,15 +630,10 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
         case MD_BLOCK_H:
             b.flush();
             // No rule row under a heading: its own palette entry is its layout cue.
-            if (b.heading_level == 1)
-                b.close_block(Builder::GAP_HARD);   // heading level 1 keeps a blank row after it
-            else if (!b.out.empty())
-                b.tight_heading_row = b.out.size() - 1;   // level 2 to 6: the next block sits right under it
             b.heading_level = 0;
             break;
         case MD_BLOCK_P:
             b.flush();
-            b.close_block();
             break;
         case MD_BLOCK_CODE:
         case MD_BLOCK_HTML: {
@@ -655,7 +678,6 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             tokenize_fence(b, fence_lang, fence_src, first_line, count);
             if (is_mermaid)
                 b.fences.push_back(Builder::Fence{fence_pos, fence_src, first_line, count, b.row_lead()});
-            b.close_block(Builder::GAP_HARD);   // a code block keeps its blank row next to a list
             break;
         }
         case MD_BLOCK_TH:
@@ -671,7 +693,6 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             break;
         case MD_BLOCK_TABLE:
             b.in_table = false;
-            b.close_block();
             // grid render via BoxSymbols; column widths = max cell width.
             if (!b.table_rows.empty()) {
                 size_t cols = 0;
@@ -806,11 +827,39 @@ int cb_text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *userdata)
     b.pos += size;
     const int64_t off = at >= 0 ? b.line_start_of((size_t)at) : -1;
     if (b.in_code) {
-        if (off >= 0)
+        if (b.code_text.empty()) {
+            // First callback of a code/HTML block: count the empty lines before the block.
+            // If the first line of the fence is non-empty, `off >= 0` is its line start;
+            // if the first line of the fence is empty (`at < 0`), `first_nonblank_line` finds
+            // the opening fence marker line so pre-fence empty lines still count.
+            const size_t from = (b.last_text_end < 0) ? 0 : (size_t)b.last_text_end;
+            const int64_t anchor = (off >= 0) ? off : (int64_t)b.first_nonblank_line(from);
+            b.blank_rows(anchor);
+            if (off < 0) {
+                // Opening fence line + this first empty verbatim line:
+                const size_t fence_open = b.first_nonblank_line(from);
+                b.last_text_end = (int64_t)b.line_end(fence_open);
+            }
+        }
+        if (off >= 0) {
             b.code_marks.emplace_back(b.code_text.size(), off);
+            b.last_text_end = (int64_t)b.line_end((size_t)at);
+        } else if (w == L"\n" && (b.code_text.empty() || b.code_text.back() == L'\n')
+                && b.last_text_end >= 0) {
+            // Empty verbatim line inside the code block (`md4c.c:4738` static "\n"):
+            // advance past this empty fence line so it is not counted again after the fence.
+            b.last_text_end = (int64_t)b.line_end((size_t)b.last_text_end);
+        }
         b.code_text += w;
         return 0;
     }
+    // The empty source lines before this text: the count runs at the anchor of this text's line,
+    // so a text on the same display line (a styled span: cb_text fires more than once per line)
+    // counts nothing.  Leading empty lines count from offset 0 (`last_text_end == -1`).
+    if (off >= 0)
+        b.blank_rows(off);
+    if (at >= 0)
+        b.last_text_end = (int64_t)b.line_end((size_t)at);
     switch (type) {
         case MD_TEXT_SOFTBR:
         case MD_TEXT_BR:
@@ -876,6 +925,7 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width)
 
     md_parse((const MD_CHAR *)utf8.data(), (MD_SIZE)utf8.size(), &parser, &b);
     b.flush();
+    b.blank_rows((int64_t)b.base_size);   // the trailing empty lines of the file
 
     m_lines = std::move(b.out);
     m_token_groups = std::move(b.token_groups);   // shift and link survive the mermaid art swap (R31)
