@@ -1,6 +1,6 @@
 ---
 description: Show a blank row for each empty source line in the F3 Markdown view, with no rows added or removed by the renderer.
-status: planned
+status: in-progress
 size: M
 risk: contract
 ---
@@ -54,6 +54,15 @@ One source file, one contract section, one large smoke-test rework. Most 0007 sp
 ## Notes
 
 - Owner ruling, 2026-11-08: "I think colorer display text lines as-is not making any assumptions and not adding anything to compact/expand". The F3 Markdown view shows the text lines of the file as they are.
+
 - Owner ask, 2026-11-08: "lets keep empty lines as exactly as they are in F4 mode, this is for F3 markdown mode". The trigger: `~/react-native-interview-questions.md`, where `### Q1` sits directly on `**Answer:**` in F3, but F4 shows one empty line between them.
 - This story reverses the spacing half of markdown-compact-layout. The removed rule rows under headings and the lighter table borders of that story stay.
 - Assumptions under the ruling: an empty list item (`-` with no text) still shows no row of its own. Leading and trailing empty lines of the file show as blank rows. A fence marker line, a table rule line and a thematic break line are not empty lines, so they add no blank rows. No new settings keys.
+
+## Build record
+
+- started: 2026-11-08T12:06:06Z
+- flow tier=full docs=spec,plan design=no orchestrator=yes final=final-reviewer gate=stop scan=yes verifier=none (risk contract)
+- Budget $15, hard stop $20 (size M).
+- BASE: `feat/markdown-blank-lines` at `4bdffebbe`, off `master` (the brief commit). Worktree `.worktrees/markdown-blank-lines`, build `.worktrees/far2l.markdown-blank-lines.build`.
+- Gate page: stop before build (G2-design, full tier, risk contract).
