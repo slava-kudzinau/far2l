@@ -367,10 +367,11 @@ class CellHandler : public RegionHandler
 	TextParser* _parser;
 	bool _stopped;
 	// One open block scheme per entry: the cell it opened (index into
-	// _cells, -1 when the capacity was spent), so leaveScheme can close
-	// the span.
-	std::vector<int> _frames;
-
+	// _cells, -1 when skipped or capacity was spent) and the line it
+	// opened on, so clearLine and leaveScheme can close the span.
+	struct Frame { int cell; size_t lno; };
+	std::vector<Frame> _frames;
+	int _last_line_len = 0;
 	void CheckDeadline()
 	{
 		if (!_stopped && std::chrono::steady_clock::now() >= _deadline) {
@@ -425,6 +426,18 @@ public:
 
 	bool Stopped() const { return _stopped; }
 	int Written() const { return _written; }
+	void clearLine(size_t lno, UnicodeString* line) override
+	{
+		if (lno > 0) {
+			for (const Frame& f : _frames) {
+				if (f.cell >= 0 && f.lno == lno - 1) {
+					_cells[static_cast<size_t>(f.cell) * V2_WORDS + 1] =
+						static_cast<uint64_t>(_last_line_len);
+				}
+			}
+		}
+		_last_line_len = line != nullptr ? line->length() : 0;
+	}
 
 	void addRegion(size_t, UnicodeString*, int sx, int ex, const Region* region) override
 	{
@@ -434,27 +447,29 @@ public:
 		CheckDeadline();
 	}
 
-	void enterScheme(size_t, UnicodeString*, int start, int end, const Region* region,
+	void enterScheme(size_t lno, UnicodeString*, int start, int end, const Region* region,
 		const Scheme*) override
 	{
 		// A block scheme opens here (its enter event spans the start edge).
 		// F4 paints the region's foreground over the whole block, so the
-		// cell opens at enter and leaveScheme closes its span; the leaves
-		// written in between (string edges, comment content) paint on top.
-		const int cell = _written < _capacity ? _written : -1;
+		// cell opens at enter and leaveScheme (or clearLine at EOL) closes
+		// its span; the leaves written in between paint on top.
+		// Skip transparent block schemes (region == nullptr), matching
+		// LineRegionsSupport::enterScheme in F4.
+		const int cell = (region != nullptr && _written < _capacity) ? _written : -1;
 		if (cell >= 0) {
 			WriteCell(region, start, end);
 		}
-		_frames.push_back(cell);
+		_frames.push_back(Frame{cell, lno});
 		CheckDeadline();
 	}
 
-	void leaveScheme(size_t, UnicodeString*, int, int end, const Region*, const Scheme*) override
+	void leaveScheme(size_t lno, UnicodeString*, int, int end, const Region*, const Scheme*) override
 	{
 		if (!_frames.empty()) {
-			const int cell = _frames.back();
-			if (cell >= 0) {
-				_cells[static_cast<size_t>(cell) * V2_WORDS + 1] =
+			const Frame f = _frames.back();
+			if (f.cell >= 0 && f.lno == lno) {
+				_cells[static_cast<size_t>(f.cell) * V2_WORDS + 1] =
 					static_cast<uint64_t>(end); // the block closed at `end`
 			}
 			_frames.pop_back();

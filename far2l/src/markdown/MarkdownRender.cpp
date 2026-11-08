@@ -442,12 +442,12 @@ void tokenize_fence(Builder &b, const std::string &lang, const std::wstring &fen
     if (hit != b.token_cache->end()) {
         groups = hit->second;
     } else {
-        const auto now = std::chrono::steady_clock::now();
         if (b.token_deadline == std::chrono::steady_clock::time_point{}) {
             // R42: the plugin load happens before the budget; the fences share 40 ms.
             b.token_source->Ready();
-            b.token_deadline = now + std::chrono::milliseconds(40);
+            b.token_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(40);
         }
+        const auto now = std::chrono::steady_clock::now();
         bool cacheable = true;
         if (now >= b.token_deadline) {
             // The fences not yet started are skipped (spec, Input limits).
@@ -470,20 +470,68 @@ void tokenize_fence(Builder &b, const std::string &lang, const std::wstring &fen
                     r.start += CODE_INDENT;
                     r.end += CODE_INDENT;
                 }
-                // Colorer closes nested regions inner-first; the printer walks ranges in cell order.
-                std::sort(g.ranges.begin(), g.ranges.end(),
-                    [](const MdTokenRange &a, const MdTokenRange &b) {
-                        return a.start < b.start || (a.start == b.start && a.end > b.end);
-                    });
+                // Colorer emits nested regions inner-after-outer; flatten overlapping
+                // spans into disjoint cell-order slices so a later inner span wins a
+                // shared cell (R2, LineRegionsCompactSupport).
+                std::vector<MdTokenRange> disjoint;
+                for (const MdTokenRange &r : g.ranges) {
+                    if (r.start >= r.end)
+                        continue;
+                    std::vector<MdTokenRange> next;
+                    bool inserted = false;
+                    for (const MdTokenRange &d : disjoint) {
+                        if (d.end <= r.start) {
+                            next.push_back(d);
+                            continue;
+                        }
+                        if (!inserted) {
+                            next.push_back(r);
+                            inserted = true;
+                        }
+                        if (d.start >= r.end) {
+                            next.push_back(d);
+                            continue;
+                        }
+                        if (d.start < r.start) {
+                            MdTokenRange left_part = d;
+                            left_part.end = r.start;
+                            next.insert(next.end() - 1, left_part);
+                        }
+                        if (d.end > r.end) {
+                            MdTokenRange right_part = d;
+                            right_part.start = r.end;
+                            next.push_back(right_part);
+                        }
+                    }
+                    if (!inserted)
+                        next.push_back(r);
+                    disjoint.swap(next);
+                }
+                g.ranges.swap(disjoint);
             }
         }
         if (cacheable)
             b.token_cache->emplace(key, groups);   // a deadline-trimmed group is cached as is (R29)
     }
+    // In a list or blockquote, each row begins with a lead run (and optional list-item
+    // prefix) before the code run.  Shift the cached group's ranges by the row's lead
+    // width so PrintCodeRuns matches the running cell position `pos` across the row.
     const size_t base = b.token_groups.size();
-    b.token_groups.insert(b.token_groups.end(), groups.begin(), groups.end());
-    for (size_t gi = 0; gi + base < b.token_groups.size() && gi < count; ++gi)
+    for (size_t gi = 0; gi < groups.size() && gi < count; ++gi) {
+        MdTokenGroup g = groups[gi];
+        uint32_t lead_cells = 0;
+        const MdLine &row = b.out[first_line + gi];
+        for (size_t ri = 0; ri + 1 < row.runs.size(); ++ri)
+            lead_cells += (uint32_t)row.runs[ri].text.size();
+        if (lead_cells > 0) {
+            for (MdTokenRange &r : g.ranges) {
+                r.start += lead_cells;
+                r.end += lead_cells;
+            }
+        }
+        b.token_groups.push_back(std::move(g));
         b.out[first_line + gi].tokens = (int)(base + gi);
+    }
 }
 
 // File offset of the first source text in the code line [s, e) of code_text, or -1 when the line
@@ -498,7 +546,6 @@ int64_t code_line_pos(const Builder &b, size_t s, size_t e)
 int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
 {
     Builder &b = *(Builder *)userdata;
-    b.pos; // (offsets tracked in text callback)
     switch (type) {
         case MD_BLOCK_QUOTE: b.open_block(); b.quote_depth++; break;
         case MD_BLOCK_UL: {
