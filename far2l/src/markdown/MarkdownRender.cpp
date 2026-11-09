@@ -154,6 +154,7 @@ struct Builder {
     // block context
     int quote_depth = 0;
     int heading_level = 0;
+    size_t heading_src = 0;       // start offset of the heading's first source line
     std::vector<int> list_stack;  // 0 = bullet, 1 = ordered
     std::vector<long> ol_counter;
     bool li_open = false;         // a list item is collecting inline content
@@ -301,6 +302,15 @@ struct Builder {
         cur_started = false;
     }
 
+    // One full-width rule row: a thematic break, or the underline of a setext heading.
+    void rule_row()
+    {
+        begin_line();
+        const int n = std::max(1, width - (int)(2 * list_stack.size()));
+        append(std::wstring((size_t)n, BoxSymbols[BS_H1]), MD_ROLE_RULE);
+        flush();
+    }
+
     void line_break() { flush(); }   // paragraph soft/hard break = new display line
 
     // --- blank rows from the source -------------------------------------------------
@@ -329,6 +339,28 @@ struct Builder {
         for (size_t i = at; i < end; ++i) {
             const char c = base[i];
             if (c != '\r' && c != '\n' && c != ' ' && c != '\t')
+                return false;
+        }
+        return true;
+    }
+
+    // A setext underline: a run of `marker` ('=' at level 1, '-' at level 2) after up to 3
+    // leading spaces, with only blanks to the end of the line.
+    bool line_is_setext_rule(size_t at, size_t end, char marker) const
+    {
+        size_t i = at;
+        for (int s = 0; s < 3 && i < end && base[i] == ' '; ++s)
+            ++i;
+        size_t run = 0;
+        while (i < end && base[i] == marker) {
+            ++i;
+            ++run;
+        }
+        if (run == 0)
+            return false;
+        for (; i < end; ++i) {
+            const char c = base[i];
+            if (c != ' ' && c != '\t' && c != '\r' && c != '\n')
                 return false;
         }
         return true;
@@ -602,6 +634,9 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             auto *d = (MD_BLOCK_H_DETAIL *)detail;
             b.open_block();
             b.heading_level = d ? (int)d->level : 1;
+            // The heading's first source line: the start of a paragraph turned setext, else the
+            // `#` line of an ATX heading.  Leave tells the two apart by the first non-space.
+            b.heading_src = b.first_nonblank_line((b.last_text_end < 0) ? 0 : (size_t)b.last_text_end);
             b.begin_line();
             break;
         }
@@ -635,12 +670,7 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             const size_t hr_line = b.first_nonblank_line(from);
             b.blank_rows((int64_t)hr_line);
             b.last_text_end = (int64_t)b.line_end(hr_line);
-            b.begin_line();
-            std::wstring hr;
-            int n = std::max(1, b.width - (int)(2 * b.list_stack.size()));
-            hr.append((size_t)n, BoxSymbols[BS_H1]);
-            b.append(hr, MD_ROLE_RULE);
-            b.flush();
+            b.rule_row();
             break;
         }
         case MD_BLOCK_TABLE:
@@ -687,11 +717,27 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             b.li_open = false;
             b.li_prefix_pending = false;   // an empty item must not keep its prefix for the next block
             break;
-        case MD_BLOCK_H:
+        case MD_BLOCK_H: {
             b.flush();
-            // No rule row under a heading: its own palette entry is its layout cue.
+            // A setext heading consumes its underline line and md4c fires no callback for it:
+            // the front matter's closing `---` is that case.  The underline sits directly under
+            // the heading's last text line: draw it as a rule row, so the block reads as a
+            // region delimited top and bottom.  An ATX heading keeps none: its own palette entry
+            // is its layout cue, and a `---` under it is a thematic break, a block with a
+            // callback of its own.
+            if (b.heading_level == 1 || b.heading_level == 2) {
+                const char first = (b.heading_src < b.base_size) ? b.base[b.heading_src] : '\n';
+                const size_t start = (b.last_text_end < 0) ? 0 : (size_t)b.last_text_end;
+                const size_t end = b.line_end(start);
+                const char marker = (b.heading_level == 1) ? '=' : '-';
+                if (first != '#' && b.line_is_setext_rule(start, end, marker)) {
+                    b.last_text_end = (int64_t)end;
+                    b.rule_row();
+                }
+            }
             b.heading_level = 0;
             break;
+        }
         case MD_BLOCK_P:
             b.flush();
             break;
