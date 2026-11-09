@@ -821,10 +821,24 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                             w.assign(cols, 1);
                         } else {
                             std::vector<int> remainders(cols);
+                            std::vector<int> minimum(cols, 1);
+                            int minimum_total = (int)cols;
+                            std::vector<size_t> by_natural;
+                            by_natural.reserve(cols);
+                            for (size_t c = 0; c < cols; ++c) by_natural.push_back(c);
+                            std::sort(by_natural.begin(), by_natural.end(), [&](size_t a, size_t b) {
+                                return w[a] != w[b] ? w[a] > w[b] : a < b;
+                            });
+                            for (size_t c : by_natural) {
+                                if (w[c] >= 2 && minimum_total < usable) {
+                                    minimum[c] = 2;
+                                    ++minimum_total;
+                                }
+                            }
                             int assigned = 0;
                             for (size_t c = 0; c < cols; ++c) {
                                 const int64_t share = (int64_t)usable * w[c];
-                                w[c] = std::max(1, (int)(share / total_natural_width));
+                                w[c] = std::max(minimum[c], (int)(share / total_natural_width));
                                 remainders[c] = (int)(share % total_natural_width);
                                 assigned += w[c];
                             }
@@ -840,7 +854,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                             while (assigned > usable) {
                                 size_t smallest = cols;
                                 for (size_t c = 0; c < cols; ++c) {
-                                    if (w[c] > 1 && (smallest == cols || remainders[c] < remainders[smallest]))
+                                    if (w[c] > minimum[c] && (smallest == cols || remainders[c] < remainders[smallest]))
                                         smallest = c;
                                 }
                                 if (smallest == cols) break;

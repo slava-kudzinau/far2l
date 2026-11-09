@@ -99,11 +99,22 @@ if (finalWidth <= firstWidth) {
 	Log("weighted table header is '" + weightedHeadLine + "'")
 	Panic("the final content column did not receive more width than the short first column")
 }
+var weightedHeaderRight = weightedHeadLine.lastIndexOf("│")
+if (weightedHeaderRight < 0) {
+	Panic("weighted table header lost its right border")
+}
 for (var i = 0; i < 6; ++i) {
 	var weightedLine = BoundedLine(0, weightedHead.Y + i, 80, "")
-	if (weightedLine.length > 80) {
+	var rightBorder = weightedLine.lastIndexOf("│")
+	if (rightBorder < 0) rightBorder = weightedLine.lastIndexOf("┤")
+	if (rightBorder < 0) rightBorder = weightedLine.lastIndexOf("┘")
+	if (rightBorder != weightedHeaderRight) {
 		Log("weighted table row is '" + weightedLine + "'")
-		Panic("a weighted table row exceeded the viewer width")
+		Panic("weighted table row right border does not align with its header")
+	}
+	if (weightedLine.substring(79, 80) == "»") {
+		Log("weighted table row is '" + weightedLine + "'")
+		Panic("a weighted table row scrolls past the viewer edge")
 	}
 }
 ExpectString("first column.")
