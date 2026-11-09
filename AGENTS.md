@@ -19,6 +19,10 @@ cmake --build ../far2l.build -j8
 
 The macOS binary is `../far2l.build/install/far2l.app/Contents/MacOS/far2l`. The Linux binary is `install/far2l` in the build folder, so change `APP` in the check below on Linux. Smoke tests need `-DTESTING=Yes`.
 
+**Runnable binary policy.** Whenever you report that a change is implemented or fixed, build far2l with all plugins using `cmake --build "$BUILD" -j8`. Report the full path to the resulting binary so the user can run and test it. On macOS, use `$BUILD/install/far2l.app/Contents/MacOS/far2l`. On Linux and BSD, use `$BUILD/install/far2l`.
+
+**macOS release packaging.** A DMG intended to open a far2l window MUST be built with `-DUSEWX=Yes`. `-DUSEWX=No` produces a terminal-only executable even when CPack wraps it in an `.app` bundle. CPack packaging MUST be followed by ad hoc or Developer ID signing because its `install_name_tool` fixup changes invalidate earlier signatures. Bundle fixup MUST search every Homebrew library directory used by the build, including `/opt/homebrew/lib` and `/opt/homebrew/opt/wxwidgets/lib`, so transitive dependencies such as `@rpath/libsharpyuv.0.dylib` are found. The packaged `.app` MUST be tested by launching the actual bundle and confirming that its window appears and its process remains running. `--help` is not a launch test. Before uploading, verify the final bundle with `codesign --verify --deep --strict`, record its SHA-256, and remove stale or duplicate release assets. Ad hoc signing is not notarization. Release notes MUST state whether the package is GUI or terminal-only and whether it is notarized.
+
 **The check.** This is the one command that proves that a story is done. It builds far2l, then runs the Markdown golden test, the C++ driver test and the three Markdown smoke tests. It takes about 12 s after a build. It prints `check ok` and exits 0, or it names the failed test and exits 1. In a worktree, set `BUILD` to the build folder of that worktree.
 
 ```sh
