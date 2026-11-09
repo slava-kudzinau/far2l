@@ -14,6 +14,7 @@ description: Index of the story records with their file status, the real merge s
 | [markdown-default-on](markdown-default-on/story.md) | done | yes, PR #3 | F3 on `.md` and `.markdown` files opens Markdown mode. The `Markdown_Auto` setting and a deviation-only cache keep the choice. | markdown-preview-reading | `markdown-preview/default-on` | `141a329d3` |
 | [markdown-browser-view](markdown-browser-view/story.md) | done | yes, PR #4 | `md-open.sh` shows a Markdown file as a web page, with diagrams from a pinned CDN. Alt-F3 runs it. | markdown-preview-reading | `markdown-preview/browser-view` | `a2f720209` |
 | [markdown-compact-layout](markdown-compact-layout/story.md) | done | yes, PR #8 | Fewer blank rows, no heading rule rows, lighter table borders. | none | `feat/markdown-compact-layout` | see PR #8 |
+| [markdown-front-matter-rule](markdown-front-matter-rule/story.md) | done | not merged, PR pending | The closing front matter line shows as a rule row: a setext heading draws its consumed underline. | none | `fix/markdown-front-matter-rule` | pending |
 
 `markdown-preview-fixes` has no pull request. Its commits are in the history of `markdown-preview/reading`, so PR #1 merged them.
 
