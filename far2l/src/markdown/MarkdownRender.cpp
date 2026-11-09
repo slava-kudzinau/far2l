@@ -783,7 +783,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                             b.append(L" ", MD_ROLE_BODY, -1, false);
                             if (c < row.size())
                                 for (const MdRun &r : row[c])
-                                    b.append(r.text, cell_role(r));
+                                    b.append(r.text, cell_role(r), -1, false);
                             b.append(std::wstring(pad > 0 ? pad : 0, L' ') + L" ", MD_ROLE_BODY, -1, false);
                             b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_RULE, -1, false);
                         }

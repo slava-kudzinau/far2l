@@ -73,8 +73,8 @@ private:
 	// Print one code run, coloring the token slices of `group`.  `tint` (story
 	// markdown-code-tint): the row's packed tint background, or -1; every color the
 	// helper sets rides it, the selection overlay (tint -1) wins over it.
-	void PrintCodeRuns(const MdTokenGroup &group, const std::wstring &text,
-		int &pos, int skip_len, int &print_len, int64_t tint);
+    void PrintCodeRuns(const MdTokenGroup &group, const std::wstring &text,
+        int &pos, int row_skip, int skip_len, int &print_len, int64_t tint);
 
 	uint64_t _sel_color;
 	const std::vector<MdLine> *_lines;

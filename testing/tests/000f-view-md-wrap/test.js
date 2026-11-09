@@ -69,14 +69,14 @@ CheckBlank("gap after the rewrapped paragraph", rewrapped.Y + 2)
 // A wide table row keeps its grid: the rule follows the header row directly, so the header is
 // not split into two rows.
 var head = ExpectString("Column A")
-// The header wraps to two rows at 80 cells; the rule row starts with the left junction.
-var rule = BoundedLine(0, head.Y + 2, 80, " \t")
+var rule = BoundedLine(0, head.Y + 1, 80, " \t")
 if (rule.substring(0, 1) != "├") {
-	Log("the row under the header is '" + rule + "'")
-	Panic("the table header row is not followed by the rule")
+    Log("the row under the header is '" + rule + "'")
+    Panic("the table header row is split by wrap")
 }
-
-// A long code fence row keeps its cells: the row above the next fence line runs past the
+if (BoundedLine(0, head.Y + 2, 80, " \t") == "") {
+    Panic("the table data row is missing")
+}
 // right edge (its right-arrow marker shows), so it took one screen row.
 var fence2 = ExpectString("second fence line")
 var longFence = BoundedLine(0, fence2.Y - 1, 80, "")
