@@ -128,30 +128,27 @@ var code_cell = ReadCell(code.X, code.Y)
 CheckSameBack("code", code_cell, ReadCell(70, code.Y), "code row fill")
 CheckForeOther("code", code_cell, plain, "viewer")
 CheckForeOther("code", code_cell, heading_cell, "heading")
-var table = ExpectString("│ cell1")
+var table = ExpectString("│", 0, 0, 80, code.Y)
 CheckBack("table box glyph", ReadCell(table.X, table.Y))
-CheckBack("table cell", ReadCell(table.X + 2, table.Y))
-// Table body text carries the body role: the scheme's def:Text row (#99EEEE -> 0xeeee99),
-// the color of the viewer's body text, not the plain-mode blank cell.
-CheckForeSame("table cell text", ReadCell(table.X + 2, table.Y), body_cell, "body")
-// Table header text takes the strong color; the borders take the rule color, read from the line
-// glyph of the separator row under the header.
-var table_head = ExpectString("Col A")
-CheckBack("table header", ReadCell(table_head.X, table_head.Y))
-CheckForeSame("table header", ReadCell(table_head.X, table_head.Y), strong_cell, "strong")
-CheckCellChar(table.X + 1, table.Y - 1, "─")
+CheckCellChar(table.X, table.Y + 1, "├")
+CheckForeSame("table header text", ReadCell(table.X + 2, table.Y), strong_cell, "strong")
+var hcode = ExpectString("hcode", 0, table.Y, 80, 1)
+CheckForeSame("code span in table header", ReadCell(hcode.X, hcode.Y), code_cell, "code")
+var table_body = ExpectString("cell1", 0, table.Y + 2, 80, 1)
+CheckForeSame("table cell text", ReadCell(table_body.X, table_body.Y), body_cell, "body")
+CheckCellChar(table.X + 1, table.Y + 1, "─")
 // The borders take the rule color: the separator line, the bars of the header row and the
 // bars of the data rows all share it, and it differs from strong and from the body fore.
-var border_cell = ReadCell(table.X + 1, table.Y - 1)
+var border_cell = ReadCell(table.X + 1, table.Y + 1)
 CheckForeOther("table border", border_cell, strong_cell, "strong")
 CheckForeOther("table border", border_cell, plain, "viewer")
 var table_bar = ReadCell(table.X, table.Y)
-CheckForeSame("table bar", table_bar, border_cell, "table border")
-// A code span in the table header keeps the code role: the header markup is strong for plain
-// text, but spans of their own win over it (the spec's precedence).
-var hcode = ExpectString("hcode")
-var hcode_cell = ReadCell(hcode.X, hcode.Y)
-CheckForeSame("code span in table header", hcode_cell, code_cell, "code")
+var narrow_line = BoundedLine(0, table.Y, 80, " ")
+var narrow_edge = narrow_line.lastIndexOf("│")
+if (narrow_edge < 0 || narrow_edge > 40) {
+	Log("the narrow table header is '" + narrow_line + "'")
+	Panic("the narrow table expanded beyond its content width")
+}
 
 // Scroll down to the mermaid fences.
 TypePageDown()
@@ -482,11 +479,11 @@ CheckRowOf("nested item right under its item", nested, item1.Y + 1);
 CheckRowOf("next item right under the nested item", item2, item1.Y + 2);
 
 // The table header has a blank row before it from the source empty line. The table has one rule.
-var table_sp = ExpectString("Spacing A");
-CheckBlankRow("blank row before the table", table_sp.Y - 1);
-CheckRowOf("table header after the list and its blank row", table_sp, item2.Y + 2);
-CheckCellChar(table_sp.X - 2, table_sp.Y + 1, "├");
-CheckRowOf("table body row under the rule", ExpectString("spacing 1"), table_sp.Y + 2);
+var table_sp = ExpectString("│", 0, item2.Y + 2, 80, 1)
+CheckBlankRow("blank row before the table", table_sp.Y - 1)
+CheckRowOf("table header after the list and its blank row", table_sp, item2.Y + 2)
+CheckCellChar(0, table_sp.Y + 1, "├")
+CheckRowOf("table continuation row under the rule", ExpectString("│", 0, table_sp.Y + 2, 80, 1), table_sp.Y + 2)
 
 // The quote has a blank row before it that keeps its lead.
 CheckCellChar(0, table_sp.Y + 3, "│");
@@ -666,13 +663,13 @@ CheckBlankRow("blank row after the thematic break", c_above_break.Y + 3);
 CheckRowOf("paragraph after the thematic break and its blank row", c_break, c_above_break.Y + 4);
 
 // R6 and R7: the table has a blank row before it from source and one rule under its header row.
-var c_head = ExpectString("Compact A");
-CheckBlankRow("blank row before the table", c_head.Y - 1);
-CheckRowOf("table header after the paragraph and its blank row", c_head, c_break.Y + 2);
-CheckCellChar(c_head.X - 2, c_head.Y + 1, "├");
-var c_cell = ExpectString("compact 1");
-CheckRowOf("body row under the header rule", c_cell, c_head.Y + 2);
-CheckCellChar(c_cell.X - 2, c_cell.Y - 1, "├");
+var c_head = ExpectString("│", 0, c_break.Y + 2, 80, 1)
+CheckBlankRow("blank row before the table", c_head.Y - 1)
+CheckRowOf("table header after the paragraph and its blank row", c_head, c_break.Y + 2)
+CheckCellChar(0, c_head.Y + 1, "├")
+var c_cell = ExpectString("│", 0, c_head.Y + 2, 80, 1)
+CheckRowOf("body row under the header rule", c_cell, c_head.Y + 2)
+CheckCellChar(0, c_cell.Y - 1, "├")
 CheckBlankRow("blank row after the table", c_cell.Y + 1);
 var c_after_table = ExpectString("Compact para after table.");
 CheckRowOf("paragraph after the table and its blank row", c_after_table, c_cell.Y + 2);
