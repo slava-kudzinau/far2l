@@ -71,7 +71,9 @@ if(NOT "${GIT_TAG}" STREQUAL "v_${VERSION}")
     endif()
 endif()
 
-set(VERSION_PATCH "${VERSION_PATCH}-beta")
+if(NOT "${GIT_TAG}" STREQUAL "v_${VERSION}")
+    set(VERSION_PATCH "${VERSION_PATCH}-beta")
+endif()
 
 set(VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
