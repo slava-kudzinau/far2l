@@ -171,9 +171,10 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 	// gates it (spec, States).  The selection overlay rides its own plain background.
 	int64_t tint = (line && line->tint >= 0 && !_selection)
 		? MdCodeTint(FarColorToReal(COL_VIEWERTEXT)) : -1;
-	int pos = 0;   // cell coordinate in the row, counted over all runs
-	if (line) {
-		for (const MdRun &run : line->runs) {
+    int pos = 0;   // cell coordinate in the row, counted over all runs
+    const int row_skip = skip_len;
+    if (line) {
+        for (const MdRun &run : line->runs) {
 			const bool tokenized = line->tokens >= 0 && _groups != nullptr &&
 				(size_t)line->tokens < _groups->size() && run.role == MD_ROLE_CODE;
 			// The runs ride the tint: a run keeps its foreground (and the underline
@@ -187,7 +188,7 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 			}
 			SetColor(run_color);
 			if (tokenized) {
-				PrintCodeRuns((*_groups)[line->tokens], run.text, pos, skip_len, print_len, tint);
+                PrintCodeRuns((*_groups)[line->tokens], run.text, pos, row_skip, skip_len, print_len, tint);
 				continue;
 			}
 
@@ -217,18 +218,17 @@ void MarkdownPrinter::Print(int skip_len, int print_len, const wchar_t * /*str*/
 						Text(p, piece);
 						print_len -= (int)cells;
 						pos += (int)cells;
-						if (run_color & COMMON_LVB_UNDERSCORE) {
-							_spans.emplace_back(pos - (int)cells, pos);
-						}
+                        if (run_color & COMMON_LVB_UNDERSCORE)
+                            _spans.emplace_back(pos - (int)cells - row_skip, pos - row_skip);
 					}
 				}
 				if (!p[piece]) break;
 				p += piece + 1;
 			}
 		}
-	}
 
 	// Blank cells (past the line end, or an empty line) take the viewer text
+    }
 	// color, not whatever color the last run or the arrows left behind.  A row
 	// with a token group pads with the code role (spec.md, Token roles); a tinted
 	// row rides the block's tint as its background (story markdown-code-tint), so
@@ -273,7 +273,7 @@ void MarkdownPrinter::Cells(const wchar_t *&p, int &pos, int &print_len, int64_t
 // Print one code run, coloring the token slices of `group` (plan T4).  Cells
 // past the last token keep the code role; the row padding keeps the text role.
 void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstring &text,
-	int &pos, int skip_len, int &print_len, int64_t tint)
+    int &pos, int row_skip, int skip_len, int &print_len, int64_t tint)
 {
 	const wchar_t *p = text.c_str();
 	bool joining = false;
@@ -308,7 +308,7 @@ void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstrin
 			const int run_start = pos;
 			Cells(p, pos, print_len, (int64_t)group.ranges[ti].end);
 			if (range_color & COMMON_LVB_UNDERSCORE)
-				_spans.emplace_back(run_start, pos);
+                _spans.emplace_back(run_start - row_skip, pos - row_skip);
 			uint64_t code_color = _selection ? _sel_color : MarkdownRunColor(MD_ROLE_CODE);
 			if (tint >= 0) {
 				SET_RGB_BACK(code_color, (uint64_t)tint);
@@ -328,7 +328,7 @@ void MarkdownPrinter::PrintCodeRuns(const MdTokenGroup &group, const std::wstrin
 // underlined run costs nothing (spec, Underline).
 void MarkdownPrinter::FinishRow(int screen_x1, int screen_y)
 {
-	if (_spans.empty())
+    if (_spans.empty())
 		return;
 
 	int first = _spans.front().first;
