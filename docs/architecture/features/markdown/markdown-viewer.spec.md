@@ -86,7 +86,7 @@ Other viewer functions act on the source file:
 | Function | Result |
 |---|---|
 | Search (F7), Alt-F8, Alt-Backspace, bookmarks | These set `FilePos`. `SyncMarkdownTop` moves the top row to the rows of that offset. |
-| F2, Shift-F2 | The layout does not change. Rows never wrap. |
+| F2, Shift-F2 | The layout changes. The doc re-renders at the current width. The viewer text, quote, list and table cells use soft wrap; fences, rules and mermaid art keep one row per row and scroll. `VM.Wrap` selects the mode. |
 | F5 | Runs `view.sh` and opens its output file (`VM.Processed` branch of `Viewer::OpenFile`). The rule `m_md_rule` still comes from the `.md` name, so the rows are the Markdown render of that output (path, file info, glow text). `AnsiEsc::Printer` draws them, so the role colors do not show. If `view.sh` fails, the rows stay. |
 | Clickable URLs | The scan reads the text of the rows. Only a URL that shows as text is clickable. |
 
@@ -182,6 +182,22 @@ foreground, the tint background.
 - A separator row follows the header. Body rows have no separators, and the table has no top or bottom border.
 - A table never shrinks to the screen. A row that is too wide is cut at the right edge.
 
+### Word wrap
+
+The viewer text, quote, list and table cell text use soft wrap: a row that is longer than
+the width splits into screen rows. Fences, horizontal rules and mermaid art rows keep one
+row per row and scroll horizontally. F2 and Shift-F2 switch the mode; the doc re-renders at
+the current width.
+
+- A wrapped row has no trailing spaces. A blank row is one row.
+- A list item wraps under its lead: the continuation rows start at the text indent. A nested
+  list adds its indent to the parent item.
+- A table row keeps one row per cell text; the row scrolls when the table is wider than the
+  screen.
+- Right, Left, Home and End move `LeftPos` in both modes. The arrow markers sit in columns 0
+  and the last column, over the first and last text cell.
+- A resize re-renders. A cache restore picks the top row by source offset and place.
+
 ### Diagrams
 
 A code block is a mermaid fence when its info word is `mermaid`, in any letter case.
@@ -195,7 +211,7 @@ A code block is a mermaid fence when its info word is `mermaid`, in any letter c
 |---|---|
 | First word of a drawn diagram | `graph`, `flowchart`, `stateDiagram`, `stateDiagram-v2`, `sequenceDiagram`, `classDiagram`, `erDiagram`, `xychart-beta`. The match is case-sensitive. |
 | Unspaced edges | For `graph` and `flowchart`, `entry.js` puts spaces around each edge operator before the parse. |
-| Art width | The bundle takes no width. The art is not scaled. A wide row is cut at the right edge. |
+| Art width | The bundle takes no width. The art is not scaled. A wide row is cut at the right edge. Wrap does not split art rows. |
 | Art lead | Art rows have no list lead and no quote bar. The hint row keeps its lead. |
 | Hint row | `(diagram not drawn here - Alt-F3 opens it in the browser)` |
 | Cache | `m_mermaid_cache` uses the source hash and the width as its key. It lives for one render pass, so fences with the same source draw once. |
@@ -274,7 +290,7 @@ States are checked against the code of branch `next/2.9.1-ovr.1`.
 
 | Item | From story | State |
 |---|---|---|
-| Long lines are cut at the right edge, and in the default Wrap mode Right does nothing. F2 is a workaround. The owner must choose a soft wrap or a change to the key guard. | markdown-preview-reading | Open |
+| Long lines are cut at the right edge. F2 soft-wraps prose, quote, list and table text; fences, rules and art scroll with Right, Left, Home and End. | markdown-preview-reading | Fixed (story markdown-horizontal-scroll) |
 | No text selection. `ReadStringMarkdown` sets `bSelection` to false, so search shows no highlight. `MarkdownPrinter` has the selection color, but no row uses it. | markdown-preview-fixes | Open |
 | In `BlackColorsIndex16`, code and art have the same foreground as body. Only heading differs. | markdown-preview-reading | Partly closed by markdown-palette: on the RGB path each role has its own color; the 16-color fallbacks stay close. |
 | In the default palette, art (light gray) and code (white) are the closest pair. A real terminal must show if this is good enough. | markdown-preview-reading | Closed by markdown-palette: code and art have different colors on both paths. The look needs the owner's manual check. |
