@@ -68,7 +68,7 @@ Result on this Mac, `next/2.9.1-ovr.1`: 12 of 14 pass. `0004-vt-shell` fails (`p
 
 | Script | What | Needs |
 |---|---|---|
-| `0007-view-file-markdown`, `0008-view-md-default`, `0009-view-md-setting-off` | The viewer in Markdown mode and its default and off setting | `-DTESTING=Yes` build |
+| `0007-view-file-markdown`, `0008-view-md-default`, `0009-view-md-setting-off`, `000f-view-md-wrap` | The viewer in Markdown mode, its default and off setting, and word wrap | `-DTESTING=Yes` build |
 | `sh testing/markdown/ascii-golden.sh` | `mermaid-ascii.js` against `testing/markdown/golden/*.mmd` and `*.txt`, in Node and in QuickJS | `node`; the QuickJS leg needs `../far2l.build/far2l/third_party/quickjs/libqjs.a` |
 | `sh testing/markdown/ascii-driver.sh` | The `AsciiMermaid` C++ code in a stand-alone driver (timeout, speed) | `libqjs.a`, no far2l build |
 

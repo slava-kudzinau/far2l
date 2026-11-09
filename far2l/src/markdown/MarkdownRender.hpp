@@ -60,6 +60,12 @@ struct MdLine {
     // the row's tint to the live theme through MdCodeTint, so a theme change shows on the
     // next redraw.
     int64_t tint = -1;
+    // Soft-wrap (F2) fields.  `flow` marks a prose line - a paragraph, heading, blockquote or
+    // list item - that the wrap pass may split; tables, code fences and diagram art keep it off.
+    // `prefix` is the cell count of the block lead at the line's start (the list indent and the
+    // blockquote bars), which the wrap pass repeats on every piece it makes.
+    bool flow = false;
+    int prefix = 0;
 
     // Total visible width in cells (sum of run lengths; cells, not codepoints).
     int Width() const;
@@ -75,7 +81,8 @@ public:
 
     // Full-document pass: parses UTF-8 `file_text`, lays out to `width` cells.  Runs carry
     // palette roles (MdRole), not colors, so the colors follow the theme at draw time.
-    void Render(const std::wstring &file_text, int width);
+    // `wrap` soft-wraps the prose lines to `width`; with it off every line keeps its source line.
+    void Render(const std::wstring &file_text, int width, bool wrap = false);
 
     // Fills `out` with the display lines of the next block and advances the
     // internal block cursor.  `at_file_pos` is the viewer's current read
@@ -83,8 +90,8 @@ public:
     // to the block containing that offset.  Returns false at document end.
     bool NextLines(std::vector<MdLine> &out, int64_t at_file_pos);
 
-    // Re-run the layout pass at a new width (the mermaid cache is dropped with it).
-    void Invalidate(int width);
+    // Re-run the layout pass at a new width and wrap mode (the mermaid cache is dropped with it).
+    void Invalidate(int width, bool wrap = false);
 
     // File offset of the first block (document start).
     int64_t FirstBlockFilePos() const { return m_first_pos; }
@@ -97,6 +104,7 @@ public:
     int64_t Cursor() const { return m_cursor; }
     void SetCursor(int64_t c) { m_cursor = c; m_cursor_pos = (c >= 0 && c < (int64_t)m_lines.size()) ? m_lines[c].nFilePos : -1; }
     int Width() const { return m_width; }
+    bool Wrap() const { return m_wrap; }
 
 private:
     std::vector<MdLine> m_lines;              // all display lines, in order
@@ -106,9 +114,10 @@ private:
     int64_t m_first_pos = 0;
     int64_t m_cursor_pos = 0;   // last at_file_pos the cursor was primed to
     int m_width = 0;
+    bool m_wrap = false;
     bool m_valid = false;
 
-    // The original text, retained so Invalidate(width) re-renders.
+    // The original text, retained so Invalidate(width, wrap) re-renders.
     std::wstring m_text;
 
     // mermaid render cache keyed by (fence source hash, width).

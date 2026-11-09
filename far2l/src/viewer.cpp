@@ -723,7 +723,7 @@ void Viewer::ShowPage(int nMode)
 				auto visualSelLength = printer->Length(StringI.Chars(StringI.nSelStart),
 						StringI.nSelEnd - StringI.nSelStart);
 
-				if (!VM.Wrap && AdjustSelPosition) {
+				if ((!VM.Wrap || VM.Markdown) && AdjustSelPosition) {
 					const int correctedWidth = Width - (ViOpt.ShowArrows ? 2 : 0);
 					if (visualSelStart < LeftPos || visualSelStart + visualSelLength > LeftPos + correctedWidth) {
 						int newLeftPos = (visualSelLength <= correctedWidth)
@@ -1132,7 +1132,7 @@ void Viewer::ShowMarkdown()
 		text.resize((size_t)got);
 	}
 
-	m_md_doc.Render(text, Width);
+	m_md_doc.Render(text, Width, VM.Wrap != 0);
 	m_md_ready = true;
 
 	vseek(top, SEEK_SET);
@@ -1167,9 +1167,10 @@ void Viewer::SyncMarkdownTop()
 		// Fresh pass (mode switched on, file opened): start at the line FilePos is in.
 		ShowMarkdown();
 		m_md_top = MarkdownLineAtPos(FilePos);
-	} else if (m_md_doc.Width() != Width) {
-		// Layout depends on width.  Keep the top line by its source offset, and by its place
-		// among the lines that share that offset (table rows and fence art share one).
+	} else if (m_md_doc.Width() != Width || m_md_doc.Wrap() != (VM.Wrap != 0)) {
+		// Layout depends on width and on the wrap mode (F2).  Keep the top line by its source
+		// offset, and by its place among the lines that share that offset (wrapped pieces, table
+		// rows and fence art share one).
 		const auto &old = m_md_doc.Lines();
 		int64_t pos = -1, same = 0;
 		if (m_md_top >= 0 && m_md_top < (int64_t)old.size()) {
@@ -1177,7 +1178,7 @@ void Viewer::SyncMarkdownTop()
 			for (int64_t i = m_md_top; i > 0 && old[(size_t)(i - 1)].nFilePos == pos; --i)
 				++same;
 		}
-		m_md_doc.Invalidate(Width);
+		m_md_doc.Invalidate(Width, VM.Wrap != 0);
 
 		const auto &lines = m_md_doc.Lines();
 		int64_t top = MarkdownLineAtPos(pos);
@@ -2381,7 +2382,7 @@ int Viewer::ProcessKey(FarKey Key)
 		case KEY_RIGHT:
 		case KEY_NUMPAD6:
 		case KEY_SHIFTNUMPAD6: {
-			if (LeftPos < MAX_VIEWLINE && ViewFile.Opened() && !VM.Hex && !VM.Wrap) {
+			if (LeftPos < MAX_VIEWLINE && ViewFile.Opened() && !VM.Hex && (!VM.Wrap || VM.Markdown)) {
 				LeftPos++;
 				Show();
 			}
@@ -2441,7 +2442,7 @@ int Viewer::ProcessKey(FarKey Key)
 
 					if (FilePos >= FileSize)
 						FilePos = FileSize - 1;		//??
-				} else if (!VM.Wrap) {
+				} else if (!VM.Wrap || VM.Markdown) {
 					LeftPos+= 20;
 
 					if (LeftPos > MAX_VIEWLINE)

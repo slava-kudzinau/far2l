@@ -3,6 +3,7 @@
 #include "md4c.h"
 #include "headers.hpp"   // WinPort: MultiByteToWideChar/WideCharToMultiByte (CP_UTF8)
 #include "interf.hpp"   // BoxSymbols[]
+#include "CharClasses.h"   // CharClasses::IsFullWidth / IsXxxfix / ZERO_WIDTH_JOINER
 #include "AsciiMermaid.hpp"
 
 #include <algorithm>
@@ -142,6 +143,11 @@ struct Builder {
     int64_t cur_pos = 0;          // file pos of the current display line
     bool cur_pos_set = false;     // cur_pos came from source text (else see flush())
     bool cur_started = false;
+    // Soft-wrap (F2) state of the line being collected: `cur_flow` marks prose (a paragraph,
+    // heading, blockquote or list item), `cur_prefix` is the cell count of the lead that a
+    // wrapped continuation line repeats.  flush() copies both to the line.
+    bool cur_flow = false;
+    int cur_prefix = 0;
 
     int width;
 
@@ -218,7 +224,9 @@ struct Builder {
         cur.clear();
         cur_pos_set = false;      // set by the line's first source text, see append()
         cur_started = true;
+        cur_flow = false;         // set by append() for prose (see flush())
         std::wstring lead = row_lead();
+        cur_prefix = (int)lead.size();   // all lead cells are 1 cell wide
         if (!lead.empty())
             cur.push_back(MdRun{lead, lead_role()});
         // The list-item prefix (the bullet, `1. `, the task box) is its own run: the scheme
@@ -259,12 +267,15 @@ struct Builder {
     }
 
     // `role` is the palette role of `text`; `off` is the file offset of `text` when it comes from the
-    // source, else -1.
-    void append(const std::wstring &text, uint64_t role, int64_t off = -1)
+    // source, else -1.  `flow` is false for the fixed layout of a table row, a code fence row and
+    // a diagram row, which the wrap pass must not split.
+    void append(const std::wstring &text, uint64_t role, int64_t off = -1, bool flow = true)
     {
         if (text.empty())
             return;
         begin_line();
+        if (flow)
+            cur_flow = true;
         if (!cur_pos_set && off >= 0)
             set_line_pos(off);
         if (!cur.empty() && cur.back().role == role)
@@ -283,6 +294,8 @@ struct Builder {
         // from the source) takes the position of the line before it, so it groups with that line
         // and never ties with a source line.
         line.nFilePos = cur_pos_set ? cur_pos : (out.empty() ? 0 : out.back().nFilePos);
+        line.flow = cur_flow;
+        line.prefix = cur_prefix;
         out.push_back(std::move(line));
         cur.clear();
         cur_started = false;
@@ -710,7 +723,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                 const int64_t line_pos = code_line_pos(b, start, end);
                 if (line_pos >= 0)
                     b.set_line_pos(line_pos);
-                b.append(std::wstring(CODE_INDENT, L' ') + line, MD_ROLE_CODE);
+                b.append(std::wstring(CODE_INDENT, L' ') + line, MD_ROLE_CODE, -1, false);
                 b.flush();
                 // The fence's rows take the block's tint (story markdown-code-tint): a
                 // non-negative tint marks the row, the printer resolves the theme's blend
@@ -763,25 +776,25 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                         };
                         b.begin_line();
                         b.set_line_pos(pos);
-                        b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_RULE);
+                        b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_RULE, -1, false);
                         for (size_t c = 0; c < cols; ++c) {
                             const int cell_w = (c < row.size()) ? (int)concat(row[c]).size() : 0;
                             const int pad = w[c] - cell_w;
-                            b.append(L" ", MD_ROLE_BODY);
+                            b.append(L" ", MD_ROLE_BODY, -1, false);
                             if (c < row.size())
                                 for (const MdRun &r : row[c])
                                     b.append(r.text, cell_role(r));
-                            b.append(std::wstring(pad > 0 ? pad : 0, L' ') + L" ", MD_ROLE_BODY);
-                            b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_RULE);
+                            b.append(std::wstring(pad > 0 ? pad : 0, L' ') + L" ", MD_ROLE_BODY, -1, false);
+                            b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_RULE, -1, false);
                         }
                         b.flush();
                     };
                     auto render_sep = [&](wchar_t l, wchar_t mid, wchar_t r) {
                         b.begin_line();
-                        b.append(std::wstring(1, l), MD_ROLE_RULE);
+                        b.append(std::wstring(1, l), MD_ROLE_RULE, -1, false);
                         for (size_t c = 0; c < cols; ++c) {
-                            b.append(std::wstring((size_t)w[c] + 2, BoxSymbols[BS_H1]), MD_ROLE_RULE);
-                            b.append(std::wstring(1, (c + 1 < cols) ? mid : r), MD_ROLE_RULE);
+                            b.append(std::wstring((size_t)w[c] + 2, BoxSymbols[BS_H1]), MD_ROLE_RULE, -1, false);
+                            b.append(std::wstring(1, (c + 1 < cols) ? mid : r), MD_ROLE_RULE, -1, false);
                         }
                         b.flush();
                     };
@@ -929,14 +942,141 @@ int cb_text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *userdata)
     return 0;
 }
 
+// --- soft wrap (F2) -----------------------------------------------------------------
+
+// Cells the code point at `p` takes, advancing past it.  The rules of MarkdownPrinter::Print,
+// so a wrapped line and a scrolled row agree on the columns: a full-width code point takes 2
+// cells, a combining mark and the target of a joiner ride the cell before them.
+int flow_cells(const wchar_t *&p, bool &joining)
+{
+    int cells = 0;
+    const wchar_t ch = *p;
+    if (static_cast<uint32_t>(ch) <= 0x7f) {
+        if (!joining)
+            cells = 1;
+        joining = false;
+    } else if (ch != 0xFEFF) {   // the BOM takes no cell, as in MarkdownPrinter::Print
+        if (ch == CharClasses::ZERO_WIDTH_JOINER) {
+            joining = true;
+        } else if (CharClasses::IsFullWidth(ch)) {
+            if (!joining)
+                cells = 2;
+            joining = false;
+        } else if (joining) {
+            // A combining mark, the target of a joiner, and the variation selector ride the
+            // cell before them (the printer's rule): they add no cell.
+            joining = false;
+        } else {
+            cells = 1;
+        }
+    }
+    ++p;
+    return cells;
+}
+
+// One code point of a line, with the role of its run and the cells it takes: the unit the wrap
+// pass measures, and the unit it rebuilds runs from.
+struct FlowCell {
+    wchar_t ch;
+    uint64_t role;
+    int cells;
+};
+
+void flow_add(std::vector<MdRun> &runs, wchar_t ch, uint64_t role)
+{
+    if (!runs.empty() && runs.back().role == role)
+        runs.back().text += ch;
+    else
+        runs.push_back(MdRun{std::wstring(1, ch), role});
+}
+
+// Soft-wrap one prose line to `width` cells.  The lead (MdLine::prefix cells: the list indent
+// and the blockquote bars) repeats on every piece, so a wrapped list item and a wrapped quote
+// keep their hanging indent; the list mark rides the first piece only.  A piece breaks at the
+// last space it took; a word longer than the room is cut.  A line that fits is handed out
+// unchanged, so its runs keep the split the parser gave them.
+void wrap_line(const MdLine &in, int width, std::vector<MdLine> &out)
+{
+    const int head_cells = in.prefix;
+    if (width <= 0 || head_cells >= width) {
+        out.push_back(in);
+        return;
+    }
+
+    std::vector<FlowCell> head, body;   // the lead, then the text that flows
+    int total = 0;
+    for (const MdRun &run : in.runs) {
+        const wchar_t *p = run.text.c_str();
+        bool joining = false;
+        while (*p) {
+            const wchar_t ch = *p;
+            const int cells = flow_cells(p, joining);
+            if ((int)head.size() < head_cells)
+                head.push_back(FlowCell{ch, run.role, cells});
+            else {
+                body.push_back(FlowCell{ch, run.role, cells});
+                total += cells;
+            }
+        }
+    }
+
+    if (body.empty() || head_cells + total <= width) {
+        out.push_back(in);
+        return;
+    }
+
+    const int room = width - head_cells;
+    size_t i = 0;
+    while (i < body.size()) {
+        // Greedy fill: take cells up to `room`, then fall back to the last space taken, so a
+        // word is not cut where it fits whole.
+        int used = 0, stop_used = 0;
+        size_t end = i, stop = i;
+        while (end < body.size() && used + body[end].cells <= room) {
+            used += body[end].cells;
+            ++end;
+            if (body[end - 1].cells == 1 && body[end - 1].ch == L' ') {
+                stop = end;
+                stop_used = used;
+            }
+        }
+        if (end < body.size() && stop > i) {
+            end = stop;
+            used = stop_used;
+        }
+
+        MdLine piece;
+        piece.nFilePos = in.nFilePos;
+        piece.tokens = in.tokens;
+        piece.tint = in.tint;
+        piece.flow = in.flow;
+        piece.prefix = in.prefix;
+        for (const FlowCell &c : head)
+            flow_add(piece.runs, c.ch, c.role);
+        for (size_t k = i; k < end; ++k)
+            flow_add(piece.runs, body[k].ch, body[k].role);
+        // The spaces at the end of a piece are the break's: the next piece starts clean.
+        while (!piece.runs.empty()) {
+            std::wstring &t = piece.runs.back().text;
+            t.erase(t.find_last_not_of(L' ') + 1);
+            if (!t.empty())
+                break;
+            piece.runs.pop_back();
+        }
+        out.push_back(std::move(piece));
+        i = end;
+    }
+}
+
 }   // namespace
 
 // ---------------------------------------------------------------------------
 
-void MarkdownDoc::Render(const std::wstring &file_text, int width)
+void MarkdownDoc::Render(const std::wstring &file_text, int width, bool wrap)
 {
     m_text = file_text;
     m_width = width;
+    m_wrap = wrap;
     m_lines.clear();
     m_block_starts.clear();
     m_block_first_line.clear();
@@ -1021,6 +1161,21 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width)
         m_lines.erase(m_lines.begin() + it->first_line, m_lines.begin() + code_end);
         m_lines.insert(m_lines.begin() + it->first_line, lines.begin(), lines.end());
     }
+
+    // The wrap pass runs last: the splice above addresses lines by index, and splitting a prose
+    // line changes no offset, so scrolling, the position cache and the mode switch keep working
+    // on the wrapped doc.
+    if (m_wrap) {
+        std::vector<MdLine> wrapped;
+        wrapped.reserve(m_lines.size());
+        for (const MdLine &line : m_lines) {
+            if (line.flow)
+                wrap_line(line, width, wrapped);
+            else
+                wrapped.push_back(line);
+        }
+        m_lines.swap(wrapped);
+    }
 }
 
 bool MarkdownDoc::NextLines(std::vector<MdLine> &out, int64_t at_file_pos)
@@ -1048,10 +1203,10 @@ bool MarkdownDoc::NextLines(std::vector<MdLine> &out, int64_t at_file_pos)
     return true;
 }
 
-void MarkdownDoc::Invalidate(int width)
+void MarkdownDoc::Invalidate(int width, bool wrap)
 {
     m_mermaid_cache.clear();
     // The token cache outlives a resize: a key is language, fence hash and
     // scheme generation (R30); a scheme change re-keys, a resize does not.
-    Render(m_text, width);
+    Render(m_text, width, wrap);
 }

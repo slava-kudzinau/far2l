@@ -368,6 +368,41 @@ CheckRowOf("paragraph after the last heading", ExpectString("Final paragraph"), 
 TypeHome()
 CheckTop("home", ExpectString("Long Start"))
 ExpectString("  0%")
+// Horizontal scrolling in Markdown mode works even when wrap mode is default-on (VM.Wrap == 1).
+// The heading row is "Long Start". Four Right presses drop "Long", and the left-arrow marker
+// takes column 1, so the row reads "«Start".
+TypeRight(4)
+var scrolled = BoundedLine(0, 1, 80, " \t")
+if (scrolled != "«Start") {
+	Log("after four Right: row 1 is '" + scrolled + "'");
+	Panic("Right did not scroll the Markdown row");
+}
+TypeLeft(4)
+var back = BoundedLine(0, 1, 80, " \t")
+if (back != "Long Start") {
+	Log("after four Left: row 1 is '" + back + "'");
+	Panic("Left did not scroll the Markdown row back");
+}
+// Ctrl-Right jumps 20 cells, past the end of the row; Ctrl-Shift-Left returns to column 0.
+ToggleLCtrl(true)
+TypeRight()
+ToggleLCtrl(false)
+var jumped = BoundedLine(0, 1, 80, " \t")
+if (jumped != "«") {
+	Log("after Ctrl-Right: row 1 is '" + jumped + "'");
+	Panic("Ctrl-Right did not jump past the Markdown row");
+}
+ToggleLCtrl(true)
+ToggleShift(true)
+TypeLeft()
+ToggleShift(false)
+ToggleLCtrl(false)
+var reset = BoundedLine(0, 1, 80, " \t")
+if (reset != "Long Start") {
+	Log("after Ctrl-Shift-Left: row 1 is '" + reset + "'");
+	Panic("Ctrl-Shift-Left did not return the Markdown row to column 0");
+}
+
 
 // Markdown -> plain -> markdown keeps the top row. Each row's file position is its line start,
 // so the plain view of the heading keeps its "# " and the list item keeps its "- ".
