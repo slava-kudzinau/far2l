@@ -35,6 +35,7 @@ Build these stories in this order. Each one changes `MarkdownRender.cpp` and the
 | [markdown-browser-github-look](markdown-browser-github-look/story.md) | in-review | M | The Alt-F3 browser page gets the GitHub look, code highlight, a 60/70/80 width and a light/dark theme, set in a defaults file or by flags. It edits only the script and the page, so it can run in parallel with the F3 stories above. | markdown-browser-view | `feat/markdown-browser-github-look` |
 | [markdown-browser-tree-panel](markdown-browser-tree-panel/story.md) | done | M | A file-tree panel on the left of the Alt-F3 page. A click on a tree file or on a local link shows that file in the same page, and Back returns. Merged in PR #16, `019c8ffda` (2026-11-07). | markdown-browser-github-look | `feat/markdown-browser-tree-panel` |
 | [markdown-blank-lines](markdown-blank-lines/story.md) | done | M | One blank row for each empty source line in the F3 Markdown view. The renderer makes no blank rows of its own. Reverses the spacing rules of markdown-compact-layout. | markdown-code-tint | `feat/markdown-blank-lines` |
+| [markdown-horizontal-scroll](markdown-horizontal-scroll/story.md) | in-progress | M | F2 soft wrap for prose, quote, list and table cells in the F3 Markdown view; Right, Left, Home and End scroll a long row in both modes. | markdown-blank-lines | `feat/markdown-horizontal-scroll` |
 
 Story [markdown-theme-colors](markdown-theme-colors/story.md) is superseded. The owner replaced it with markdown-palette and markdown-code-tint on 2026-11-06.
 
