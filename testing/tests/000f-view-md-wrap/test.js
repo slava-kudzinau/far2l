@@ -3,9 +3,6 @@ profile=mydir + "/profile"
 left=mydir + "/left"
 right=mydir + "/right"
 
-// F2 (word wrap) in Markdown mode: prose soft-wraps to the screen width, the fixed layouts -
-// a table row, a code fence row - stay on one row, and horizontal scrolling reaches the cells
-// past the width.  The fixture is opened at 80 columns.
 function CheckNotBlank(name, y) {
 	var text = BoundedLine(0, y, 80, " \t")
 	if (text == "") {
@@ -66,24 +63,50 @@ var rewrapped = ExpectString("Alpha bravo")
 CheckNotBlank("paragraph continuation after F2", rewrapped.Y + 1)
 CheckBlank("gap after the rewrapped paragraph", rewrapped.Y + 2)
 
-// A wide table row keeps its grid: the rule follows the header row directly, so the header is
-// not split into two rows.
 var head = ExpectString("Column A")
 var rule = BoundedLine(0, head.Y + 1, 80, " \t")
 if (rule.substring(0, 1) != "├") {
     Log("the row under the header is '" + rule + "'")
     Panic("the table header row is split by wrap")
 }
-if (BoundedLine(0, head.Y + 2, 80, " \t") == "") {
-    Panic("the table data row is missing")
+if (BoundedLine(0, head.Y, 80, "").substring(79, 80) == "»") {
+    Panic("table unexpectedly scrolls horizontally")
 }
-// right edge (its right-arrow marker shows), so it took one screen row.
-var fence2 = ExpectString("second fence line")
-var longFence = BoundedLine(0, fence2.Y - 1, 80, "")
-if (longFence.substring(longFence.length - 1) != "»") {
-	Log("the long fence row is '" + longFence + "'")
-	Panic("the long code fence row was split")
+var row1 = BoundedLine(0, head.Y + 2, 80, " ")
+var row2 = BoundedLine(0, head.Y + 3, 80, " ")
+if (row1.indexOf("aaaaaaaaaaaaaaaaaaaaaaaa") < 0 || row2.indexOf("aaaaaaaa") < 0) {
+    Log("row one is '" + row1 + "', row two is '" + row2 + "'")
+    Panic("the long table word was not split at its column width")
 }
+if (row1.indexOf("cccc dddd") < 0 || row2.indexOf("hhhh") < 0 || row1.indexOf("hhhh") >= 0) {
+    Log("row one is '" + row1 + "', row two is '" + row2 + "'")
+    Panic("the table cell did not prefer a whitespace break")
+}
+
+var weightedHead = ExpectString("Detailed content column")
+var weightedHeadLine = BoundedLine(0, weightedHead.Y, 80, "")
+var bars = []
+for (var b = 0; b < weightedHeadLine.length; ++b) {
+	if (weightedHeadLine.substring(b, b + 1) == "│") bars.push(b)
+}
+if (bars.length < 4) {
+	Log("weighted table header is '" + weightedHeadLine + "'")
+	Panic("the weighted table header lost its column borders")
+}
+var firstWidth = bars[1] - bars[0]
+var finalWidth = bars[3] - bars[2]
+if (finalWidth <= firstWidth) {
+	Log("weighted table header is '" + weightedHeadLine + "'")
+	Panic("the final content column did not receive more width than the short first column")
+}
+for (var i = 0; i < 6; ++i) {
+	var weightedLine = BoundedLine(0, weightedHead.Y + i, 80, "")
+	if (weightedLine.length > 80) {
+		Log("weighted table row is '" + weightedLine + "'")
+		Panic("a weighted table row exceeded the viewer width")
+	}
+}
+ExpectString("first column.")
 
 // A list item wraps under its lead: the bullet rides the first row only, and the continuation
 // starts at the 2-cell list indent.
@@ -94,6 +117,22 @@ if (BoundedLine(0, item.Y + 1, 80, " \t").indexOf("•") >= 0) {
 	Panic("the list mark repeated on the wrapped row")
 }
 CheckCellChar(2, item.Y + 1, "abcdefghijklmnopqrstuvwxyz")
+
+var wide = ExpectString("界")
+var wideLine = BoundedLine(0, wide.Y, 80, "")
+if (wideLine.substring(wide.X + 2, wide.X + 4) != "  ") {
+    Log("the wide-glyph table row is '" + wideLine + "'")
+    Panic("the wide glyph has incorrect table padding")
+}
+
+// The fences, the final paragraph and the mermaid art sit below the first screen.
+TypePageDown()
+var fence2 = ExpectString("second fence line")
+var longFence = BoundedLine(0, fence2.Y - 1, 80, "")
+if (longFence.substring(longFence.length - 1) != "»") {
+	Log("the long fence row is '" + longFence + "'")
+	Panic("the long code fence row was split")
+}
 // The mermaid box keeps one row per box row: its top border runs past the right edge
 // (its right-arrow marker shows), so the wide art row was not split by wrap.
 var boxTop = ExpectString("┌")

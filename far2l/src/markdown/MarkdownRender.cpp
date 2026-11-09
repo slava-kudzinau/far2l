@@ -33,6 +33,7 @@ const wchar_t      MERMAID_HINT[] = L"(diagram not drawn here - Alt-F3 opens it 
 std::wstring concat(const std::vector<MdRun> &runs);
 std::wstring utf8_to_wide(const char *data, size_t size);
 std::wstring attr_to_wide(const MD_ATTRIBUTE &a);
+int flow_cells(const wchar_t *&p, bool &joining);
 
 std::wstring utf8_to_wide(const char *data, size_t size)
 {
@@ -790,55 +791,165 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             break;
         case MD_BLOCK_TABLE:
             b.in_table = false;
-            // grid render via BoxSymbols; column widths = max cell width.
             if (!b.table_rows.empty()) {
                 size_t cols = 0;
-                for (auto &r : b.table_rows)
-                    cols = std::max(cols, r.size());
+                for (auto &r : b.table_rows) cols = std::max(cols, r.size());
                 if (cols) {
-                    std::vector<int> w(cols, 0);
-                    for (auto &r : b.table_rows)
-                        for (size_t c = 0; c < r.size(); ++c)
-                            w[c] = std::max(w[c], (int)concat(r[c]).size());
-                    // Rows take their own source offset; the rule under the header takes the line before it
-                    // (flush()).  Header text with no other span is drawn in the strong role; other cells
-                    // keep their roles.
-                    auto render_row = [&](std::vector<std::vector<MdRun>> &row, int64_t pos, bool header) {
-                        // Header text keeps a code, link or strong span of its own; only plain header
-                        // text moves to the strong role.
-                        auto cell_role = [&](const MdRun &r) {
-                            if (!(header && r.role == MD_ROLE_BODY))
-                                return r.role;
-                            return static_cast<uint64_t>(MD_ROLE_STRONG);
-                        };
-                        b.begin_line();
-                        b.set_line_pos(pos);
-                        b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_RULE, -1, false);
-                        for (size_t c = 0; c < cols; ++c) {
-                            const int cell_w = (c < row.size()) ? (int)concat(row[c]).size() : 0;
-                            const int pad = w[c] - cell_w;
-                            b.append(L" ", MD_ROLE_BODY, -1, false);
-                            if (c < row.size())
-                                for (const MdRun &r : row[c])
-                                    b.append(r.text, cell_role(r), -1, false);
-                            b.append(std::wstring(pad > 0 ? pad : 0, L' ') + L" ", MD_ROLE_BODY, -1, false);
-                            b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_RULE, -1, false);
+                    auto cells_of = [](const std::vector<MdRun> &runs) {
+                        int cells = 0;
+                        bool joining = false;
+                        for (const MdRun &run : runs) {
+                            const wchar_t *p = run.text.c_str();
+                            while (*p) cells += flow_cells(p, joining);
                         }
-                        b.flush();
+                        return cells;
                     };
-                    auto render_sep = [&](wchar_t l, wchar_t mid, wchar_t r) {
-                        b.begin_line();
-                        b.append(std::wstring(1, l), MD_ROLE_RULE, -1, false);
-                        for (size_t c = 0; c < cols; ++c) {
-                            b.append(std::wstring((size_t)w[c] + 2, BoxSymbols[BS_H1]), MD_ROLE_RULE, -1, false);
-                            b.append(std::wstring(1, (c + 1 < cols) ? mid : r), MD_ROLE_RULE, -1, false);
+                    std::vector<int> w(cols, 1);
+                    for (auto &row : b.table_rows) {
+                        for (size_t c = 0; c < cols && c < row.size(); ++c)
+                            w[c] = std::max(w[c], cells_of(row[c]));
+                    }
+                    int natural = (int)cols + 1;
+                    int total_natural_width = 0;
+                    for (int value : w) {
+                        natural += value + 2;
+                        total_natural_width += value;
+                    }
+                    if (natural > b.width) {
+                        const int usable = std::max((int)cols, b.width - (int)cols - 1 - 2 * (int)cols);
+                        if (usable == (int)cols) {
+                            w.assign(cols, 1);
+                        } else {
+                            std::vector<int> remainders(cols);
+                            int assigned = 0;
+                            for (size_t c = 0; c < cols; ++c) {
+                                const int64_t share = (int64_t)usable * w[c];
+                                w[c] = std::max(1, (int)(share / total_natural_width));
+                                remainders[c] = (int)(share % total_natural_width);
+                                assigned += w[c];
+                            }
+                            while (assigned < usable) {
+                                size_t best = 0;
+                                for (size_t c = 1; c < cols; ++c) {
+                                    if (remainders[c] > remainders[best]) best = c;
+                                }
+                                ++w[best];
+                                remainders[best] = -1;
+                                ++assigned;
+                            }
+                            while (assigned > usable) {
+                                size_t smallest = cols;
+                                for (size_t c = 0; c < cols; ++c) {
+                                    if (w[c] > 1 && (smallest == cols || remainders[c] < remainders[smallest]))
+                                        smallest = c;
+                                }
+                                if (smallest == cols) break;
+                                --w[smallest];
+                                remainders[smallest] = total_natural_width + 1;
+                                --assigned;
+                            }
                         }
-                        b.flush();
+                    }
+                    auto cell_role = [&](const MdRun &r, bool header) {
+                        return header && r.role == MD_ROLE_BODY ? static_cast<uint64_t>(MD_ROLE_STRONG) : r.role;
+                    };
+                    auto split = [&](const std::vector<MdRun> &src, int limit) {
+                        struct CellChar { wchar_t ch; uint64_t role; int cells; };
+                        std::vector<CellChar> chars;
+                        bool joining = false;
+                        for (const MdRun &run : src) {
+                            const wchar_t *p = run.text.c_str();
+                            while (*p) {
+                                const wchar_t ch = *p++;
+                                int cells = 0;
+                                if ((uint32_t)ch <= 0x7f) {
+                                    if (!joining) cells = 1;
+                                    joining = false;
+                                } else if (ch != 0xFEFF) {
+                                    if (ch == CharClasses::ZERO_WIDTH_JOINER) joining = true;
+                                    else if (CharClasses::IsFullWidth(ch)) {
+                                        if (!joining) cells = 2;
+                                        joining = false;
+                                    } else if (joining) joining = false;
+                                    else cells = 1;
+                                }
+                                chars.push_back({ch, run.role, cells});
+                            }
+                        }
+                        limit = std::max(1, limit);
+                        std::vector<std::vector<MdRun>> pieces;
+                        size_t i = 0;
+                        while (i < chars.size()) {
+                            while (i < chars.size() && iswspace(chars[i].ch)) ++i;
+                            if (i == chars.size()) break;
+                            size_t end = i;
+                            int used = 0;
+                            while (end < chars.size() && used + chars[end].cells <= limit) {
+                                used += chars[end].cells;
+                                ++end;
+                            }
+                            if (end < chars.size()) {
+                                for (size_t k = end; k > i; --k) {
+                                    if (iswspace(chars[k - 1].ch)) { end = k; break; }
+                                }
+                            }
+                            if (end == i) end = i + 1;
+                            std::vector<MdRun> piece;
+                            for (size_t k = i; k < end; ++k) {
+                                if (!piece.empty() && piece.back().role == chars[k].role)
+                                    piece.back().text += chars[k].ch;
+                                else
+                                    piece.push_back({std::wstring(1, chars[k].ch), chars[k].role});
+                            }
+                            while (!piece.empty()) {
+                                std::wstring &tail = piece.back().text;
+                                while (!tail.empty() && iswspace(tail.back())) tail.pop_back();
+                                if (!tail.empty()) break;
+                                piece.pop_back();
+                            }
+                            pieces.push_back(std::move(piece));
+                            i = end;
+                        }
+                        if (pieces.empty()) pieces.push_back({});
+                        return pieces;
                     };
                     for (size_t ri = 0; ri < b.table_rows.size(); ++ri) {
-                        render_row(b.table_rows[ri], b.table_row_pos[ri], ri == 0);
-                        if (ri == 0)
-                            render_sep(BoxSymbols[BS_L_H1V1], BoxSymbols[BS_C_H1V1], BoxSymbols[BS_R_H1V1]);
+                        auto &row = b.table_rows[ri];
+                        std::vector<std::vector<std::vector<MdRun>>> cells(cols);
+                        size_t height = 1;
+                        for (size_t c = 0; c < cols; ++c) {
+                            const auto empty = std::vector<MdRun>{};
+                            cells[c] = split(c < row.size() ? row[c] : empty, w[c]);
+                            height = std::max(height, cells[c].size());
+                        }
+                        for (size_t line = 0; line < height; ++line) {
+                            b.begin_line(); b.set_line_pos(b.table_row_pos[ri]);
+                            b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_RULE, -1, false);
+                            for (size_t c = 0; c < cols; ++c) {
+                                b.append(L" ", MD_ROLE_BODY, -1, false);
+                                if (line < cells[c].size()) {
+                                    for (const MdRun &run : cells[c][line])
+                                        b.append(run.text, cell_role(run, ri == 0), -1, false);
+                                }
+                                int n = 0;
+                                bool joining = false;
+                                if (line < cells[c].size()) {
+                                    for (const MdRun &run : cells[c][line]) {
+                                        const wchar_t *p = run.text.c_str();
+                                        while (*p) n += flow_cells(p, joining);
+                                    }
+                                }
+                                const int padding = std::max(1, w[c] - n + 1);
+                                b.append(std::wstring(padding, L' '), MD_ROLE_BODY, -1, false);
+                                b.append(std::wstring(1, BoxSymbols[BS_V1]), MD_ROLE_RULE, -1, false);
+                            }
+                            b.flush();
+                        }
+                        if (ri == 0) {
+                            b.begin_line(); b.append(std::wstring(1, BoxSymbols[BS_L_H1V1]), MD_ROLE_RULE, -1, false);
+                            for (size_t c = 0; c < cols; ++c) { b.append(std::wstring(w[c] + 2, BoxSymbols[BS_H1]), MD_ROLE_RULE, -1, false); b.append(std::wstring(1, c + 1 < cols ? BoxSymbols[BS_C_H1V1] : BoxSymbols[BS_R_H1V1]), MD_ROLE_RULE, -1, false); }
+                            b.flush();
+                        }
                     }
                 }
             }

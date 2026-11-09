@@ -13,6 +13,7 @@ refs:
   - docs/architecture/decisions/adr-006-ascii-diagrams.md
   - docs/architecture/decisions/adr-007-markdown-default-on.md
 ---
+Tables use their natural column widths when they fit the viewer. Oversized tables distribute the available content width in proportion to their natural column widths. The renderer assigns remaining cells by descending fractional remainder, with lower column indexes first on ties, then wraps cell content vertically. Horizontal scrolling never reveals additional table content.
 
 # Spec: Markdown mode in the F3 viewer
 
@@ -176,11 +177,12 @@ foreground, the tint background.
 
 ### Tables
 
-- The width of a column is the largest cell in that column, counted in `wchar_t` units.
+- The width of a column is the largest cell in that column, counted in terminal display cells.
+- When natural widths exceed the viewer, the renderer allocates available content cells in proportion to each natural width. It computes integer shares and assigns remaining cells by descending fractional remainder, with lower column indexes first on ties. Each column receives at least one content cell.
 - Text is left-aligned in all columns. The alignment markers in the source have no effect.
 - The first row uses the strong role. A cell keeps its inline role, so a code span or a link in a header cell keeps the code or link role. Borders use the rule role.
 - A separator row follows the header. Body rows have no separators, and the table has no top or bottom border.
-- A table never shrinks to the screen. A row that is too wide is cut at the right edge.
+- A constrained table fits the viewer by wrapping each cell within its allocated column width. Horizontal scrolling does not reveal additional table content.
 
 ### Word wrap
 
