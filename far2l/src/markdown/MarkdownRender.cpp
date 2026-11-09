@@ -154,7 +154,7 @@ struct Builder {
     // block context
     int quote_depth = 0;
     int heading_level = 0;
-    size_t heading_src = 0;       // start offset of the heading's first source line
+    size_t heading_src;
     std::vector<int> list_stack;  // 0 = bullet, 1 = ordered
     std::vector<long> ol_counter;
     bool li_open = false;         // a list item is collecting inline content
@@ -302,7 +302,6 @@ struct Builder {
         cur_started = false;
     }
 
-    // One full-width rule row: a thematic break, or the underline of a setext heading.
     void rule_row()
     {
         begin_line();
@@ -634,8 +633,6 @@ int cb_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             auto *d = (MD_BLOCK_H_DETAIL *)detail;
             b.open_block();
             b.heading_level = d ? (int)d->level : 1;
-            // The heading's first source line: the start of a paragraph turned setext, else the
-            // `#` line of an ATX heading.  Leave tells the two apart by the first non-space.
             b.heading_src = b.first_nonblank_line((b.last_text_end < 0) ? 0 : (size_t)b.last_text_end);
             b.begin_line();
             break;
@@ -719,12 +716,6 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             break;
         case MD_BLOCK_H: {
             b.flush();
-            // A setext heading consumes its underline line and md4c fires no callback for it:
-            // the front matter's closing `---` is that case.  The underline sits directly under
-            // the heading's last text line: draw it as a rule row, so the block reads as a
-            // region delimited top and bottom.  An ATX heading keeps none: its own palette entry
-            // is its layout cue, and a `---` under it is a thematic break, a block with a
-            // callback of its own.
             if (b.heading_level == 1 || b.heading_level == 2) {
                 const char first = (b.heading_src < b.base_size) ? b.base[b.heading_src] : '\n';
                 const size_t start = (b.last_text_end < 0) ? 0 : (size_t)b.last_text_end;
