@@ -96,7 +96,7 @@ Other viewer functions act on the source file:
 
 | Source | Rows |
 |---|---|
-| Heading | The text. No rule row follows it. |
+| Heading | The text. An ATX heading has no rule row after it. A setext heading shows its consumed underline as a rule row under the text. |
 | Paragraph | One row for each source line. A soft break or a hard break starts a new row. |
 | Bullet item | A lead of 2 cells for each list level, then `• `. |
 | Ordered item | The same lead, then `<n>. `. The first number comes from the source. |
@@ -104,7 +104,7 @@ Other viewer functions act on the source file:
 | Block quote | `│ ` for each quote level, after the list lead. |
 | Fenced or indented code | 4 cells of indent after the lead. Blank lines of the code stay. |
 | HTML block | Verbatim, as code. Nothing runs. |
-| Horizontal rule | A row of `─`. This is the only full-width line. A `---` line under a paragraph makes a heading, not a rule. |
+| Horizontal rule | A row of `─`. A `---` line under a paragraph makes a heading: the text, then a rule row for the consumed underline. The front matter closing line is that case, so the front matter reads as a region delimited top and bottom. |
 | Emphasis, strikethrough, underline | The markers go and the text stays. Emphasis text takes the `em` role. No italic, bold or strikeout attribute shows. Underline shows when the Colorer look carries it: heading and link in the default scheme. |
 | Fence token colors | A fence token takes the Colorer scheme's color for its region, and the underline where the scheme underlines. The gate is the view-wide Colorer batch verdict. Cells with no token, and the row's tail, keep the `code` role. |
 | Link | The label shows. The target is dropped. |

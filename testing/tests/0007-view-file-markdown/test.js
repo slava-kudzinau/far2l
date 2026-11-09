@@ -225,13 +225,12 @@ CheckBack("code span in quote", ReadCell(qcode.X, qcode.Y))
 var quote2 = ExpectString("block quote line")
 CheckForeSame("quote text", ReadCell(quote2.X + 2, quote2.Y), quote_cell, "quote")
 CheckBack("quote text", ReadCell(quote2.X + 2, quote2.Y))
-// A setext-style `---` under a paragraph renders as an H2: the h2 color, and no rule row
-// under it (the paragraph text moves up into the heading row, the quote follows after a blank).
 var setext_h2 = ExpectString("setext-style break")
 var setext_h2_cell = ReadCell(setext_h2.X, setext_h2.Y)
 CheckForeSame("setext break as h2", setext_h2_cell, h2_cell, "h2")
-CheckForeSame("row after the setext break", ReadCell(0, setext_h2.Y + 2), quote_cell, "quote")
-CheckCellChar(0, setext_h2.Y + 2, "│")
+CheckCellChar(0, setext_h2.Y + 1, "─")
+CheckForeSame("row after the setext break", ReadCell(0, setext_h2.Y + 3), quote_cell, "quote")
+CheckCellChar(0, setext_h2.Y + 3, "│")
 CheckBack("setext break as h2", setext_h2_cell)
 // The trailing thematic break shares the rule color of the table borders, and the quote text
 // differs from it: close the viewer and read the rule row on the last page.
@@ -633,11 +632,10 @@ CheckBlankRow("blank row after level 6 heading", c_six.Y + 1);
 var c_after_six = ExpectString("Compact para after six.");
 CheckRowOf("paragraph after level 6 heading and its blank row", c_after_six, c_six.Y + 2);
 
-// A setext heading of level 2 keeps its source blank rows.
 var c_setext = ExpectString("Compact Setext");
 CheckBlankRow("blank row before a setext heading", c_setext.Y - 1);
 CheckRowOf("setext heading after the paragraph and its blank row", c_setext, c_after_six.Y + 2);
-CheckBlankRow("blank row after a setext heading", c_setext.Y + 1);
+CheckCellChar(0, c_setext.Y + 1, "─");
 CheckNoBorder();
 
 // Page 5: the paragraph after setext, setext heading of level 1, the thematic break, the table,
@@ -646,15 +644,18 @@ TypePageDown();
 CheckNoBorder();
 
 var c_after_setext = ExpectString("Compact para after setext.");
-CheckRowOf("paragraph after a setext heading and its blank row", c_after_setext, 2);
+CheckRowOf("paragraph after a setext heading and its blank row", c_after_setext, 3);
+CheckBlankRow("blank row after a setext heading", c_after_setext.Y - 1);
+CheckCellChar(0, c_after_setext.Y - 2, "─");
 
 // A setext heading of level 1 keeps one blank row before and after it from source blanks.
 var c_setext_top = ExpectString("Compact Setext Top");
 CheckBlankRow("blank row before a setext heading of level 1", c_setext_top.Y - 1);
 CheckRowOf("setext heading of level 1", c_setext_top, c_after_setext.Y + 2);
-CheckBlankRow("blank row after a setext heading of level 1", c_setext_top.Y + 1);
+CheckCellChar(0, c_setext_top.Y + 1, "─");
+CheckBlankRow("blank row after a setext heading of level 1", c_setext_top.Y + 2);
 var c_above_break = ExpectString("Compact para above break.");
-CheckRowOf("paragraph after a level 1 heading and its blank row", c_above_break, c_setext_top.Y + 2);
+CheckRowOf("paragraph after a level 1 heading and its blank row", c_above_break, c_setext_top.Y + 3);
 
 // Thematic break HR scan: empty line before the break shows a blank row above it.
 CheckBlankRow("blank row before the thematic break", c_above_break.Y + 1);
@@ -724,14 +725,17 @@ CheckBlankRow("blank row between heading and html", r_head_html.Y + 1);
 var r_html2 = ExpectString("review html two");
 CheckRowOf("html block after heading and its blank row", r_html2, r_head_html.Y + 2);
 CheckBlankRow("blank row after html block", r_html2.Y + 1);
+TypeDown(2);
+var r_html2_p6 = ExpectString("review html two");
 var r_para5 = ExpectString("Review para five.");
-CheckRowOf("paragraph after the html block and its blank row", r_para5, r_html2.Y + 2);
+CheckRowOf("paragraph after the html block and its blank row", r_para5, r_html2_p6.Y + 2);
 CheckBlankRow("blank row after paragraph five", r_para5.Y + 1);
 CheckNoBorder();
 
 // Page 7, the last page: the fence in an item, the heading and the html block as the first
 // block of a list item.
 TypePageDown();
+TypeDown(2);
 CheckNoBorder();
 
 var r_para5_p7 = ExpectString("Review para five.");
