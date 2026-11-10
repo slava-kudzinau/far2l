@@ -3,6 +3,10 @@ CMakeFiles
 CMakeScripts
 CMakeLists.txt.user
 Testing
+!/testing/
+!/testing/tests/
+!/testing/tests/0010-view-md-table-cols/
+!/testing/tests/0010-view-md-table-cols/**
 Makefile
 cmake_install.cmake
 install_manifest.txt
