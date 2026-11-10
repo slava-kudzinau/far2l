@@ -14,6 +14,7 @@ description: Index of the story records with their file status, the real merge s
 | [markdown-default-on](markdown-default-on/story.md) | done | yes, PR #3 | F3 on `.md` and `.markdown` files opens Markdown mode. The `Markdown_Auto` setting and a deviation-only cache keep the choice. | markdown-preview-reading | `markdown-preview/default-on` | `141a329d3` |
 | [markdown-browser-view](markdown-browser-view/story.md) | done | yes, PR #4 | `md-open.sh` shows a Markdown file as a web page, with diagrams from a pinned CDN. Alt-F3 runs it. | markdown-preview-reading | `markdown-preview/browser-view` | `a2f720209` |
 | [markdown-compact-layout](markdown-compact-layout/story.md) | done | yes, PR #8 | Fewer blank rows, no heading rule rows, lighter table borders. | none | `feat/markdown-compact-layout` | see PR #8 |
+| [markdown-front-matter-rule](markdown-front-matter-rule/story.md) | done | not merged, PR pending | The closing front matter line shows as a rule row: a setext heading draws its consumed underline. | none | `fix/markdown-front-matter-rule` | pending |
 
 `markdown-preview-fixes` has no pull request. Its commits are in the history of `markdown-preview/reading`, so PR #1 merged them.
 
@@ -36,6 +37,7 @@ Build these stories in this order. Each one changes `MarkdownRender.cpp` and the
 | [markdown-browser-tree-panel](markdown-browser-tree-panel/story.md) | done | M | A file-tree panel on the left of the Alt-F3 page. A click on a tree file or on a local link shows that file in the same page, and Back returns. Merged in PR #16, `019c8ffda` (2026-11-07). | markdown-browser-github-look | `feat/markdown-browser-tree-panel` |
 | [markdown-blank-lines](markdown-blank-lines/story.md) | done | M | One blank row for each empty source line in the F3 Markdown view. The renderer makes no blank rows of its own. Reverses the spacing rules of markdown-compact-layout. | markdown-code-tint | `feat/markdown-blank-lines` |
 | [markdown-horizontal-scroll](markdown-horizontal-scroll/story.md) | in-progress | M | F2 soft wrap for prose, quote, list and table cells in the F3 Markdown view; Right, Left, Home and End scroll a long row in both modes. | markdown-blank-lines | `feat/markdown-horizontal-scroll` |
+| [markdown-table-fit](markdown-table-fit/story.md) | planned | M | Width-aware F3 tables wrap cell content within the viewer width instead of scrolling horizontally. | markdown-horizontal-scroll | `feat/markdown-table-fit` |
 
 Story [markdown-theme-colors](markdown-theme-colors/story.md) is superseded. The owner replaced it with markdown-palette and markdown-code-tint on 2026-11-06.
 

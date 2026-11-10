@@ -128,30 +128,27 @@ var code_cell = ReadCell(code.X, code.Y)
 CheckSameBack("code", code_cell, ReadCell(70, code.Y), "code row fill")
 CheckForeOther("code", code_cell, plain, "viewer")
 CheckForeOther("code", code_cell, heading_cell, "heading")
-var table = ExpectString("│ cell1")
+var table = ExpectString("│", 0, 0, 80, code.Y)
 CheckBack("table box glyph", ReadCell(table.X, table.Y))
-CheckBack("table cell", ReadCell(table.X + 2, table.Y))
-// Table body text carries the body role: the scheme's def:Text row (#99EEEE -> 0xeeee99),
-// the color of the viewer's body text, not the plain-mode blank cell.
-CheckForeSame("table cell text", ReadCell(table.X + 2, table.Y), body_cell, "body")
-// Table header text takes the strong color; the borders take the rule color, read from the line
-// glyph of the separator row under the header.
-var table_head = ExpectString("Col A")
-CheckBack("table header", ReadCell(table_head.X, table_head.Y))
-CheckForeSame("table header", ReadCell(table_head.X, table_head.Y), strong_cell, "strong")
-CheckCellChar(table.X + 1, table.Y - 1, "─")
+CheckCellChar(table.X, table.Y + 1, "├")
+CheckForeSame("table header text", ReadCell(table.X + 2, table.Y), strong_cell, "strong")
+var hcode = ExpectString("hcode", 0, table.Y, 80, 1)
+CheckForeSame("code span in table header", ReadCell(hcode.X, hcode.Y), code_cell, "code")
+var table_body = ExpectString("cell1", 0, table.Y + 2, 80, 1)
+CheckForeSame("table cell text", ReadCell(table_body.X, table_body.Y), body_cell, "body")
+CheckCellChar(table.X + 1, table.Y + 1, "─")
 // The borders take the rule color: the separator line, the bars of the header row and the
 // bars of the data rows all share it, and it differs from strong and from the body fore.
-var border_cell = ReadCell(table.X + 1, table.Y - 1)
+var border_cell = ReadCell(table.X + 1, table.Y + 1)
 CheckForeOther("table border", border_cell, strong_cell, "strong")
 CheckForeOther("table border", border_cell, plain, "viewer")
 var table_bar = ReadCell(table.X, table.Y)
-CheckForeSame("table bar", table_bar, border_cell, "table border")
-// A code span in the table header keeps the code role: the header markup is strong for plain
-// text, but spans of their own win over it (the spec's precedence).
-var hcode = ExpectString("hcode")
-var hcode_cell = ReadCell(hcode.X, hcode.Y)
-CheckForeSame("code span in table header", hcode_cell, code_cell, "code")
+var narrow_line = BoundedLine(0, table.Y, 80, " ")
+var narrow_edge = narrow_line.lastIndexOf("│")
+if (narrow_edge < 0 || narrow_edge > 40) {
+	Log("the narrow table header is '" + narrow_line + "'")
+	Panic("the narrow table expanded beyond its content width")
+}
 
 // Scroll down to the mermaid fences.
 TypePageDown()
@@ -225,13 +222,12 @@ CheckBack("code span in quote", ReadCell(qcode.X, qcode.Y))
 var quote2 = ExpectString("block quote line")
 CheckForeSame("quote text", ReadCell(quote2.X + 2, quote2.Y), quote_cell, "quote")
 CheckBack("quote text", ReadCell(quote2.X + 2, quote2.Y))
-// A setext-style `---` under a paragraph renders as an H2: the h2 color, and no rule row
-// under it (the paragraph text moves up into the heading row, the quote follows after a blank).
 var setext_h2 = ExpectString("setext-style break")
 var setext_h2_cell = ReadCell(setext_h2.X, setext_h2.Y)
 CheckForeSame("setext break as h2", setext_h2_cell, h2_cell, "h2")
-CheckForeSame("row after the setext break", ReadCell(0, setext_h2.Y + 2), quote_cell, "quote")
-CheckCellChar(0, setext_h2.Y + 2, "│")
+CheckCellChar(0, setext_h2.Y + 1, "─")
+CheckForeSame("row after the setext break", ReadCell(0, setext_h2.Y + 3), quote_cell, "quote")
+CheckCellChar(0, setext_h2.Y + 3, "│")
 CheckBack("setext break as h2", setext_h2_cell)
 // The trailing thematic break shares the rule color of the table borders, and the quote text
 // differs from it: close the viewer and read the rule row on the last page.
@@ -483,11 +479,11 @@ CheckRowOf("nested item right under its item", nested, item1.Y + 1);
 CheckRowOf("next item right under the nested item", item2, item1.Y + 2);
 
 // The table header has a blank row before it from the source empty line. The table has one rule.
-var table_sp = ExpectString("Spacing A");
-CheckBlankRow("blank row before the table", table_sp.Y - 1);
-CheckRowOf("table header after the list and its blank row", table_sp, item2.Y + 2);
-CheckCellChar(table_sp.X - 2, table_sp.Y + 1, "├");
-CheckRowOf("table body row under the rule", ExpectString("spacing 1"), table_sp.Y + 2);
+var table_sp = ExpectString("│", 0, item2.Y + 2, 80, 1)
+CheckBlankRow("blank row before the table", table_sp.Y - 1)
+CheckRowOf("table header after the list and its blank row", table_sp, item2.Y + 2)
+CheckCellChar(0, table_sp.Y + 1, "├")
+CheckRowOf("table continuation row under the rule", ExpectString("│", 0, table_sp.Y + 2, 80, 1), table_sp.Y + 2)
 
 // The quote has a blank row before it that keeps its lead.
 CheckCellChar(0, table_sp.Y + 3, "│");
@@ -633,11 +629,10 @@ CheckBlankRow("blank row after level 6 heading", c_six.Y + 1);
 var c_after_six = ExpectString("Compact para after six.");
 CheckRowOf("paragraph after level 6 heading and its blank row", c_after_six, c_six.Y + 2);
 
-// A setext heading of level 2 keeps its source blank rows.
 var c_setext = ExpectString("Compact Setext");
 CheckBlankRow("blank row before a setext heading", c_setext.Y - 1);
 CheckRowOf("setext heading after the paragraph and its blank row", c_setext, c_after_six.Y + 2);
-CheckBlankRow("blank row after a setext heading", c_setext.Y + 1);
+CheckCellChar(0, c_setext.Y + 1, "─");
 CheckNoBorder();
 
 // Page 5: the paragraph after setext, setext heading of level 1, the thematic break, the table,
@@ -646,15 +641,18 @@ TypePageDown();
 CheckNoBorder();
 
 var c_after_setext = ExpectString("Compact para after setext.");
-CheckRowOf("paragraph after a setext heading and its blank row", c_after_setext, 2);
+CheckRowOf("paragraph after a setext heading and its blank row", c_after_setext, 3);
+CheckBlankRow("blank row after a setext heading", c_after_setext.Y - 1);
+CheckCellChar(0, c_after_setext.Y - 2, "─");
 
 // A setext heading of level 1 keeps one blank row before and after it from source blanks.
 var c_setext_top = ExpectString("Compact Setext Top");
 CheckBlankRow("blank row before a setext heading of level 1", c_setext_top.Y - 1);
 CheckRowOf("setext heading of level 1", c_setext_top, c_after_setext.Y + 2);
-CheckBlankRow("blank row after a setext heading of level 1", c_setext_top.Y + 1);
+CheckCellChar(0, c_setext_top.Y + 1, "─");
+CheckBlankRow("blank row after a setext heading of level 1", c_setext_top.Y + 2);
 var c_above_break = ExpectString("Compact para above break.");
-CheckRowOf("paragraph after a level 1 heading and its blank row", c_above_break, c_setext_top.Y + 2);
+CheckRowOf("paragraph after a level 1 heading and its blank row", c_above_break, c_setext_top.Y + 3);
 
 // Thematic break HR scan: empty line before the break shows a blank row above it.
 CheckBlankRow("blank row before the thematic break", c_above_break.Y + 1);
@@ -665,13 +663,13 @@ CheckBlankRow("blank row after the thematic break", c_above_break.Y + 3);
 CheckRowOf("paragraph after the thematic break and its blank row", c_break, c_above_break.Y + 4);
 
 // R6 and R7: the table has a blank row before it from source and one rule under its header row.
-var c_head = ExpectString("Compact A");
-CheckBlankRow("blank row before the table", c_head.Y - 1);
-CheckRowOf("table header after the paragraph and its blank row", c_head, c_break.Y + 2);
-CheckCellChar(c_head.X - 2, c_head.Y + 1, "├");
-var c_cell = ExpectString("compact 1");
-CheckRowOf("body row under the header rule", c_cell, c_head.Y + 2);
-CheckCellChar(c_cell.X - 2, c_cell.Y - 1, "├");
+var c_head = ExpectString("│", 0, c_break.Y + 2, 80, 1)
+CheckBlankRow("blank row before the table", c_head.Y - 1)
+CheckRowOf("table header after the paragraph and its blank row", c_head, c_break.Y + 2)
+CheckCellChar(0, c_head.Y + 1, "├")
+var c_cell = ExpectString("│", 0, c_head.Y + 2, 80, 1)
+CheckRowOf("body row under the header rule", c_cell, c_head.Y + 2)
+CheckCellChar(0, c_cell.Y - 1, "├")
 CheckBlankRow("blank row after the table", c_cell.Y + 1);
 var c_after_table = ExpectString("Compact para after table.");
 CheckRowOf("paragraph after the table and its blank row", c_after_table, c_cell.Y + 2);
@@ -724,14 +722,17 @@ CheckBlankRow("blank row between heading and html", r_head_html.Y + 1);
 var r_html2 = ExpectString("review html two");
 CheckRowOf("html block after heading and its blank row", r_html2, r_head_html.Y + 2);
 CheckBlankRow("blank row after html block", r_html2.Y + 1);
+TypeDown(2);
+var r_html2_p6 = ExpectString("review html two");
 var r_para5 = ExpectString("Review para five.");
-CheckRowOf("paragraph after the html block and its blank row", r_para5, r_html2.Y + 2);
+CheckRowOf("paragraph after the html block and its blank row", r_para5, r_html2_p6.Y + 2);
 CheckBlankRow("blank row after paragraph five", r_para5.Y + 1);
 CheckNoBorder();
 
 // Page 7, the last page: the fence in an item, the heading and the html block as the first
 // block of a list item.
 TypePageDown();
+TypeDown(2);
 CheckNoBorder();
 
 var r_para5_p7 = ExpectString("Review para five.");

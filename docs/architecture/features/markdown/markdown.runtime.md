@@ -9,6 +9,7 @@ refs:
 
 # View: Markdown runtime
 
+Table layout bounds columns to the available viewer width and repeats borders and padding on continuation lines.
 Four flows matter. All F3 work runs on the UI thread. The browser flow is outside far2l after the command starts.
 
 ## Open a `.md` file in F3
@@ -71,6 +72,27 @@ sequenceDiagram
 | Page | `MarkdownPage` | Moves by the screen height minus 1, up to `MarkdownMaxTop`. |
 | Sync | `SyncMarkdownTop` | Three cases: new render, new width, or `FilePos` moved by other code. |
 | Draw | `MarkdownPrinter::Print` | Ignores the text argument and draws the runs of `m_md_screen` in row order. |
+
+
+## Word wrap
+
+F2 and Shift-F2 call `ProcessWrapMode`: it sets `VM.Wrap`, clears `m_md_ready`, and asks for
+`SHOW_MARKDOWN_W`. The redraw calls `Render(text, Width, VM.Wrap)`. `Builder` marks text,
+quote, list and table cell rows with `wrap` true; the layout code (fences, rules, art rows)
+marks its rows with `wrap` false. `MarkdownDoc::Render` splits each marked row that is wider
+than the width into screen rows at cell boundaries, with no trailing spaces. `SyncMarkdownTop`
+keeps the same source row on screen: a width change finds the top row by source offset and
+place. `ReadStringMarkdown` joins the runs and the row's `tint` into `m_md_screen`, so a
+continuation row keeps the code-block tint of its logical row.
+The table layout uses natural column widths while those widths fit the viewer. Otherwise, it allocates available content cells in proportion to each natural width. It assigns remaining cells by descending fractional remainder, with lower column indexes first on ties, then wraps cell content into bordered continuation rows.
+
+| Step | Who | Note |
+|---|---|---|
+| Key | `ProcessKey` | `KEY_F2`/`SHIFT_F2` set the mode and pick `SHOW_MARKDOWN_W`. |
+| Scroll | `KEY_RIGHT`, `KEY_LEFT`, `KEY_HOME`, `KEY_END` | Move `LeftPos` in both modes; arrows overlay the first and last column. |
+| Split | `MarkdownDoc::Render` | Marks rows only; a marked row wider than the width becomes screen rows. |
+| Keep top | `SyncMarkdownTop` | Finds the row of `FilePos`, then the row of that place in the new render. |
+| Draw | `ReadStringMarkdown` | Carries the row's `tint` into `m_md_screen`. |
 
 ## One mermaid fence to ASCII art
 

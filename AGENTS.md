@@ -125,7 +125,9 @@ Before you open files, get a list of all docs: `grep -r '^description:' docs --i
 - Do story work with the `fde-delivery:deliver-story` skill. Story folders go in `docs/stories/{story}/`.
 - Commit a story on its own story branch, with the code that implements it. This covers its `story.md`, its row in `docs/stories/index.md` and its changes to other story files. Do not put story briefs on a `doc/` branch. If the story branch does not exist yet, do not commit the brief.
 - Name each new branch `{type}/{slug}`. The type is `feat`, `fix`, `refactor`, `test`, `doc` or `chore`. A story branch is `feat/{story}` or `fix/{story}`. The old `markdown-preview/*` branches keep their names.
-- When stories run in parallel, each story has a worktree in `.worktrees/{story}`. Pull requests go into `next/2.9.1-ovr.1`.
+- When a `next` branch is sealed, create the next versioned `next` branch for release testing. Work in separate worktrees and feature or fix branches. Pull requests from those branches MUST target the active release-testing `next` branch, not the sealed branch.
+- When you create a new versioned `next` branch, update `packaging/version` to that branch's version before you build release artifacts.
+- Commits MUST NOT go directly to `main` or any `next/*` branch. Use a dedicated worktree and feature, fix, refactor, test, doc or chore branch, then merge through a reviewed pull request.
 - Always pass `--repo slava-kudzinau/far2l` to `gh`. Without it, `gh` uses `elfmz/far2l` in this checkout.
 - Do not commit, push or merge if the owner did not ask. Do not push to `master`. Do not send a pull request to `upstream` if the owner did not ask.
 - Do not install from the network if the owner did not ask.

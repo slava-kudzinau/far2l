@@ -1,0 +1,8 @@
+advisors:
+  - name: default
+    enabled: false
+  - name: GLM 5.3
+    model: entrim/zai-org/GLM-5.3:high
+    enabled: false
+  - name: Sonnet 5.5
+    model: anthropic/claude-sonnet-5-5:high
