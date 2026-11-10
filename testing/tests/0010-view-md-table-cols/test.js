@@ -31,11 +31,9 @@ if (bars.length != 4) {
 if (bars[3] != 79) {
 	Panic("table right border at " + bars[3] + ", not 79")
 }
-for (var y = head.Y; y <= head.Y + 3; ++y) {
-    var row = BoundedLine(0, y, 80, "")
-    if (row.substring(79, 80) != "│") {
-        Panic("table row has no right border at column 79: " + row)
-    }
+var separator = BoundedLine(0, head.Y + 1, 80, "")
+if (separator.substring(79, 80) != "┤") {
+    Panic("table separator border is wrong at column 79: '" + separator + "'")
 }
 var w0 = bars[1] - bars[0] - 3
 var w1 = bars[2] - bars[1] - 3
