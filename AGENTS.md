@@ -6,18 +6,18 @@ far2l is a Linux, macOS and BSD port of the FAR Manager file manager. This fork 
 
 Details and the reasons are in [docs/how-we-build.md](docs/how-we-build.md). Run the commands below from the repo root.
 
-**Build.** Always build out of tree. Each worktree uses its own build folder.
+**Build.** Always build into the `.build` folder at the root of the checkout. The folder is git-ignored. Each worktree uses its own `.build` folder.
 
 ```sh
 # new build folder (one time)
-cmake -S . -B ../far2l.build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTING=Yes -DUSEWX=No -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
+cmake -S . -B .build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTING=Yes -DUSEWX=No -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
 # far2l only
-cmake --build ../far2l.build --target far2l -j8
+cmake --build .build --target far2l -j8
 # far2l and all plugins
-cmake --build ../far2l.build -j8
+cmake --build .build -j8
 ```
 
-The macOS binary is `../far2l.build/install/far2l.app/Contents/MacOS/far2l`. The Linux binary is `install/far2l` in the build folder, so change `APP` in the check below on Linux. Smoke tests need `-DTESTING=Yes`.
+The macOS binary is `.build/install/far2l.app/Contents/MacOS/far2l`. The Linux binary is `install/far2l` in the build folder, so change `APP` in the check below on Linux. Smoke tests need `-DTESTING=Yes`.
 
 **Runnable binary policy.** Whenever you report that a change is implemented or fixed, build far2l with all plugins using `cmake --build "$BUILD" -j8`. Report the full path to the resulting binary so the user can run and test it. On macOS, use `$BUILD/install/far2l.app/Contents/MacOS/far2l`. On Linux and BSD, use `$BUILD/install/far2l`.
 
@@ -26,20 +26,20 @@ The macOS binary is `../far2l.build/install/far2l.app/Contents/MacOS/far2l`. The
 **The check.** This is the one command that proves that a story is done. It builds far2l, then runs the Markdown golden test, the C++ driver test and the three Markdown smoke tests. It takes about 12 s after a build. It prints `check ok` and exits 0, or it names the failed test and exits 1. In a worktree, set `BUILD` to the build folder of that worktree.
 
 ```sh
-BUILD=${BUILD:-../far2l.build}; APP=$(cd "$BUILD" && pwd)/install/far2l.app/Contents/MacOS/far2l; TESTS=${TESTS:-0007-view-file-markdown 0008-view-md-default 0009-view-md-setting-off}
+BUILD=${BUILD:-.build}; APP=$(cd "$BUILD" && pwd)/install/far2l.app/Contents/MacOS/far2l; TESTS=${TESTS:-0007-view-file-markdown 0008-view-md-default 0009-view-md-setting-off}
 cmake --build "$BUILD" --target far2l -j8 && sh testing/markdown/ascii-golden.sh && sh testing/markdown/ascii-driver.sh && (cd testing && for t in $(echo $TESTS); do o=$(./far2l-smoke-run.sh "$APP" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && ! echo "$o" | grep -q FAILED || { echo "FAILED: $t"; exit 1; }; done) && echo "check ok"
 ```
 
 **All smoke tests.** Use this when a change touches more than Markdown. It prints PASS or FAIL for each test and takes about 32 s. Read the output, because the loop has no useful exit code.
 
 ```sh
-APP=$(cd ../far2l.build && pwd)/install/far2l.app/Contents/MacOS/far2l
+APP=$(cd .build && pwd)/install/far2l.app/Contents/MacOS/far2l
 (cd testing && for t in $(ls tests); do o=$(./far2l-smoke-run.sh "$APP" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && echo "PASS $t" || echo "FAIL $t"; done)
 ```
 
 On this Mac, `0004-vt-shell` and `000b-find-file` fail today. The cause is not known. Any other failure is new, so stop and find the cause.
 
-**Worktrees.** A worktree is in `.worktrees/{story}`. Its build folder is a sibling of the worktree, at `../far2l.{story}.build` from the worktree root (inside `.worktrees/`). Set `BUILD` to that folder. `{story}` is the bare story slug, with no type prefix, dot, or suffix: worktree `.worktrees/markdown-code-highlight`, build folder `.worktrees/far2l.markdown-code-highlight.build`. Each worktree keeps its own build folder, so parallel stories do not rebuild each other's objects.
+**Worktrees.** A worktree is in `.worktrees/{story}`. Its build folder is `.build` at the worktree root. Set `BUILD` to that folder. Each worktree keeps its own build folder, so parallel stories do not rebuild each other's objects.
 
 A smoke run passes the test folder path as the test-controller id. far2l binds that id as a unix socket (`LocalSocketServer`, `utils/src/LocalSocket.cpp:179`). macOS keeps 103 characters of the socket name, so the long path of a worktree is cut, and a stale socket lands in `testing/tests/` with the head of the test folder name, for example `0007-view-fi`. The name length depends on the path length: a shorter worktree path leaves a longer socket name. The next run of `far2l-smoke-run.sh` then stops with `mkdir: tests/0007-view-fi: Not a directory`, and the check prints `FAILED` for a test with no code fault. Each run leaves a socket, so clean before every smoke test in the loop, not once before the loop. A far2l console server that survived an earlier run rebinds the path, and the APFS directory cache can hide the unlinked entry from `find`:
 
@@ -125,6 +125,7 @@ Before you open files, get a list of all docs: `grep -r '^description:' docs --i
 - Do story work with the `fde-delivery:deliver-story` skill. Story folders go in `docs/stories/{story}/`.
 - Commit a story on its own story branch, with the code that implements it. This covers its `story.md`, its row in `docs/stories/index.md` and its changes to other story files. Do not put story briefs on a `doc/` branch. If the story branch does not exist yet, do not commit the brief.
 - Name each new branch `{type}/{slug}`. The type is `feat`, `fix`, `refactor`, `test`, `doc` or `chore`. A story branch is `feat/{story}` or `fix/{story}`. The old `markdown-preview/*` branches keep their names.
+- Base every new story worktree on the newest `next/` branch. Fetch, then pick the branch with the newest commit date, for example `next/2.9.1-ovr.2` when it is newer than `next/2.9.1-ovr.1`: `git worktree add -b {type}/{story} ../.worktrees/{story} origin/next/{version}`.
 - When a `next` branch is sealed, create the next versioned `next` branch for release testing. Work in separate worktrees and feature or fix branches. Pull requests from those branches MUST target the active release-testing `next` branch, not the sealed branch.
 - When you create a new versioned `next` branch, update `packaging/version` to that branch's version before you build release artifacts.
 - Commits MUST NOT go directly to `main` or any `next/*` branch. Use a dedicated worktree and feature, fix, refactor, test, doc or chore branch, then merge through a reviewed pull request.
