@@ -42,6 +42,25 @@ cmake --build ../far2l.build -j8
 
 The incremental full build took 42 s on an 18-core Mac. The binary is `../far2l.build/install/far2l.app/Contents/MacOS/far2l` (on Linux: `install/far2l`). Resources go to `far2l.app/Contents/Resources`.
 
+## macOS release package (DMG)
+
+Build the package with `-DUSEWX=Yes`. That gives a windowed app. `-DUSEWX=No` gives a terminal-only executable, even when CPack wraps it in an `.app`.
+
+Sign the app after the bundle fixup. CPack runs `install_name_tool` (in `packaging/osx/FixupBundle.cmake.in`) on the staged copy. That rewrite invalidates any signature made before it. Sign first, package second, and macOS kills the app at launch: `codesign` says "code has no resources but signature indicates they must be present".
+
+Order:
+
+```sh
+cmake --build .build -j8                       # USEWX=Yes in the cache
+cpack --config .build/CPackConfig.cmake        # stages + fixup; runs install_name_tool
+STAGE=$(find _CPack_Packages -type d -name far2l.app)
+codesign --force --deep --sign - "$STAGE"      # sign after fixup
+hdiutil create -volname far2l-<version> -srcfolder "${STAGE%far2l.app}" \
+    -format UDZO far2l-<version>.dmg           # DMG from the signed staging
+```
+
+Check the package: `codesign --verify --deep --strict` on the app in the mounted DMG, then launch it and confirm the process stays running. `--help` is not a launch test. Record the DMG SHA-256. Ad hoc signing is not notarization; release notes state GUI/terminal and notarized/not.
+
 ## Tests
 
 There is no `make test`, and `ctest` at the build root finds nothing, because the root `CMakeLists.txt` has no `enable_testing`. Two plugins have CTest tests of their own. `plugins/transformer/CMakeLists.txt` adds `transformer_config_test` when `TESTING` is on. `plugins/jumpword/tests/CMakeLists.txt` is stand-alone (the root build does not use it), and the file says some of its tests are expected to fail. We did not run either one. The main tests are the smoke tests plus the Markdown scripts below.
