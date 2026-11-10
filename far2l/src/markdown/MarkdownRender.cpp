@@ -816,51 +816,68 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
                         total_natural_width += value;
                     }
                     if (natural > b.width) {
-                        const int usable = std::max((int)cols, b.width - (int)cols - 1 - 2 * (int)cols);
-                        if (usable == (int)cols) {
-                            w.assign(cols, 1);
-                        } else {
-                            std::vector<int> remainders(cols);
-                            std::vector<int> minimum(cols, 1);
-                            int minimum_total = (int)cols;
-                            std::vector<size_t> by_natural;
-                            by_natural.reserve(cols);
-                            for (size_t c = 0; c < cols; ++c) by_natural.push_back(c);
-                            std::sort(by_natural.begin(), by_natural.end(), [&](size_t a, size_t b) {
-                                return w[a] != w[b] ? w[a] > w[b] : a < b;
+                        const int usable = std::max(0, b.width - 3 * (int)cols - 1);
+                        std::vector<int> minimum(cols, 1);
+                        for (size_t c = 0; c < cols; ++c) {
+                            int word = 0;
+                            bool joining = false;
+                            for (const auto &row : b.table_rows) {
+                                word = 0;
+                                joining = false;
+                                if (c < row.size()) {
+                                    bool in_word = false;
+                                    for (const MdRun &run : row[c]) {
+                                        const wchar_t *p = run.text.c_str();
+                                        while (*p) {
+                                            if (iswspace(*p)) {
+                                                if (in_word) minimum[c] = std::max(minimum[c], word);
+                                                word = 0;
+                                                joining = false;
+                                                in_word = false;
+                                                ++p;
+                                            } else {
+                                                word += flow_cells(p, joining);
+                                                in_word = true;
+                                            }
+                                        }
+                                    }
+                                    if (in_word) minimum[c] = std::max(minimum[c], word);
+                                }
+                            }
+                        }
+                        int64_t minimum_total = 0;
+                        for (int value : minimum) minimum_total += value;
+                        const bool floors_fit = usable > 0 && minimum_total <= usable;
+                        if (!floors_fit) {
+                            std::vector<size_t> by_minimum(cols);
+                            for (size_t c = 0; c < cols; ++c) by_minimum[c] = c;
+                            std::sort(by_minimum.begin(), by_minimum.end(), [&](size_t a, size_t b) {
+                                return minimum[a] != minimum[b] ? minimum[a] > minimum[b] : a < b;
                             });
-                            for (size_t c : by_natural) {
-                                if (w[c] >= 2 && minimum_total < usable) {
-                                    minimum[c] = 2;
-                                    ++minimum_total;
-                                }
+                            w.assign(cols, usable > 0 ? 1 : 0);
+                            int left = std::max(0, usable - (int)std::count(w.begin(), w.end(), 1));
+                            for (size_t c : by_minimum) {
+                                const int give = std::min(left, minimum[c] - 1);
+                                w[c] += give;
+                                left -= give;
+                                if (left == 0) break;
                             }
-                            int assigned = 0;
+                        } else {
+                            const int free = usable - (int)minimum_total;
+                            std::vector<int64_t> remainders(cols);
+                            int64_t assigned = minimum_total;
                             for (size_t c = 0; c < cols; ++c) {
-                                const int64_t share = (int64_t)usable * w[c];
-                                w[c] = std::max(minimum[c], (int)(share / total_natural_width));
-                                remainders[c] = (int)(share % total_natural_width);
-                                assigned += w[c];
+                                const int64_t share = (int64_t)free * w[c];
+                                w[c] = minimum[c] + (int)(share / total_natural_width);
+                                remainders[c] = share % total_natural_width;
+                                assigned += w[c] - minimum[c];
                             }
-                            while (assigned < usable) {
+                            for (int left = usable - (int)assigned; left > 0; --left) {
                                 size_t best = 0;
-                                for (size_t c = 1; c < cols; ++c) {
+                                for (size_t c = 1; c < cols; ++c)
                                     if (remainders[c] > remainders[best]) best = c;
-                                }
                                 ++w[best];
                                 remainders[best] = -1;
-                                ++assigned;
-                            }
-                            while (assigned > usable) {
-                                size_t smallest = cols;
-                                for (size_t c = 0; c < cols; ++c) {
-                                    if (w[c] > minimum[c] && (smallest == cols || remainders[c] < remainders[smallest]))
-                                        smallest = c;
-                                }
-                                if (smallest == cols) break;
-                                --w[smallest];
-                                remainders[smallest] = total_natural_width + 1;
-                                --assigned;
                             }
                         }
                     }

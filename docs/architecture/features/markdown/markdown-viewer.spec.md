@@ -13,7 +13,7 @@ refs:
   - docs/architecture/decisions/adr-006-ascii-diagrams.md
   - docs/architecture/decisions/adr-007-markdown-default-on.md
 ---
-Tables use their natural column widths when they fit the viewer. Oversized tables distribute the available content width in proportion to their natural column widths. The renderer assigns remaining cells by descending fractional remainder, with lower column indexes first on ties, then wraps cell content vertically. Horizontal scrolling never reveals additional table content.
+Tables use their natural column widths when they fit the viewer. For an oversized table, the renderer reserves each column's longest unbreakable word in terminal display cells when all floors fit. It then distributes the remaining content cells in proportion to natural column widths. It assigns leftover cells by descending fractional remainder, with lower column indexes first on ties. If the floors exceed available content width, it distributes all content cells by descending floor width, with lower column indexes first on ties; words may split. The renderer then wraps cell content vertically. Horizontal scrolling never reveals additional table content.
 
 # Spec: Markdown mode in the F3 viewer
 
@@ -178,7 +178,7 @@ foreground, the tint background.
 ### Tables
 
 - The width of a column is the largest cell in that column, counted in terminal display cells.
-- When natural widths exceed the viewer, the renderer allocates available content cells in proportion to each natural width. It computes integer shares and assigns remaining cells by descending fractional remainder, with lower column indexes first on ties. Each column receives at least one content cell.
+- When natural widths exceed the viewer, the renderer reserves each column's longest unbreakable word in terminal display cells when all floors fit. It then distributes remaining content cells in proportion to natural column widths and assigns leftover cells by descending fractional remainder, with lower column indexes first on ties. If the floors exceed available content width, it distributes all content cells by descending floor width, with lower column indexes first on ties; words may split.
 - Text is left-aligned in all columns. The alignment markers in the source have no effect.
 - The first row uses the strong role. A cell keeps its inline role, so a code span or a link in a header cell keeps the code or link role. Borders use the rule role.
 - A separator row follows the header. Body rows have no separators, and the table has no top or bottom border.

@@ -8,7 +8,7 @@ refs:
 # Markdown invariants
 
 Rules that always hold for the Markdown feature. Format: `- **[area]**: rule (Learned from: source, date)`. To retire one, delete it and say why in the commit or an ADR. Whole-app rules are in [architecture invariants](../../invariants.md). The [overview](markdown.overview.md) is the entry point of this folder.
-- **[tables]**: Table rows remain rows by cells and styled runs until layout. Wrapping preserves roles, separators, borders, and aligned empty cells. A table uses its natural column widths when they fit the viewer. An oversized table assigns content widths in proportion to natural widths, then distributes remaining cells by descending fractional remainder and lower column index on ties. (Learned from: story markdown-table-fit, 2026-11-09)
+- **[tables]**: Table rows keep their cells and styled runs until layout. Wrapping keeps roles, separators, borders, and aligned empty cells. A table uses natural widths when they fit. An oversized table reserves each column's longest unbreakable word in terminal display cells when all floors fit, then allocates remaining cells by natural width and fractional remainder; lower indexes win ties. If the floors exceed available width, it allocates all content cells by descending floor width; lower indexes win ties, and words may split. (Learned from: story markdown-table-fit, 2026-11-09)
 
 ## Markdown viewer
 
