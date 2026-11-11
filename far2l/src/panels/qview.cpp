@@ -389,6 +389,9 @@ void QuickView::Update(int Mode)
 	Redraw();
 }
 
+// Widen quick view for a Markdown file. The sibling panel shrinks to a QVIEW_MD_STRIP column
+// strip in VIEW_2 mode, and quick view takes the rest. If the panels are stacked
+// (PanelsDisposition 1), only the view mode changes, because there is no side strip. RestoreMdWideLayout undoes it.
 void QuickView::ApplyMdWideLayout()
 {
 	if (m_md_wide_applied)
@@ -398,7 +401,6 @@ void QuickView::ApplyMdWideLayout()
 	m_md_saved_view_mode = sib->GetViewMode();
 	m_md_saved_width_decrement = Opt.WidthDecrement;
 	sib->SetViewMode(2);	// VIEW_2: two NAME columns
-	ViewSettings.FullScreen = 1;	// quick view spans the full width
 	if (Opt.PanelsDisposition == 0) {
 		if (sib == CtrlObject->Cp()->LeftPanel)
 			Opt.WidthDecrement = ScrX / 2 + 1 - QVIEW_MD_STRIP;
@@ -409,6 +411,7 @@ void QuickView::ApplyMdWideLayout()
 	m_md_wide_applied = 1;
 }
 
+// Give back the sibling view mode and the split saved by ApplyMdWideLayout. Safe to call twice.
 void QuickView::RestoreMdWideLayout()
 {
 	if (!m_md_wide_applied)
@@ -416,7 +419,6 @@ void QuickView::RestoreMdWideLayout()
 
 	Panel *sib = CtrlObject->Cp()->GetAnotherPanel(this);
 	sib->SetViewMode(m_md_saved_view_mode);
-	ViewSettings.FullScreen = 0;
 	Opt.WidthDecrement = m_md_saved_width_decrement;
 	CtrlObject->Cp()->SetScreenPosition();
 	m_md_wide_applied = 0;
