@@ -434,9 +434,11 @@ void QuickView::Hide()
 	Panel::Hide();
 }
 
+// Only a quick view that holds an open viewer applies the wide layout here. ShowFile
+// applies it for a new file, and it leaves strCurFileName stale when it shows no file.
 void QuickView::Show()
 {
-	if (MdWideGate(strCurFileName))
+	if (QView && MdWideGate(strCurFileName))
 		ApplyMdWideLayout();
 	Panel::Show();
 }
