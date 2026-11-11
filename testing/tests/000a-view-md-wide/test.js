@@ -32,6 +32,28 @@ TypeDown()
 ExpectString("Wide", 21, 1, 16, 1)
 ExpectString("india", 66, 2, 12, 1)
 
+// Ctrl+P hides the quick view: the file list gets the half screen back (its right border is in
+// the middle of row 0). Ctrl+P shows it again: the wide layout applies again.
+ToggleLCtrl(true)
+TypeText("p")
+ToggleLCtrl(false)
+ExpectString("╗", 38, 0, 4, 1)
+ToggleLCtrl(true)
+TypeText("p")
+ToggleLCtrl(false)
+ExpectString("╗╔", 18, 0, 4, 1)
+ExpectString("india", 66, 2, 12, 1)
+
+// Ctrl+O hides both panels and shows them again: the wide layout is back.
+ToggleLCtrl(true)
+TypeText("o")
+ToggleLCtrl(false)
+ToggleLCtrl(true)
+TypeText("o")
+ToggleLCtrl(false)
+ExpectString("╗╔", 18, 0, 4, 1)
+ExpectString("india", 66, 2, 12, 1)
+
 // Ctrl+Q closes the quick view while it is wide: the half-screen split restores.
 // The border of the left panel meets the border of the right panel in the middle of row 0.
 ToggleLCtrl(true)
