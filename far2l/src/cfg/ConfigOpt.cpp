@@ -290,6 +290,8 @@ const ConfigOpt g_cfg_opts[] {
 		L"Viewer", L"Written only: the last Shift+F4 markdown mode. It is not read at start; the start mode comes from Markdown_Auto and the saved choice for each file" },
 	{OST_COMMON, NSecViewer, "Markdown_Auto", &Opt.ViOpt.ViewerMarkdownAuto, 1,
 		L"ViewerSettings", L"Opens .md and .markdown files in Markdown mode unless the file has a saved Shift+F4 choice" },
+	{OST_COMMON, NSecViewer, "Markdown_QuickViewWide", &Opt.ViOpt.ViewerMdQuickViewWide, 1,
+		L"ViewerSettings", L"Widens Quick view to the full screen for .md and .markdown files; the other panel keeps a narrow single-column strip" },
 	{OST_COMMON, NSecViewer, "PersistentBlocks", &Opt.ViOpt.PersistentBlocks, 0,
 		L"ViewerSettings", L"Keeps viewer selections visible after cursor movement and commands" },
 	{OST_COMMON, NSecViewer, "DefaultCodePage", &Opt.ViOpt.DefaultCodePage, CP_UTF8,
