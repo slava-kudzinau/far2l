@@ -101,4 +101,20 @@ TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
 TypeEnter()
 ExpectAppExit(0)
+
+// Markdown_QuickViewStripWidth sets the strip width: 30 columns, so the borders meet at column 29.
+// The test replaces config.ini with only this key.
+SaveTextFile(config, ["[Viewer]", "Markdown_QuickViewStripWidth=30"])
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+ExpectString("wide.md")
+TypeDown(2)
+ToggleLCtrl(true)
+TypeText("q")
+ToggleLCtrl(false)
+ExpectString("╗╔", 28, 0, 4, 1)
+ExpectString("Wide", 31, 1, 12, 1)
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0)
 0;
