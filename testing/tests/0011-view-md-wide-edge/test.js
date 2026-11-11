@@ -41,4 +41,38 @@ TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
 TypeEnter()
 ExpectAppExit(0)
+
+// Shift+F9 saves the setup while the quick view is wide. The save gives back the half screen
+// layout for a moment: the screen must be repainted in the wide layout afterwards. A stale two
+// column list would show its column separator inside the 20 column strip.
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+ExpectString("wide.md")
+TypeDown(3)
+ToggleLCtrl(true)
+TypeText("q")
+ToggleLCtrl(false)
+ExpectString("╗╔", 18, 0, 4, 1)
+ToggleShift(true)
+TypeFKey(9)
+ToggleShift(false)
+ExpectString("══ Save setup ══")
+TypeEnter()
+ExpectNoString("══ Save setup ══")
+Sleep(500)
+ExpectString("╗╔", 18, 0, 4, 1)
+ExpectNoString("│", 1, 3, 17, 5)
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0)
+
+// The saved setup holds the user layout, not the strip layout.
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+ExpectString("wide.md")
+ExpectString("║║", 38, 4, 4, 1)
+ExpectString("│", 2, 3, 36, 4)
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0)
 0;
