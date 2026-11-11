@@ -6,7 +6,7 @@ This spec describes the shipped behavior. The durable contract is in `markdown-v
 
 | Call | Result |
 |---|---|
-| `QuickView::ShowFile(name, ...)` where `name` ends in `.md` or `.markdown` (any letter case), `Markdown_QuickViewWide=1`, layout not applied | `ApplyMdWideLayout` runs before the `Viewer` is created. It saves the sibling `GetViewMode()` and `Opt.WidthDecrement`. It sets the sibling to view mode 10 (one NAME column). With vertical panels it sets `Opt.WidthDecrement` by the formula below. It calls `SetScreenPosition`. The quick view panel has no `FullScreen` flag. |
+| `QuickView::ShowFile(name, ...)` where `name` ends in `.md` or `.markdown` (any letter case) and is not a directory, `Markdown_QuickViewWide=1`, layout not applied | `ApplyMdWideLayout` runs before the `Viewer` is created. It sets its flag first. It saves the sibling `GetViewMode()` and `Opt.WidthDecrement`. With vertical panels it sets the sibling to view mode 10 (one NAME column) and sets `Opt.WidthDecrement` by the formula below. It calls `SetScreenPosition`. The quick view panel has no `FullScreen` flag. |
 | `ShowFile` with the layout applied and a name that is not a gate file | `RestoreMdWideLayout` gives back the saved view mode and the saved `Opt.WidthDecrement`, then calls `SetScreenPosition`. A second restore does nothing. |
 | `FilePanels::ChangePanel` replaces or removes the quick view | It calls `RestoreMdWideLayout` before it reads the quick view position. |
 | `QuickView::Hide` (Ctrl+P, Ctrl+O) | It calls `RestoreMdWideLayout`, then `Panel::Hide`. |
@@ -15,7 +15,7 @@ This spec describes the shipped behavior. The durable contract is in `markdown-v
 | `~QuickView` | It does not restore the layout. The sibling panel may be gone at exit. |
 | Tab focus switch | The layout does not change. |
 | Sibling is `TreeList` or `InfoList` | View mode 10 is safe (`Panel::SetViewMode` only stores it). The split applies as for a file list. |
-| Panel disposition 1 (stacked panels) | No split change. The sibling gets the view mode only. |
+| Panel disposition 1 (stacked panels) | No change. There is no strip. |
 | Ctrl+Left, Ctrl+Right, Ctrl+Clear while the layout is applied | The keys change `Opt.WidthDecrement` as before. The next restore overwrites the change. |
 
 ## Unit: split formula (vertical panels)
@@ -59,7 +59,7 @@ The extension check mirrors `IsMarkdownFileName`: a trailing `.md` or `.markdown
 | Ctrl+O twice with a wide quick view | The wide layout returns. |
 | Exit with `AutoSaveSetup=1` and a wide quick view, then start | The split is in the middle. The list keeps its two column mode. |
 | `Markdown_QuickViewStripWidth=30` | The borders meet at column 29. |
-| `Markdown_QuickViewStripWidth` below 10 or above `ScrX - 10` | The code keeps it between 10 and `ScrX - 10`. |
+| `Markdown_QuickViewStripWidth` below 11 or above `ScrX - 10` | The code and the split clamp keep it between 11 and `ScrX - 10`. |
 
 ## Done
 

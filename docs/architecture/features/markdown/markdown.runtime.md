@@ -163,7 +163,7 @@ sequenceDiagram
 
 ## Quick view takes the screen minus a strip for Markdown
 
-`QuickView::ShowFile` gates on the extension (`.md`, `.markdown`, case-insensitive) and `Markdown_QuickViewWide`. On a pass it calls `QuickView::ApplyMdWideLayout`. The call saves the view mode of the sibling file list and `Opt.WidthDecrement` on the `QuickView` object. It sets the sibling to view mode 10 (one NAME column). It sets `Opt.WidthDecrement` so that the sibling gets `Markdown_QuickViewStripWidth` columns. Then it calls `FilePanels::SetScreenPosition`. The call comes before the `Viewer` is created, so the Markdown rows render at the wider width. The quick view panel has no `FullScreen` flag. With stacked panels (disposition 1) only the view mode changes.
+`QuickView::ShowFile` gates on the extension (`.md`, `.markdown`, case-insensitive), on `Markdown_QuickViewWide` and on the path being a file, not a directory. On a pass it calls `QuickView::ApplyMdWideLayout`. The call saves the view mode of the sibling file list and `Opt.WidthDecrement` on the `QuickView` object. It sets the flag `m_md_wide_applied` first, because `SetScreenPosition` can redraw the panels and the redraw can reach `ShowFile` again. Then it sets the sibling to view mode 10 (one NAME column). It sets `Opt.WidthDecrement` so that the sibling gets `Markdown_QuickViewStripWidth` columns. Then it calls `FilePanels::SetScreenPosition`. The call comes before the `Viewer` is created, so the Markdown rows render at the wider width. The quick view panel has no `FullScreen` flag. With stacked panels (disposition 1) there is no strip, so nothing changes.
 
 `QuickView::RestoreMdWideLayout` gives the saved values back and calls `SetScreenPosition`. These events call it:
 
@@ -172,8 +172,8 @@ sequenceDiagram
 | Quick view shows a file that is not a gate file | `QuickView::ShowFile` |
 | Quick view closes or the panel type changes | `FilePanels::ChangePanel`, before it reads the quick view position |
 | Quick view hides (Ctrl+P, Ctrl+O) | `QuickView::Hide` |
-| The setup is saved (Shift+F9, `AutoSaveSetup` at exit) | `ConfigOptSave`, which applies the layout again after the save |
+| The setup is saved (Shift+F9, `AutoSaveSetup` at exit) | `ConfigOptSave`, after the Save setup dialog. It applies the layout again after the save and repaints. |
 
-`QuickView::Show` applies the layout again when a hidden quick view shows a gate file. The destructor of `QuickView` does not restore the layout. At exit the sibling panel may be gone already.
+`QuickView::Show` applies the layout again when a hidden quick view shows a gate file. It does this only when the quick view holds an open `Viewer`. `ShowFile(nullptr)` leaves the old file name in `strCurFileName`, and `Show` must not apply the layout for that name. The destructor of `QuickView` does not restore the layout. At exit the sibling panel may be gone already.
 
 Tab focus switches do not touch the layout. Ctrl+Left, Ctrl+Right and Ctrl+Clear change `Opt.WidthDecrement` while the layout is on. A restore overwrites that change with the saved value. A full redraw repaints the sibling strip that the quick view box covers during the apply cycle.

@@ -43,13 +43,22 @@ These fixes came from owner tests. They replace the rulings above where they dif
 | Crash at exit with a wide quick view | `~QuickView` used a sibling panel that was gone | The destructor does not restore the layout |
 | A hidden quick view left an empty area beside a narrow list | `FileList::UpdateViewPanel` does not call `ShowFile` while the quick view is hidden | `QuickView::Hide` restores. `QuickView::Show` applies again |
 | The strip showed two NAME columns | The built-in table has no one column mode, and the list copies its settings from the table at each redraw | View mode 10, an 11th table entry with one NAME column |
-| The strip layout reached the saved setup | `ConfigOptSave` read `Opt.WidthDecrement` and the list view mode while the layout was on | `ConfigOptSave` restores before the save and applies again after |
+| The strip layout reached the saved setup | `ConfigOptSave` read `Opt.WidthDecrement` and the list view mode while the layout was on | `ConfigOptSave` restores before the save and applies again after (see the fixes below for the dialog) |
 | The strip width had no setting | The width was a constant | Ini key `Markdown_QuickViewStripWidth` (default 20) |
+| The layout did not restore after a nested apply. The ini held the strip layout | `ApplyMdWideLayout` set `m_md_wide_applied` at its end, and `SetScreenPosition` redrew the panels first. The redraw reached `ShowFile` and `ApplyMdWideLayout` again, which saved the strip values as the user values | `ApplyMdWideLayout` sets the flag before any side effect |
+| Shift+F9 left the strip garbled. The ini held the strip layout | The Save setup dialog redrew the panels after the restore, and `QuickView::Show` applied the layout again. Nothing repainted after the apply that followed the save | `ConfigOptSave` restores after the dialog, and it repaints after it applies. The `ConfigOptSaveImpl` wrapper is gone |
+| `ShowFile(nullptr)` undid its own restore | `Show` read the old Markdown name in `strCurFileName` and applied the layout | `QuickView::Show` applies only when the quick view holds an open `Viewer`. No test drives this path: it needs a plugin panel whose file fetch fails. Proof is by code reading |
+| A directory named `docs.md` widened quick view | The gate checked the name only | `ShowFile` also needs a path that is not a directory |
+| Stacked panels changed the list view mode for no gain | `ApplyMdWideLayout` always set view mode 10 | It sets view mode 10 only with side by side panels |
+| The strip minimum in the comment and the help text was 10 | `SetPanelPositions` limits the split to `ScrX / 2 - 10`, so the strip has at least 11 columns | The comment and the help text say 11 |
 
 Open items:
 
 - Ctrl+Left, Ctrl+Right and Ctrl+Clear work while the layout is on, with either panel focused. The next restore overwrites the change. The ini key is the way to keep a width.
-- Stacked panels get the one column view mode in a full width list. A strip is not there. The owner has not asked for a change.
+- Stacked panels keep the list view mode. A strip is not there.
+- A terminal resize keeps the old `Opt.WidthDecrement`, so the strip width changes with the screen.
+- The right strip is one column wider than the left strip.
+- A plugin that reads the view mode of the file list can see mode 10. `FCTL_SETVIEWMODE` rejects mode 10.
 - Ctrl+U (swap panels) while the layout is on flips `Opt.WidthDecrement`. By the code, the restore then writes back the saved value with the old sign. No test checked this.
 - `SavePanelModes` writes `[Panel/ViewModes/Mode10]` in `panel.ini` on the first save.
 - On macOS, Mission Control can take Ctrl+Left and Ctrl+Right ("Move left a space" and "Move right a space" in System Settings, Keyboard, Keyboard Shortcuts, Mission Control). The tests send the keys straight to far2l, so they cannot show this. It is a likely cause when the keys do nothing in a terminal. It is not proven.
