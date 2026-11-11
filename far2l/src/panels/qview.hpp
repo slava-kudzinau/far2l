@@ -98,7 +98,8 @@ public:
 	virtual ~QuickView();
 
 	// Undo the wide Markdown layout. Does nothing if it is not applied.
-	// FilePanels::ChangePanel calls it before it reads the panel position.
+	// FilePanels::ChangePanel calls it before it reads the panel position and removes the
+	// quick view. The destructor does not call it: at exit the sibling panel may be gone already.
 	void RestoreMdWideLayout();
 
 public:

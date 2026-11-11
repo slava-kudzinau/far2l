@@ -68,7 +68,6 @@ QuickView::QuickView()
 
 QuickView::~QuickView()
 {
-	RestoreMdWideLayout();
 	CloseFile();
 	SetMacroMode(TRUE);
 }
