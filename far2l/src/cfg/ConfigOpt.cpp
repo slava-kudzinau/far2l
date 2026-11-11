@@ -294,7 +294,7 @@ const ConfigOpt g_cfg_opts[] {
 	{OST_COMMON, NSecViewer, "Markdown_QuickViewWide", &Opt.ViOpt.ViewerMdQuickViewWide, 1,
 		L"ViewerSettings", L"Widens Quick view for .md and .markdown files; the other panel keeps a narrow single-column strip" },
 	{OST_COMMON, NSecViewer, "Markdown_QuickViewStripWidth", &Opt.ViOpt.ViewerMdQuickViewStripWidth, 20,
-		L"ViewerSettings", L"Width in columns of the file list strip beside a wide Quick view; the value is kept between 10 and the screen width minus 10" },
+		L"ViewerSettings", L"Width in columns of the file list strip beside a wide Quick view; the strip is at least 11 columns and at most the screen width minus 10" },
 	{OST_COMMON, NSecViewer, "PersistentBlocks", &Opt.ViOpt.PersistentBlocks, 0,
 		L"ViewerSettings", L"Keeps viewer selections visible after cursor movement and commands" },
 	{OST_COMMON, NSecViewer, "DefaultCodePage", &Opt.ViOpt.DefaultCodePage, CP_UTF8,
