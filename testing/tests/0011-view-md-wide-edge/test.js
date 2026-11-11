@@ -12,7 +12,17 @@ ExpectString("OSC52");
 TypeEscape()
 
 // Directories first: /.., dir.md, plain.txt, wide.md.
-TypeDown(2)
+// A directory named dir.md is not a Markdown file: quick view keeps the half screen split
+// (its box starts at column 40, and the file list keeps two columns).
+TypeDown()
+ToggleLCtrl(true)
+TypeText("q")
+ToggleLCtrl(false)
+ExpectString("╗╔", 38, 0, 4, 1)
+ToggleLCtrl(true)
+TypeText("q")
+ToggleLCtrl(false)
+TypeDown()
 
 // The left panel grows over the command line.
 ToggleLCtrl(true)
