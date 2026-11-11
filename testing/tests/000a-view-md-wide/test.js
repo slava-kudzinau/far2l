@@ -2,6 +2,7 @@ mydir=WorkDir()
 profile=mydir + "/profile"
 left=mydir + "/left"
 right=mydir + "/right"
+config=profile + "/.config/settings/config.ini"
 
 // A fresh profile shows the help screen on start; a reused one would not.
 RemoveAll(profile)
@@ -70,6 +71,32 @@ TypeText("q")
 ToggleLCtrl(false)
 ExpectString("╗╔", 18, 0, 4, 1)
 
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0)
+
+// Saving the setup while the quick view is wide must not save the strip layout. AutoSaveSetup
+// saves it on exit: the first run exits with a wide quick view on wide.md, the second run
+// starts from the saved setup. The panels must be split in the middle (row 0 is not checked:
+// a quick view title with a long path covers it) and the list must keep its two column mode.
+SaveTextFile(config, ["[System]", "AutoSaveSetup=1"])
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+ExpectString("wide.md")
+TypeDown(2)
+ToggleLCtrl(true)
+TypeText("q")
+ToggleLCtrl(false)
+ExpectString("╗╔", 18, 0, 4, 1)
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0)
+
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+ExpectString("wide.md")
+ExpectString("║║", 38, 4, 4, 1)
+ExpectString("│", 2, 3, 36, 4)
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
 TypeEnter()
