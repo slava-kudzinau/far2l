@@ -470,11 +470,12 @@ int QuickView::MdWideGate(const wchar_t *name) const
 
 void QuickView::ShowFile(const wchar_t *FileName, int TempFile, HANDLE hDirPlugin)
 {
-	DWORD FileAttr = 0;
+	// A missing file has all attribute bits set, so it counts as a directory below.
+	const DWORD FileAttr = (FileName && !hDirPlugin) ? apiGetFileAttributes(FileName) : 0;
 	CloseFile();
 	QView = nullptr;
 
-	if (MdWideGate(FileName))
+	if (MdWideGate(FileName) && !hDirPlugin && !(FileAttr & FILE_ATTRIBUTE_DIRECTORY))
 		ApplyMdWideLayout();
 	else
 		RestoreMdWideLayout();
@@ -489,12 +490,9 @@ void QuickView::ShowFile(const wchar_t *FileName, int TempFile, HANDLE hDirPlugi
 		return;
 	}
 
-	if (!hDirPlugin) {
-		FileAttr = apiGetFileAttributes(FileName);
-		if (FileAttr != INVALID_FILE_ATTRIBUTES
-			&& ((FileAttr & FILE_ATTRIBUTE_DEVICE) != 0 || (FileAttr & FILE_ATTRIBUTE_BROKEN) != 0) )
-			return; // avoid stuck
-	}
+	if (!hDirPlugin && FileAttr != INVALID_FILE_ATTRIBUTES
+		&& ((FileAttr & FILE_ATTRIBUTE_DEVICE) != 0 || (FileAttr & FILE_ATTRIBUTE_BROKEN) != 0) )
+		return; // avoid stuck
 
 	bool SameFile = !StrCmp(strCurFileName, FileName);
 	strCurFileName = FileName;
