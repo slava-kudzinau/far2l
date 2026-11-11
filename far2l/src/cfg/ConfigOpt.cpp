@@ -44,6 +44,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "dialog.hpp"
 #include "filepanels.hpp"
 #include "filelist.hpp"
+#include "qview.hpp"
 #include "panel.hpp"
 #include "help.hpp"
 #include "filefilter.hpp"
@@ -1185,7 +1186,7 @@ static bool ConfigOptSaveAsk(BOOL &SaveCommon, BOOL &SavePanels, BOOL &SaveMacro
 	return Builder.ShowDialog();
 }
 
-void ConfigOptSave(bool Ask)
+static void ConfigOptSaveImpl(bool Ask)
 {
 	if (Opt.Policies.DisabledOptions&0x20000) // Bit 17 - Сохранить параметры
 		return;
@@ -1234,4 +1235,22 @@ void ConfigOptSave(bool Ask)
 
 	if (SaveMacros)
 		CtrlObject->Macro.SaveMacros();
+}
+
+// A wide Markdown quick view lends its strip layout to the file list. Take the layout back
+// while the setup is saved, so that the saved split and view mode are the user's own.
+void ConfigOptSave(bool Ask)
+{
+	QuickView *quick_view = nullptr;
+	if (CtrlObject && CtrlObject->Cp()) {
+		for (Panel *panel : {CtrlObject->Cp()->LeftPanel, CtrlObject->Cp()->RightPanel}) {
+			if (panel && panel->GetType() == QVIEW_PANEL)
+				quick_view = static_cast<QuickView *>(panel);
+		}
+	}
+
+	const bool was_wide = quick_view && quick_view->RestoreMdWideLayout();
+	ConfigOptSaveImpl(Ask);
+	if (was_wide)
+		quick_view->ApplyMdWideLayout();
 }

@@ -413,16 +413,17 @@ void QuickView::ApplyMdWideLayout()
 }
 
 // Give back the sibling view mode and the split saved by ApplyMdWideLayout. Safe to call twice.
-void QuickView::RestoreMdWideLayout()
+bool QuickView::RestoreMdWideLayout()
 {
 	if (!m_md_wide_applied)
-		return;
+		return false;
 
 	Panel *sib = CtrlObject->Cp()->GetAnotherPanel(this);
 	sib->SetViewMode(m_md_saved_view_mode);
 	Opt.WidthDecrement = m_md_saved_width_decrement;
 	CtrlObject->Cp()->SetScreenPosition();
 	m_md_wide_applied = 0;
+	return true;
 }
 
 void QuickView::Hide()

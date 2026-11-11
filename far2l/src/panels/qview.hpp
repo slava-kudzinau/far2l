@@ -78,7 +78,6 @@ private:
 
 	int ProcessScroll(int NewOffset);
 
-	void ApplyMdWideLayout();
 	int MdWideGate(const wchar_t *name) const;
 
 private:
@@ -97,10 +96,14 @@ public:
 	QuickView();
 	virtual ~QuickView();
 
-	// Undo the wide Markdown layout. Does nothing if it is not applied.
+	// Widen quick view and shrink the sibling panel to a strip. Does nothing if it is applied.
+	void ApplyMdWideLayout();
+
+	// Undo the wide Markdown layout. Does nothing if it is not applied. Returns true if it undid it.
 	// FilePanels::ChangePanel calls it before it reads the panel position and removes the
-	// quick view. The destructor does not call it: at exit the sibling panel may be gone already.
-	void RestoreMdWideLayout();
+	// quick view. ConfigOptSave calls it so that the strip layout is not saved.
+	// The destructor does not call it: at exit the sibling panel may be gone already.
+	bool RestoreMdWideLayout();
 
 	// A hidden quick view gives the wide layout back. Showing it for a Markdown file applies it again.
 	virtual void Hide();
