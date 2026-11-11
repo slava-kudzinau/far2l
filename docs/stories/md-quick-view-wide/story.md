@@ -1,6 +1,6 @@
 ---
 description: Quick view (Ctrl-Q) on a Markdown file widens itself by collapsing the sibling panel to a narrow single-column strip, and restores the layout on exit.
-status: in-progress
+status: ready
 size: M
 refs:
   - docs/architecture/features/markdown/markdown.runtime.md
@@ -114,3 +114,4 @@ reference).
 - BASE: 0664be115 (origin/next/2.9.1-ovr.2), worktree .worktrees/md-quick-view-wide
 - Check: `BUILD=$PWD/.build` in the worktree; TESTS add `000a-view-md-wide` once created
 - Gate page: G2-design gate=stop, owner reads before build
+- completed: 2026-11-11; check ok on 3dddc185e; budget verdict ok (budget 15, hard stop 20)

@@ -160,3 +160,7 @@ sequenceDiagram
 | Write | `md-open.sh` | One page at `${TMPDIR:-/tmp}/far2l-md-<pid>.html`. |
 | Show | The page script | The text shows before any network use. |
 | Failure | `showCode` | A broken diagram shows its source and its error. Other diagrams still draw. |
+
+## Quick view spans the screen for Markdown
+
+`QuickView::ShowFile` gates on the extension (`.md`, `.markdown`, case-insensitive) and `Markdown_QuickViewWide`. On a pass it sets the quick-view panel full-screen, switches the sibling file list to the two-name-column view mode, moves the split by `Opt.WidthDecrement`, then calls `FilePanels::SetScreenPosition` before creating the `Viewer`, so the Markdown rows render at the wider width. The saved split, view mode and flag live on the `QuickView` object; `ShowFile` for a non-Markdown file and the destructor restore them, then `SetScreenPosition` runs again. Tab focus switches do not touch the layout. A full redraw repaints the sibling strip that the quick-view box covers during the apply cycle.

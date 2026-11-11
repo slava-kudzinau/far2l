@@ -68,16 +68,24 @@ cd testing && pkill -9 -f -- '--test=/tmp/far2l'; find tests -maxdepth 1 -type s
 
 ### What was built
 
-{{against "What it builds": same, more, or less, and why}}
+Same scope as "What it builds". One build-time refinement: the smoke test proves the restore
+phase from the right panel (quick view shows `plain.txt`, content at x 41) and re-applies wide
+on the next file; the full-screen quick-view box draws over the sibling strip during one draw
+cycle, and the strip returns on the next redraw (cosmetic, close-out ruling 8).
 
 ### Decisions changed during the build
 
-{{rows changed or added in the table above, with the reason; or "none"}}
+None in the decisions table. Rulings 1-4 in `closeout.md` resolved the plan's shorthand to real
+APIs (`Opt.ViOpt` is a value member; `CtrlObject->Cp()->GetAnotherPanel(this)`); ruling 7 set
+the test's coordinate pair from a real screen run, as the plan authorized.
 
 ### What the reviews caught
 
-{{the findings that changed code, one line each; or "nothing that changed code"}}
+- T3 review: trimmed `test.js` under 40 lines (commit amended to 3dddc185e).
+- Final whole-branch review: Approved, 0 Critical / 0 Important / 1 Minor (fixed); merge risk low.
 
 ### Run it
 
-{{the command or demo, and what you should see}}
+`BUILD=$PWD/.build; APP=$BUILD/install/far2l.app/Contents/MacOS/far2l; ASCII_BUILD=$PWD/.build cmake --build "$BUILD" --target far2l -j8 && sh testing/markdown/ascii-golden.sh && sh testing/markdown/ascii-driver.sh && (cd testing && for t in 0007-view-file-markdown 0008-view-md-default 0009-view-md-setting-off 000a-view-md-wide; do o=$(./far2l-smoke-run.sh "$APP" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && ! echo "$o" | grep -q FAILED || { echo "FAILED: $t"; exit 1; }; done) && echo "check ok"` - prints `check ok`.
+
+Manual: run `$APP`, `Ctrl-Q` on a `.md` file - the list shrinks to a 20-column strip and the Markdown view spans the screen; arrow to a `.txt` - the split returns.
