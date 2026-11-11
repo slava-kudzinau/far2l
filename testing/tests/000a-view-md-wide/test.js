@@ -39,6 +39,13 @@ TypeText("q")
 ToggleLCtrl(false)
 ExpectString("╗╔", 38, 0, 4, 1)
 
+// Quit while the wide quick view is open: the left panel goes first, so the quick view destructor
+// must not use it.
+ToggleLCtrl(true)
+TypeText("q")
+ToggleLCtrl(false)
+ExpectString("╗╔", 18, 0, 4, 1)
+
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
 TypeEnter()
