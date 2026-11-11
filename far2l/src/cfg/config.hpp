@@ -258,7 +258,8 @@ struct ViewerOptions
 	int ShowMenuBar;
 	int ViewerMarkdownMode;	// last Shift+F4 markdown mode; written only, the start mode is not read from it
 	int ViewerMarkdownAuto;	// open .md/.markdown files in Markdown mode unless the file has a saved choice
-	int ViewerMdQuickViewWide;	// widen quick view to the full screen for .md/.markdown files
+	int ViewerMdQuickViewWide;	// widen quick view for .md/.markdown files; the file list keeps a strip
+	int ViewerMdQuickViewStripWidth;	// columns of the file list strip beside a wide quick view
 };
 
 // "Полиция"
