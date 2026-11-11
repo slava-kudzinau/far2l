@@ -423,6 +423,19 @@ void QuickView::RestoreMdWideLayout()
 	m_md_wide_applied = 0;
 }
 
+void QuickView::Hide()
+{
+	RestoreMdWideLayout();
+	Panel::Hide();
+}
+
+void QuickView::Show()
+{
+	if (MdWideGate(strCurFileName))
+		ApplyMdWideLayout();
+	Panel::Show();
+}
+
 int QuickView::MdWideGate(const wchar_t *name) const
 {
 	if (!Opt.ViOpt.ViewerMdQuickViewWide || !name || !*name)

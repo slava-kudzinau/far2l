@@ -102,6 +102,10 @@ public:
 	// quick view. The destructor does not call it: at exit the sibling panel may be gone already.
 	void RestoreMdWideLayout();
 
+	// A hidden quick view gives the wide layout back. Showing it for a Markdown file applies it again.
+	virtual void Hide();
+	virtual void Show();
+
 public:
 	virtual int ProcessKey(FarKey Key);
 	virtual int ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent);
