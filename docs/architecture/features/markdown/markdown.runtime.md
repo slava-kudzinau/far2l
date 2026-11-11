@@ -161,6 +161,19 @@ sequenceDiagram
 | Show | The page script | The text shows before any network use. |
 | Failure | `showCode` | A broken diagram shows its source and its error. Other diagrams still draw. |
 
-## Quick view spans the screen for Markdown
+## Quick view takes the screen minus a strip for Markdown
 
-`QuickView::ShowFile` gates on the extension (`.md`, `.markdown`, case-insensitive) and `Markdown_QuickViewWide`. On a pass it sets the quick-view panel full-screen, switches the sibling file list to the two-name-column view mode, moves the split by `Opt.WidthDecrement`, then calls `FilePanels::SetScreenPosition` before creating the `Viewer`, so the Markdown rows render at the wider width. The saved split, view mode and flag live on the `QuickView` object; `ShowFile` for a non-Markdown file and the destructor restore them, then `SetScreenPosition` runs again. Tab focus switches do not touch the layout. A full redraw repaints the sibling strip that the quick-view box covers during the apply cycle.
+`QuickView::ShowFile` gates on the extension (`.md`, `.markdown`, case-insensitive) and `Markdown_QuickViewWide`. On a pass it calls `QuickView::ApplyMdWideLayout`. The call saves the view mode of the sibling file list and `Opt.WidthDecrement` on the `QuickView` object. It sets the sibling to view mode 10 (one NAME column). It sets `Opt.WidthDecrement` so that the sibling gets `Markdown_QuickViewStripWidth` columns. Then it calls `FilePanels::SetScreenPosition`. The call comes before the `Viewer` is created, so the Markdown rows render at the wider width. The quick view panel has no `FullScreen` flag. With stacked panels (disposition 1) only the view mode changes.
+
+`QuickView::RestoreMdWideLayout` gives the saved values back and calls `SetScreenPosition`. These events call it:
+
+| Event | Caller |
+|---|---|
+| Quick view shows a file that is not a gate file | `QuickView::ShowFile` |
+| Quick view closes or the panel type changes | `FilePanels::ChangePanel`, before it reads the quick view position |
+| Quick view hides (Ctrl+P, Ctrl+O) | `QuickView::Hide` |
+| The setup is saved (Shift+F9, `AutoSaveSetup` at exit) | `ConfigOptSave`, which applies the layout again after the save |
+
+`QuickView::Show` applies the layout again when a hidden quick view shows a gate file. The destructor of `QuickView` does not restore the layout. At exit the sibling panel may be gone already.
+
+Tab focus switches do not touch the layout. Ctrl+Left, Ctrl+Right and Ctrl+Clear change `Opt.WidthDecrement` while the layout is on. A restore overwrites that change with the saved value. A full redraw repaints the sibling strip that the quick view box covers during the apply cycle.

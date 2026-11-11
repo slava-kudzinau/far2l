@@ -218,6 +218,24 @@ A code block is a mermaid fence when its info word is `mermaid`, in any letter c
 | Hint row | `(diagram not drawn here - Alt-F3 opens it in the browser)` |
 | Cache | `m_mermaid_cache` uses the source hash and the width as its key. It lives for one render pass, so fences with the same source draw once. |
 
+### Quick view of a Markdown file
+
+Quick view (Ctrl+Q) on a `.md` or `.markdown` file takes the screen minus a strip. The file list keeps the strip.
+
+| Item | Rule |
+|---|---|
+| Gate | The file name ends in `.md` or `.markdown`, in any letter case. The ini key `Markdown_QuickViewWide` is 1 (the default). The key `Markdown_Auto` and the saved Shift+F4 choice do not matter. |
+| Layout | The quick view panel is not full screen and has no `FullScreen` flag. `Opt.WidthDecrement` moves the split. The sibling panel gets a strip of `Markdown_QuickViewStripWidth` columns. The default is 20. At 80 columns the strip is 20 columns on the left and 21 columns on the right. |
+| Strip width | The value is kept between 10 and `ScrX - 10`. The existing clamp of `Opt.WidthDecrement` (`ScrX / 2 - 10`) applies after that. |
+| Strip content | A file list in the strip shows one NAME column. It uses the internal view mode 10. The mode is not in the panel modes menu. A long name is cut at the strip width. |
+| Stacked panels | Panel disposition 1 has no side strip. The split does not change. The list still gets the one column view mode. |
+| Apply | `QuickView::ShowFile` applies the layout for a gate file. It applies the layout before it creates the `Viewer`. `QuickView::Show` applies it again when a hidden quick view shows a gate file. |
+| Restore | The layout gives back the saved view mode and the saved `Opt.WidthDecrement`. This happens in four cases. Quick view shows another file. Quick view closes. Quick view hides (Ctrl+P, Ctrl+O). The setup is saved. |
+| Close | `FilePanels::ChangePanel` calls `QuickView::RestoreMdWideLayout` before it reads the quick view position. The quick view destructor does not restore the layout. |
+| Save | `ConfigOptSave` restores the layout before it writes the setup. It applies the layout again after. The saved `WidthDecrement` and the saved view mode of the list are the values of the user. |
+| Resize keys | Ctrl+Left, Ctrl+Right and Ctrl+Clear change `Opt.WidthDecrement` for the layout that is on screen. The next restore gives back the value from before the layout, so the change is lost. To keep a strip width, set `Markdown_QuickViewStripWidth` in the ini file. |
+| Focus | A Tab to the other panel does not change the layout. |
+
 ### Failure behavior
 
 Each failure writes one stderr line, `AsciiMermaid: render failed: <err>`, and shows the code rows plus the hint row. The viewer stays open.

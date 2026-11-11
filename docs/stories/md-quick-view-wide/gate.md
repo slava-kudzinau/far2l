@@ -1,5 +1,7 @@
 # Gate: md-quick-view-wide
 
+Status: history. Owner tests changed the design after this gate. See `spec.md` and `closeout.md`.
+
 _For the owner, who reads this instead of the code. One page per section. The model writes "Before build" before any task starts, and "At merge" at close-out; both go at the top of the PR._
 
 ## Before build

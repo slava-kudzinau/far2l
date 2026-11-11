@@ -1,5 +1,7 @@
 # Plan: md-quick-view-wide
 
+Status: history. The first build followed this plan. Owner tests then changed the design. There is no `FullScreen` flag. The strip has one NAME column (view mode 10). The layout restores before `ChangePanel` and on hide, not in the destructor. The key `Markdown_QuickViewStripWidth` replaces the constant `QVIEW_MD_STRIP`. `spec.md` and `closeout.md` hold the shipped behavior.
+
 Spec: `spec.md` (governs exact values).
 
 ## Global Constraints

@@ -1,53 +1,70 @@
 # Spec: md-quick-view-wide
 
-## Unit: `far2l/src/panels/qview.cpp` (layout apply and restore)
+This spec describes the shipped behavior. The durable contract is in `markdown-viewer.spec.md`, section "Quick view of a Markdown file".
+
+## Unit: layout in `far2l/src/panels/qview.cpp`
 
 | Call | Result |
 |---|---|
-| `QuickView::ShowFile(name, ...)` where `name` ends in `.md` or `.markdown` (case-insensitive), ini `Markdown_QuickViewWide=1`, layout not applied | Apply runs before the `Viewer` is created (before `new Viewer(true)`, `qview.cpp:451`): save sibling `GetViewMode()`; `sibling->SetViewMode(2)` (VIEW_2, the two-name-column mode); `ViewSettings.FullScreen = 1` on the quick-view panel; set `Opt.WidthDecrement` per the formula below; `CtrlObject->Cp()->SetScreenPosition()`. New viewer rect = new panel rect. Applied flag set. |
-| `QuickView::ShowFile(name, ...)` with layout applied and name not matching | Restore: sibling `SetViewMode(saved mode)`; `ViewSettings.FullScreen = 0`; `Opt.WidthDecrement = saved decrement`; `SetScreenPosition()`. Flag cleared. Viewer then created at the restored half-screen rect. |
-| Quick view closes (Ctrl-Q path, `~QuickView`) with layout applied | Same restore as above, then `SetScreenPosition()`. far2l.ini is not written by the feature. |
-| Tab focus switch while applied | Layout unchanged; state stays on the `QuickView` object. |
-| Sibling is `TreeList` or `InfoList` | `SetViewMode(2)` is safe (base `Panel::SetViewMode` stores only); `WidthDecrement` and `FullScreen` apply as for a file panel. |
-| `Opt.PanelsDisposition == 1` (horizontal panels) with layout applied | `ViewSettings.FullScreen = 1` on the quick-view panel and sibling `SetViewMode(2)` apply and restore; `Opt.WidthDecrement` untouched (it adjusts height in horizontal panels). |
+| `QuickView::ShowFile(name, ...)` where `name` ends in `.md` or `.markdown` (any letter case), `Markdown_QuickViewWide=1`, layout not applied | `ApplyMdWideLayout` runs before the `Viewer` is created. It saves the sibling `GetViewMode()` and `Opt.WidthDecrement`. It sets the sibling to view mode 10 (one NAME column). With vertical panels it sets `Opt.WidthDecrement` by the formula below. It calls `SetScreenPosition`. The quick view panel has no `FullScreen` flag. |
+| `ShowFile` with the layout applied and a name that is not a gate file | `RestoreMdWideLayout` gives back the saved view mode and the saved `Opt.WidthDecrement`, then calls `SetScreenPosition`. A second restore does nothing. |
+| `FilePanels::ChangePanel` replaces or removes the quick view | It calls `RestoreMdWideLayout` before it reads the quick view position. |
+| `QuickView::Hide` (Ctrl+P, Ctrl+O) | It calls `RestoreMdWideLayout`, then `Panel::Hide`. |
+| `QuickView::Show` on a gate file | It calls `ApplyMdWideLayout`, then `Panel::Show`. |
+| `ConfigOptSave` (Shift+F9, `AutoSaveSetup` at exit) | It calls `RestoreMdWideLayout` before the save. It calls `ApplyMdWideLayout` after the save, if the restore did work. |
+| `~QuickView` | It does not restore the layout. The sibling panel may be gone at exit. |
+| Tab focus switch | The layout does not change. |
+| Sibling is `TreeList` or `InfoList` | View mode 10 is safe (`Panel::SetViewMode` only stores it). The split applies as for a file list. |
+| Panel disposition 1 (stacked panels) | No split change. The sibling gets the view mode only. |
+| Ctrl+Left, Ctrl+Right, Ctrl+Clear while the layout is applied | The keys change `Opt.WidthDecrement` as before. The next restore overwrites the change. |
 
-## Unit: split formula (vertical panels, strip width `W = 20`)
+## Unit: split formula (vertical panels)
 
-| Sibling panel side | `Opt.WidthDecrement` | Resulting strip (from `SetPanelPositions`, `filepanels.cpp:277-289`) |
+`strip = max(10, min(Markdown_QuickViewStripWidth, ScrX - 10))`.
+
+| Sibling side | `Opt.WidthDecrement` | Strip |
 |---|---|---|
-| left (`QuickView` is right, `FullScreen=1`) | `ScrX / 2 + 1 - W` | left spans `0 .. ScrX/2 - WidthDecrement` = width `W` |
-| right (`QuickView` is left, `FullScreen=1`) | `W - ScrX / 2` | right spans `ScrX/2 + 1 - WidthDecrement .. ScrX` = width `W` |
+| left | `ScrX / 2 + 1 - strip` | `strip` columns |
+| right | `strip - ScrX / 2` | `strip + 1` columns at 80 columns (`ScrX` is 79) |
 
-The existing clamp `|WidthDecrement| <= ScrX/2 - 10` in `SetPanelPositions` bounds narrow screens.
+The existing clamp `|WidthDecrement| <= ScrX / 2 - 10` in `SetPanelPositions` applies after the formula.
 
-## Unit: ini key
+## Unit: ini keys
 
 | Key | Section | Field | Default |
 |---|---|---|---|
-| `Markdown_QuickViewWide` | `NSecViewer` (same section as `Markdown_Auto`, `ConfigOpt.cpp:289-292`) | `Opt.ViOpt.ViewerMdQuickViewWide` (`config.hpp`, next to `ViewerMarkdownAuto`) | 1 |
+| `Markdown_QuickViewWide` | `NSecViewer` | `Opt.ViOpt.ViewerMdQuickViewWide` | 1 |
+| `Markdown_QuickViewStripWidth` | `NSecViewer` | `Opt.ViOpt.ViewerMdQuickViewStripWidth` | 20 |
 
-Help text: `Widens Quick view to the full screen for .md and .markdown files; the other panel keeps a narrow single-column strip`.
+Neither key has an entry in a settings dialog. The user edits them in `config.ini`.
+
+## Unit: view mode 10
+
+`ViewSettingsRef` in `far2l/src/panels/flmodes.cpp` has an 11th entry. It has one NAME column. The panel modes menu lists modes 0 to 9 only, so mode 10 is not in the menu. `SavePanelModes` writes it as `[Panel/ViewModes/Mode10]`. `FileList::ShowFileList` copies the view settings from `ViewSettingsArray[ViewMode]` at each redraw, so the layout needs a table entry. A change to `ViewSettings` alone does not last.
 
 ## Unit: gate
 
-Extension check mirrors `IsMarkdownFileName` (`viewer.cpp:86-106`): trailing `.md` or `.markdown`, case-insensitive, without the `Markdown_Auto` condition. A file whose saved Shift+F4 choice shows it plain still applies the wide layout.
+The extension check mirrors `IsMarkdownFileName`: a trailing `.md` or `.markdown`, in any letter case. It does not test `Markdown_Auto`. A file with a saved Shift+F4 choice for plain text still gets the wide layout.
 
 ## Validation
 
 | Call | Expected |
 |---|---|
-| `ShowFile("notes.MD")` with feature on | Wide layout applied |
-| `ShowFile("notes.markdown")` | Wide layout applied |
-| `ShowFile("readme.txt")` right after an apply | Layout restored once; flag cleared; a second restore call is a no-op |
-| Apply twice without restore (same file re-shown) | State saved once; second apply is a no-op (flag checked first) |
-| `ShowFile(".md")` (a name that is only the extension) | Wide layout applied (the extension check matches) |
-| `ShowFile("")` | Treated as non-Markdown: restore runs (no-op when nothing applied); no crash |
-| `ScrX = 30` | `WidthDecrement` clamped to 5 (`ScrX/2 - 10`); strip 11 columns; no crash |
+| Ctrl+Q on `wide.md` | Wide layout. The borders meet at column 19 of row 0. The viewer text goes past column 70. |
+| The strip holds a 17 character name | The strip shows the whole name in one column. |
+| Up to `plain.txt`, then Down to `wide.md` | The half screen split, then the wide layout again. |
+| Ctrl+Q closes a wide quick view | The borders meet in the middle of row 0. |
+| Exit with a wide quick view | No crash. |
+| Ctrl+P on a wide quick view, then Ctrl+P | The list gets the half screen. Then the wide layout returns. |
+| Ctrl+O twice with a wide quick view | The wide layout returns. |
+| Exit with `AutoSaveSetup=1` and a wide quick view, then start | The split is in the middle. The list keeps its two column mode. |
+| `Markdown_QuickViewStripWidth=30` | The borders meet at column 29. |
+| `Markdown_QuickViewStripWidth` below 10 or above `ScrX - 10` | The code keeps it between 10 and `ScrX - 10`. |
 
 ## Done
 
-`BUILD=$PWD/.build; APP=$BUILD/install/far2l.app/Contents/MacOS/far2l; cmake --build "$BUILD" --target far2l -j8 && sh testing/markdown/ascii-golden.sh && sh testing/markdown/ascii-driver.sh && (cd testing && for t in 0007-view-file-markdown 0008-view-md-default 0009-view-md-setting-off 000a-view-md-wide; do o=$(./far2l-smoke-run.sh "$APP" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && ! echo "$o" | grep -q FAILED || { echo "FAILED: $t"; exit 1; }; done) && echo "check ok"` exits 0 (run from the worktree root; configure `.build` once with `cmake -S . -B .build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTING=Yes -DUSEWX=No -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0`). Every row above is covered by the smoke test `testing/tests/000a-view-md-wide/test.js` (geometry rows) and by inspection of the pure branches (disposition, tree sibling, clamp).
+The check from `AGENTS.md` exits 0, with `000a-view-md-wide` in `TESTS`. Set `ASCII_BUILD` to the build folder for `ascii-driver.sh`.
 
 ## Out of scope
 
-F3 (full-screen viewer) layout, panel disposition changes, view-mode editor edits, plugin panel columns, mermaid behavior, the `.md` rule list in settings.
+The F3 viewer layout, panel disposition changes, the panel modes editor, plugin panel columns, mermaid behavior, a settings dialog entry for the two keys.

@@ -31,3 +31,25 @@ Commits: 7424e0e39 (T1 ini key plumbing), 87e81c415 (T2 apply/restore in QuickVi
 |---|---|---|---|---|---|
 | task-reviewer | haiku | 1 | 0 | 0 | 0 |
 | final-reviewer | opus | 1 | 0 | 0 | 0 |
+
+## Follow-up fixes after the first close-out
+
+These fixes came from owner tests. They replace the rulings above where they differ (the full screen flag, view mode 2, the destructor restore, the 20 column constant). `spec.md` holds the shipped contract.
+
+| Fix | Cause | Change |
+|---|---|---|
+| The restore ran after `ChangePanel` copied the quick view position | The copy used the wide position | `FilePanels::ChangePanel` calls `RestoreMdWideLayout` first |
+| The file list strip was hidden | The quick view had the full screen flag | The quick view takes the screen minus the strip, with no `FullScreen` flag |
+| Crash at exit with a wide quick view | `~QuickView` used a sibling panel that was gone | The destructor does not restore the layout |
+| A hidden quick view left an empty area beside a narrow list | `FileList::UpdateViewPanel` does not call `ShowFile` while the quick view is hidden | `QuickView::Hide` restores. `QuickView::Show` applies again |
+| The strip showed two NAME columns | The built-in table has no one column mode, and the list copies its settings from the table at each redraw | View mode 10, an 11th table entry with one NAME column |
+| The strip layout reached the saved setup | `ConfigOptSave` read `Opt.WidthDecrement` and the list view mode while the layout was on | `ConfigOptSave` restores before the save and applies again after |
+| The strip width had no setting | The width was a constant | Ini key `Markdown_QuickViewStripWidth` (default 20) |
+
+Open items:
+
+- Ctrl+Left, Ctrl+Right and Ctrl+Clear work while the layout is on, with either panel focused. The next restore overwrites the change. The ini key is the way to keep a width.
+- Stacked panels get the one column view mode in a full width list. A strip is not there. The owner has not asked for a change.
+- Ctrl+U (swap panels) while the layout is on flips `Opt.WidthDecrement`. By the code, the restore then writes back the saved value with the old sign. No test checked this.
+- `SavePanelModes` writes `[Panel/ViewModes/Mode10]` in `panel.ini` on the first save.
+- On macOS, Mission Control can take Ctrl+Left and Ctrl+Right ("Move left a space" and "Move right a space" in System Settings, Keyboard, Keyboard Shortcuts, Mission Control). The tests send the keys straight to far2l, so they cannot show this. It is a likely cause when the keys do nothing in a terminal. It is not proven.

@@ -1,5 +1,5 @@
 ---
-description: Quick view (Ctrl-Q) on a Markdown file widens itself by collapsing the sibling panel to a narrow single-column strip, and restores the layout on exit.
+description: Quick view (Ctrl+Q) on a Markdown file takes the screen minus a narrow one column file list strip, and gives the layout back on close, on hide and when the setup is saved.
 status: ready
 size: M
 refs:
@@ -12,11 +12,11 @@ refs:
 
 ## Goal
 
-Markdown text reads well in wide lines: tables fit, long prose wraps less. Quick view is
+Markdown text reads well in wide lines: tables fit, and long prose wraps less. Quick view is
 the F3 `Viewer` with full Markdown rendering, but it owns only half the screen. The owner
-wants quick view to take most of the screen while it shows a Markdown file, with the file
-list shrinking to a narrow single-column strip, and the original layout back when quick
-view shows a non-Markdown file or closes.
+wants quick view to take most of the screen while it shows a Markdown file. The file list
+shrinks to a narrow single-column strip. The original layout comes back when quick view shows
+another file, closes or hides.
 
 ## Context
 
@@ -31,76 +31,57 @@ view shows a non-Markdown file or closes.
   costs no column (`viewer.cpp:540-548`).
 - Modes: `VIEW_0..VIEW_9` with a per-mode `FullScreen` flag
   (`far2l/src/panels/flmodes.cpp:56-127`, `panel.hpp:39-53`); reusable entry
-  `FilePanels::ChangePanelViewMode` (`filepanels.cpp:846`). The built-in table has no true
-  1-column mode; pick the fewest-columns mode.
+  `FilePanels::ChangePanelViewMode` (`filepanels.cpp:846`). The built-in table had no
+  one column mode, so the story added mode 10 (not in the modes menu).
 - Markdown width re-layout on resize exists: `Invalidate(Width)` + `SyncMarkdownTop`
   (`viewer.cpp:1164-1196`).
 
 ## Scope
 
-**In:** `far2l/src/panels/qview.cpp/.hpp` (apply/restore + state), small wiring in
-`far2l/src/filepanels.cpp`, one ini key `Markdown_QuickViewWide` (default 1) in
-`far2l/src/cfg/config.hpp` and `ConfigOpt.cpp`, one smoke test, spec rows in
-`docs/architecture/features/markdown/` at close-out.
+**In:** `far2l/src/panels/qview.cpp` and `qview.hpp` (apply, restore, hide, show). `far2l/src/panels/flmodes.cpp` (view mode 10). `far2l/src/filepanels.cpp` (restore before `ChangePanel`). `far2l/src/cfg/config.hpp` and `ConfigOpt.cpp` (two ini keys, restore around the save). The smoke test `000a-view-md-wide`. The spec rows in `docs/architecture/features/markdown/`.
 
-**Out:** the F3 (full-screen viewer) layout, panel disposition changes, column-mode editor
-changes, plugin-panel specifics beyond "do not crash", mermaid behavior.
+**Out:** the F3 (full-screen viewer) layout, panel disposition changes, column-mode editor changes, plugin-panel specifics beyond "do not crash", mermaid behavior, a settings dialog entry.
 
 ## Behavior (owner's rulings, 2026-11-11)
 
-1. Trigger is per file: apply when quick view shows a `.md`/`.markdown` file, restore when
-   it shows any other file, restore when quick view closes. State survives Tab focus switches.
-2. Layout: the quick-view panel takes the full screen span; the sibling panel keeps a
-   strip of about 20 columns at the far side.
-3. The sibling file list switches to the fewest-columns view mode while applied; tree and
-   info siblings get the split change only. Horizontal panel disposition applies the mode
-   only, no split change.
-4. Restore is temporary: saved `ViewMode` + saved `Opt.WidthDecrement` + quick-view
-   `FullScreen` flag; far2l.ini is not rewritten by the feature itself.
-5. Gate is the file extension only (`.md`, `.markdown`), like `IsMarkdownFileName`
-   (`viewer.cpp:86`) without the `Markdown_Auto` condition. Markdown rendering mode on or
-   off does not matter.
-6. New ini key `Markdown_QuickViewWide`, default on.
+1. The trigger is per file. The layout applies when quick view shows a `.md` or `.markdown` file. It restores in four cases. Quick view shows another file. Quick view closes. Quick view hides (Ctrl+P, Ctrl+O). The setup is saved. Tab focus switches keep it.
+2. The quick view panel takes the screen minus a strip. It is not full screen and has no `FullScreen` flag. The file list keeps a strip of `Markdown_QuickViewStripWidth` columns (default 20) on its side. At 80 columns the strip is 21 columns when the list is on the right.
+3. The strip shows one NAME column (view mode 10). Tree and info siblings get the split change only. Stacked panels (disposition 1) have no strip. The list gets the view mode only.
+4. The restore is temporary. The saved view mode and the saved `Opt.WidthDecrement` live on the `QuickView` object. The feature never writes `far2l.ini`. `ConfigOptSave` takes the layout back before it writes the setup. Thus the saved split and the saved list mode are the user's own.
+5. The gate is the file extension only (`.md`, `.markdown`). `Markdown_Auto` does not matter.
+6. Two ini keys: `Markdown_QuickViewWide` (default 1) and `Markdown_QuickViewStripWidth` (default 20, kept between 10 and `ScrX - 10`). Neither has a settings dialog entry.
+7. Ctrl+Left, Ctrl+Right and Ctrl+Clear still move the split while the layout is on. The next restore overwrites the change. To keep a strip width, set the ini key.
 
 ## Mechanism (builder calls)
 
-- Hook `QuickView::ShowFile` at entry, before `new Viewer(true)` at `qview.cpp:451`, so the
-  viewer is created with the final rect. Apply sets: sibling `SetViewMode(fewest-column
-  mode)` (save the old one), this panel's `ViewSettings.FullScreen = 1`, `Opt.WidthDecrement`
-  = `ScrX/2 - list_width + 1` (sibling on left) or `list_width - ScrX/2` (sibling on right),
-  then `CtrlObject->Cp()->SetScreenPosition()`.
-- State fields on `QuickView` (applied flag, saved mode, saved decrement). Restore in
-  `ShowFile` for non-MD files and in `~QuickView` (Ctrl-Q close path in
-  `FilePanels::ProcessKey` `filepanels.cpp:559-604`), followed by `SetScreenPosition()`.
-- The `QuickView` object lives across Tab switches (panel object kept by `ChangePanel`),
-  dies on Ctrl-Q close, so the saved state is exactly the quick-view lifetime.
-- `list_width` default 20; clamp through the existing `±(ScrX/2 - 10)` clamp.
+- `QuickView::ShowFile` calls `ApplyMdWideLayout` or `RestoreMdWideLayout` at entry, before `new Viewer(true)`, so the viewer is born with the final rect.
+- `ApplyMdWideLayout` sets the sibling to view mode 10. It sets `Opt.WidthDecrement` (`ScrX / 2 + 1 - strip` for a sibling on the left, `strip - ScrX / 2` on the right). Then it calls `SetScreenPosition`.
+- View mode 10 is an 11th entry in `ViewSettingsRef`. `FileList::ShowFileList` copies the view settings from the table at each redraw. A change to `ViewSettings` alone does not last.
+- `FilePanels::ChangePanel` calls `RestoreMdWideLayout` before it reads the quick view position. `~QuickView` does not restore, because the sibling panel may be gone at exit.
+- `QuickView::Hide` restores. `QuickView::Show` applies again for a gate file.
+- `ConfigOptSave` restores before the save and applies again after.
+- The existing clamp `|WidthDecrement| <= ScrX / 2 - 10` bounds the split.
 
 ## Size
 
-M: two panels files + one ini key + one smoke test; no contract change to Markdown
-rendering; parallel to the `MarkdownRender.cpp` series (touches `qview.cpp`,
-`filepanels.cpp` only).
+M: the quick view, one view mode, the config save, two ini keys and one smoke test.
+The story does not change Markdown rendering.
 
 ## Unknowns
 
-None structural. Builder verifies: which built-in `VIEW_*` index has fewest columns in the
-default table (`flmodes.cpp:56-127`), and that `SetScreenPosition` + `Show` repaint both
-panels cleanly mid-file-list (the `Ctrl-PgUp` pattern at `filelist.cpp:2005-2018` is the
-reference).
+None open.
 
 ## Acceptance criteria
 
-1. Ctrl-Q on a `.md` file: quick view spans the full screen width; the file list shows a
-   single narrow strip (~20 columns) at the far side; Markdown renders at the wider width.
-2. Arrow to a non-`.md` file: split and column mode return to the pre-quick-view values.
-3. Arrow back: wide layout again. Tab to the file list: layout keeps; quick view stays wide
-   while focused files are `.md`.
-4. Ctrl-Q close on an MD file: original mode, split, and ini values are unchanged.
-5. `Markdown_QuickViewWide=0` in ini: quick view keeps the plain half-screen split for MD.
-6. Quitting far2l while the wide layout is applied persists the applied split and mode in
-   ini (documented edge).
-7. The check command passes, with the new smoke test added to `TESTS`.
+1. Ctrl+Q on a `.md` file: the quick view takes the screen minus the strip. The file list shows one name column in the strip. Markdown renders at the wider width.
+2. Arrow to a file that is not `.md`: the split and the list view mode return.
+3. Arrow back: the wide layout again. Tab keeps the layout.
+4. Ctrl+Q close on a `.md` file: the original view mode and split return. The borders meet in the middle.
+5. `Markdown_QuickViewWide=0`: quick view keeps the half screen split for `.md`.
+6. Ctrl+P hides the quick view and the list gets the half screen. Ctrl+P shows it and the wide layout returns. Ctrl+O twice does the same.
+7. Exit with a wide quick view does not crash. With `AutoSaveSetup=1` the saved split and the saved list view mode are not the strip values.
+8. `Markdown_QuickViewStripWidth=30` gives a strip of 30 columns.
+9. The check command passes, with `000a-view-md-wide` in `TESTS`.
 
 ## Notes
 

@@ -37,6 +37,13 @@ Rules that always hold for the Markdown feature. Format: `- **[area]**: rule (Le
 - **[bundle]**: `far2l/bootstrap/mermaid-ascii.js` is built by `far2l/bootstrap/mermaid-ascii/build.sh` and committed. It is at most 300 KB and has no `elkjs`. Run `sh testing/markdown/ascii-golden.sh` after a rebuild. The far2l build never needs Node. (Learned from: story markdown-ascii-diagrams, gate, 2026-11-06)
 - **[bundle]**: Golden files come from the `beautiful-mermaid` package in Node, never from the bundle. (Learned from: story markdown-ascii-diagrams, T4 for `A-->B`, 2026-11-06)
 
+## Quick view
+
+- **[quick view]**: `QuickView::~QuickView` never calls `RestoreMdWideLayout`. At exit the sibling panel may be gone, and the restore would use it. `FilePanels::ChangePanel` restores the layout before it reads the quick view position. (Learned from: story md-quick-view-wide, exit crash, 2026-11-11)
+- **[quick view]**: The wide quick view layout never reaches a saved file. `ConfigOptSave` restores the layout before the write and applies it again after, because the layout holds `Opt.WidthDecrement` and the list view mode. (Learned from: story md-quick-view-wide, setup saved at exit, 2026-11-11)
+- **[quick view]**: A hidden quick view gives the layout back (`QuickView::Hide`), because `FileList::UpdateViewPanel` does not call `ShowFile` while the quick view is hidden. (Learned from: story md-quick-view-wide, Ctrl+P, 2026-11-11)
+- **[quick view]**: The file list redraw copies its view settings from `ViewSettingsArray[ViewMode]` each time (`FileList::ShowFileList`). A change to `ViewSettings` alone does not last. A layout that needs another column set needs its own mode entry. (Learned from: story md-quick-view-wide, one name column, 2026-11-11)
+
 ## Browser view
 
 - **[browser]**: `far2l/bootstrap/md-open.sh` treats the Markdown file as untrusted. The text goes into the page as escaped data (`\` first, then `</` and `<!--`) and raw HTML shows as text. Mermaid runs with `securityLevel:'strict'`. The page has a `Content-Security-Policy` that allows inline scripts, scripts from all of `https://cdn.jsdelivr.net`, and local images only. Only the page script pins the mermaid URL (`MERMAID_URL`) and its `integrity` hash (`MERMAID_SRI`). The text shows before the CDN script loads. (Learned from: story markdown-browser-view, first final review, 2026-11-06)
