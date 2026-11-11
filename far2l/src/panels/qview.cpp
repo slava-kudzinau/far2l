@@ -399,6 +399,7 @@ void QuickView::ApplyMdWideLayout()
 	if (m_md_wide_applied)
 		return;
 
+	m_md_wide_applied = 1;	// before any redraw can reach ShowFile and nest here
 	Panel *sib = CtrlObject->Cp()->GetAnotherPanel(this);
 	m_md_saved_view_mode = sib->GetViewMode();
 	m_md_saved_width_decrement = Opt.WidthDecrement;
@@ -411,7 +412,6 @@ void QuickView::ApplyMdWideLayout()
 			Opt.WidthDecrement = strip - ScrX / 2;
 	}
 	CtrlObject->Cp()->SetScreenPosition();
-	m_md_wide_applied = 1;
 }
 
 // Give back the sibling view mode and the split saved by ApplyMdWideLayout. Safe to call twice.
