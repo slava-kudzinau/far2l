@@ -79,7 +79,6 @@ private:
 	int ProcessScroll(int NewOffset);
 
 	void ApplyMdWideLayout();
-	void RestoreMdWideLayout();
 	int MdWideGate(const wchar_t *name) const;
 
 private:
@@ -97,6 +96,10 @@ private:
 public:
 	QuickView();
 	virtual ~QuickView();
+
+	// Undo the wide Markdown layout. Does nothing if it is not applied.
+	// FilePanels::ChangePanel calls it before it reads the panel position.
+	void RestoreMdWideLayout();
 
 public:
 	virtual int ProcessKey(FarKey Key);

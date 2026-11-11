@@ -898,6 +898,10 @@ Panel *FilePanels::ChangePanel(Panel *Current, int NewType, int CreateNew, int F
 	if (!Force && NewType == OldType && OldPanelMode == NORMAL_PANEL)
 		return (Current);
 
+	// A wide quick view must give the half-screen slot back before the new panel copies its position.
+	if (OldType == QVIEW_PANEL)
+		static_cast<QuickView *>(Current)->RestoreMdWideLayout();
+
 	OldViewMode = Current->GetPrevViewMode();
 	OldFullScreen = Current->IsFullScreen();
 	OldSortMode = Current->GetPrevSortMode();
