@@ -1,5 +1,6 @@
 mydir=WorkDir()
 profile=mydir + "/profile"
+config=profile + "/.config/settings/config.ini"
 left=mydir + "/left"
 right=mydir + "/right"
 
@@ -81,6 +82,22 @@ StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left,
 ExpectString("wide.md")
 ExpectString("║║", 38, 4, 4, 1)
 ExpectString("│", 2, 3, 36, 4)
+TypeFKey(10)
+ExpectString("Do you want to quit FAR?")
+TypeEnter()
+ExpectAppExit(0)
+
+// Stacked panels (PanelsDisposition=1) have no side strip. The wide layout must not change the
+// view mode of the file list: it keeps its two column separator.
+SaveTextFile(config, ["[Layout]", "PanelsDisposition=1"])
+StartAppWithSize(["--tty", "--nodetect", "--mortal", "-u", profile, "-cd", left, "-cd", right], 80, 24);
+ExpectString("wide.md")
+TypeDown(3)
+ToggleLCtrl(true)
+TypeText("q")
+ToggleLCtrl(false)
+ExpectString("Wide")
+ExpectString("│", 0, 2, 80, 3)
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
 TypeEnter()
