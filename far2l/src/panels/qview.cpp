@@ -54,6 +54,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 static int LastWrapMode = -1;
 static int LastWrapType = -1;
 static const int QVIEW_MD_STRIP = 20;
+// Last entry of ViewSettingsRef in flmodes.cpp: one NAME column, not in the panel modes menu.
+static const int QVIEW_MD_STRIP_MODE = 10;
 
 QuickView::QuickView()
 	:
@@ -389,7 +391,7 @@ void QuickView::Update(int Mode)
 }
 
 // Widen quick view for a Markdown file. The sibling panel shrinks to a QVIEW_MD_STRIP column
-// strip in VIEW_2 mode, and quick view takes the rest. If the panels are stacked
+// strip with one NAME column (QVIEW_MD_STRIP_MODE), and quick view takes the rest. If the panels are stacked
 // (PanelsDisposition 1), only the view mode changes, because there is no side strip. RestoreMdWideLayout undoes it.
 void QuickView::ApplyMdWideLayout()
 {
@@ -399,7 +401,7 @@ void QuickView::ApplyMdWideLayout()
 	Panel *sib = CtrlObject->Cp()->GetAnotherPanel(this);
 	m_md_saved_view_mode = sib->GetViewMode();
 	m_md_saved_width_decrement = Opt.WidthDecrement;
-	sib->SetViewMode(2);	// VIEW_2: two NAME columns
+	sib->SetViewMode(QVIEW_MD_STRIP_MODE);
 	if (Opt.PanelsDisposition == 0) {
 		if (sib == CtrlObject->Cp()->LeftPanel)
 			Opt.WidthDecrement = ScrX / 2 + 1 - QVIEW_MD_STRIP;

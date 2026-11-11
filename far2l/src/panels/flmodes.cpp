@@ -132,7 +132,11 @@ static const std::vector<PanelViewSettings> ViewSettingsRef = {
 		/* 09 */ {{NAME_COLUMN, SIZE_COLUMN | COLUMN_AUTO, NUMLINK_COLUMN}, {0, 6, 3}, 3,
 				{COLUMN_RIGHTALIGN | NAME_COLUMN, OWNER_COLUMN, GROUP_COLUMN, SIZE_COLUMN, DATE_COLUMN, TIME_COLUMN},
 				{0, 6, 6, 6, 0, 5}, 6, 0, 1, 0, 0, 0, 0, {COUNT_WIDTH, COUNT_WIDTH, COUNT_WIDTH},
-				{COUNT_WIDTH, COUNT_WIDTH, COUNT_WIDTH, COUNT_WIDTH}}
+				{COUNT_WIDTH, COUNT_WIDTH, COUNT_WIDTH, COUNT_WIDTH}},
+
+		/* 10 */ // Not in the panel modes menu. The wide Markdown quick view gives it to the file list strip.
+				{{NAME_COLUMN}, {0}, 1, {COLUMN_RIGHTALIGN | NAME_COLUMN}, {0}, 1, 0, 0, 0, 0, 0, 0,
+				{COUNT_WIDTH}, {COUNT_WIDTH}}
 };
 
 std::vector<PanelViewSettings> ViewSettingsArray = ViewSettingsRef;
