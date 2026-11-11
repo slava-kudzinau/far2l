@@ -1188,7 +1188,7 @@ static bool ConfigOptSaveAsk(BOOL &SaveCommon, BOOL &SavePanels, BOOL &SaveMacro
 	return Builder.ShowDialog();
 }
 
-static void ConfigOptSaveImpl(bool Ask)
+void ConfigOptSave(bool Ask)
 {
 	if (Opt.Policies.DisabledOptions&0x20000) // Bit 17 - Сохранить параметры
 		return;
@@ -1203,6 +1203,16 @@ static void ConfigOptSaveImpl(bool Ask)
 
 	if (Ask && !ConfigOptSaveAsk(SaveCommon, SavePanels, SaveMacros))
 			return;
+
+	// A wide Markdown quick view lends its strip layout to the file list. Give the layout back
+	// while the setup is saved, so that the saved split and view mode are the user's own. This
+	// comes after the Ask dialog: its redraw would apply the wide layout again.
+	QuickView *quick_view = nullptr;
+	for (Panel *panel : {CtrlObject->Cp()->LeftPanel, CtrlObject->Cp()->RightPanel}) {
+		if (panel && panel->GetType() == QVIEW_PANEL)
+			quick_view = static_cast<QuickView *>(panel);
+	}
+	const bool was_wide = quick_view && quick_view->RestoreMdWideLayout();
 
 	const unsigned SaveFlags
 			= (SaveCommon ? OST_COMMON : 0) | (SavePanels ? OST_PANELS : 0);
@@ -1237,22 +1247,9 @@ static void ConfigOptSaveImpl(bool Ask)
 
 	if (SaveMacros)
 		CtrlObject->Macro.SaveMacros();
-}
 
-// A wide Markdown quick view lends its strip layout to the file list. Take the layout back
-// while the setup is saved, so that the saved split and view mode are the user's own.
-void ConfigOptSave(bool Ask)
-{
-	QuickView *quick_view = nullptr;
-	if (CtrlObject && CtrlObject->Cp()) {
-		for (Panel *panel : {CtrlObject->Cp()->LeftPanel, CtrlObject->Cp()->RightPanel}) {
-			if (panel && panel->GetType() == QVIEW_PANEL)
-				quick_view = static_cast<QuickView *>(panel);
-		}
-	}
-
-	const bool was_wide = quick_view && quick_view->RestoreMdWideLayout();
-	ConfigOptSaveImpl(Ask);
-	if (was_wide)
+	if (was_wide) {
 		quick_view->ApplyMdWideLayout();
+		CtrlObject->Cp()->Redraw();
+	}
 }
