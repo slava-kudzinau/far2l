@@ -53,6 +53,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 static int LastWrapMode = -1;
 static int LastWrapType = -1;
+static const int QVIEW_MD_STRIP = 20;
 
 QuickView::QuickView()
 	:
@@ -67,6 +68,7 @@ QuickView::QuickView()
 
 QuickView::~QuickView()
 {
+	RestoreMdWideLayout();
 	CloseFile();
 	SetMacroMode(TRUE);
 }
@@ -387,11 +389,74 @@ void QuickView::Update(int Mode)
 	Redraw();
 }
 
+void QuickView::ApplyMdWideLayout()
+{
+	if (m_md_wide_applied)
+		return;
+
+	Panel *sib = CtrlObject->Cp()->GetAnotherPanel(this);
+	m_md_saved_view_mode = sib->GetViewMode();
+	m_md_saved_width_decrement = Opt.WidthDecrement;
+	sib->SetViewMode(2);	// VIEW_2: two NAME columns
+	ViewSettings.FullScreen = 1;	// quick view spans the full width
+	if (Opt.PanelsDisposition == 0) {
+		if (sib == CtrlObject->Cp()->LeftPanel)
+			Opt.WidthDecrement = ScrX / 2 + 1 - QVIEW_MD_STRIP;
+		else
+			Opt.WidthDecrement = QVIEW_MD_STRIP - ScrX / 2;
+	}
+	CtrlObject->Cp()->SetScreenPosition();
+	m_md_wide_applied = 1;
+}
+
+void QuickView::RestoreMdWideLayout()
+{
+	if (!m_md_wide_applied)
+		return;
+
+	Panel *sib = CtrlObject->Cp()->GetAnotherPanel(this);
+	sib->SetViewMode(m_md_saved_view_mode);
+	ViewSettings.FullScreen = 0;
+	Opt.WidthDecrement = m_md_saved_width_decrement;
+	CtrlObject->Cp()->SetScreenPosition();
+	m_md_wide_applied = 0;
+}
+
+int QuickView::MdWideGate(const wchar_t *name) const
+{
+	if (!Opt.ViOpt.ViewerMdQuickViewWide || !name || !*name)
+		return 0;
+
+	const wchar_t *base = PointToName(name);
+	const size_t name_len = StrLength(base);
+	for (const wchar_t *suffix : {L".md", L".markdown"}) {
+		const size_t suffix_len = StrLength(suffix);
+		if (name_len < suffix_len)
+			continue;
+		const wchar_t *tail = base + name_len - suffix_len;
+		bool match = true;
+		for (size_t i = 0; match && i < suffix_len; ++i) {
+			wchar_t c = tail[i];
+			if (c >= L'A' && c <= L'Z')
+				c = c - L'A' + L'a';
+			match = (c == suffix[i]);
+		}
+		if (match)
+			return 1;
+	}
+	return 0;
+}
+
 void QuickView::ShowFile(const wchar_t *FileName, int TempFile, HANDLE hDirPlugin)
 {
 	DWORD FileAttr = 0;
 	CloseFile();
 	QView = nullptr;
+
+	if (MdWideGate(FileName))
+		ApplyMdWideLayout();
+	else
+		RestoreMdWideLayout();
 
 	if (!IsVisible())
 		return;

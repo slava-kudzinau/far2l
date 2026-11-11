@@ -63,6 +63,9 @@ private:
 	DirInfo di;
 	int OldWrapMode;
 	int OldWrapType;
+	int m_md_wide_applied{0};
+	int m_md_saved_view_mode{-1};
+	int m_md_saved_width_decrement{0};
 
 	void PrintBox();
 	void PrintContent(const wchar_t *WalkedNowDir = nullptr);
@@ -74,6 +77,10 @@ private:
 	}
 
 	int ProcessScroll(int NewOffset);
+
+	void ApplyMdWideLayout();
+	void RestoreMdWideLayout();
+	int MdWideGate(const wchar_t *name) const;
 
 private:
 	virtual void DisplayObject();
