@@ -28,10 +28,13 @@ TypeDown()
 ExpectString("Wide", 1, 1, 16, 1)
 ExpectString("TAILWORD", 64, 2, 16, 1)
 
-// Ctrl+Q closes the quick view; quit.
+// Ctrl+Q closes the quick view while it is wide: the half-screen split restores.
+// The border of the left panel meets the border of the right panel in the middle of row 0.
 ToggleLCtrl(true)
 TypeText("q")
 ToggleLCtrl(false)
+ExpectString("╗╔", 38, 0, 4, 1)
+
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
 TypeEnter()
