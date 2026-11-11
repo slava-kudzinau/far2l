@@ -23,6 +23,8 @@ ExpectString("Wide", 21, 1, 16, 1)
 ExpectString("india", 66, 2, 12, 1)
 ExpectString("╗╔", 18, 0, 4, 1)
 ExpectString("wide.md", 1, 4, 10, 1)
+// The strip shows one name column: a 17 character name is shown whole.
+ExpectString("zz-strip-name.txt", 1, 3, 18, 8)
 // Up onto plain.txt: quick view shows it and the half-screen split restores (box in right half).
 TypeUp()
 ExpectString("Plain", 41, 1, 16, 1)
