@@ -390,9 +390,10 @@ void QuickView::Update(int Mode)
 }
 
 // Widen quick view for a Markdown file. The sibling panel shrinks to a strip of
-// Markdown_QuickViewStripWidth columns (kept between 10 and ScrX - 10) with one NAME column
-// (QVIEW_MD_STRIP_MODE), and quick view takes the rest. If the panels are stacked
-// (PanelsDisposition 1), only the view mode changes, because there is no side strip.
+// Markdown_QuickViewStripWidth columns with one NAME column (QVIEW_MD_STRIP_MODE), and quick
+// view takes the rest. The strip is never wider than ScrX - 10 columns. FilePanels::
+// SetPanelPositions limits the split, so the strip is never narrower than 11 columns.
+// If the panels are stacked (PanelsDisposition 1), there is no side strip and nothing changes.
 // RestoreMdWideLayout undoes it.
 void QuickView::ApplyMdWideLayout()
 {
@@ -404,8 +405,8 @@ void QuickView::ApplyMdWideLayout()
 	m_md_saved_view_mode = sib->GetViewMode();
 	m_md_saved_width_decrement = Opt.WidthDecrement;
 	const int strip = std::max(10, std::min(Opt.ViOpt.ViewerMdQuickViewStripWidth, ScrX - 10));
-	sib->SetViewMode(QVIEW_MD_STRIP_MODE);
 	if (Opt.PanelsDisposition == 0) {
+		sib->SetViewMode(QVIEW_MD_STRIP_MODE);
 		if (sib == CtrlObject->Cp()->LeftPanel)
 			Opt.WidthDecrement = ScrX / 2 + 1 - strip;
 		else
