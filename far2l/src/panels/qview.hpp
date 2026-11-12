@@ -63,6 +63,9 @@ private:
 	DirInfo di;
 	int OldWrapMode;
 	int OldWrapType;
+	int m_md_wide_applied{0};
+	int m_md_saved_view_mode{-1};
+	int m_md_saved_width_decrement{0};
 
 	void PrintBox();
 	void PrintContent(const wchar_t *WalkedNowDir = nullptr);
@@ -74,6 +77,8 @@ private:
 	}
 
 	int ProcessScroll(int NewOffset);
+
+	int MdWideGate(const wchar_t *name) const;
 
 private:
 	virtual void DisplayObject();
@@ -90,6 +95,19 @@ private:
 public:
 	QuickView();
 	virtual ~QuickView();
+
+	// Widen quick view and shrink the sibling panel to a strip. Does nothing if it is applied.
+	void ApplyMdWideLayout();
+
+	// Undo the wide Markdown layout. Does nothing if it is not applied. Returns true if it undid it.
+	// FilePanels::ChangePanel calls it before it reads the panel position and removes the
+	// quick view. ConfigOptSave calls it so that the strip layout is not saved.
+	// The destructor does not call it: at exit the sibling panel may be gone already.
+	bool RestoreMdWideLayout();
+
+	// A hidden quick view gives the wide layout back. Showing it for a Markdown file applies it again.
+	virtual void Hide();
+	virtual void Show();
 
 public:
 	virtual int ProcessKey(FarKey Key);

@@ -570,7 +570,8 @@ int FilePanels::ProcessKey(FarKey Key)
 				else
 					NewType = TREE_PANEL;
 
-				if (ActivePanel->GetType() == NewType)
+				const bool ClosingFromThis = (ActivePanel->GetType() == NewType);
+				if (ClosingFromThis)
 					AnotherPanel = ActivePanel;
 
 				if (!AnotherPanel->ProcessPluginEvent(FE_CLOSE, nullptr)) {
@@ -598,7 +599,16 @@ int FilePanels::ProcessKey(FarKey Key)
 					AnotherPanel->Show();
 				}
 
-				ActivePanel->SetFocus();
+				// Ctrl+Q moves focus into the quick view. Ctrl+Q from the quick view returns focus
+				// to the sibling panel, where quick view was started.
+				Panel *FocusPanel = ActivePanel;
+				if (Key == KEY_CTRLQ) {
+					if (AnotherPanel->GetType() == QVIEW_PANEL)
+						FocusPanel = AnotherPanel;
+					else if (ClosingFromThis)
+						FocusPanel = GetAnotherPanel(AnotherPanel);
+				}
+				FocusPanel->SetFocus();
 			}
 
 			break;
@@ -897,6 +907,10 @@ Panel *FilePanels::ChangePanel(Panel *Current, int NewType, int CreateNew, int F
 
 	if (!Force && NewType == OldType && OldPanelMode == NORMAL_PANEL)
 		return (Current);
+
+	// A wide quick view must give the half-screen slot back before the new panel copies its position.
+	if (OldType == QVIEW_PANEL)
+		static_cast<QuickView *>(Current)->RestoreMdWideLayout();
 
 	OldViewMode = Current->GetPrevViewMode();
 	OldFullScreen = Current->IsFullScreen();

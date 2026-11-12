@@ -44,6 +44,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "dialog.hpp"
 #include "filepanels.hpp"
 #include "filelist.hpp"
+#include "qview.hpp"
 #include "panel.hpp"
 #include "help.hpp"
 #include "filefilter.hpp"
@@ -290,6 +291,10 @@ const ConfigOpt g_cfg_opts[] {
 		L"Viewer", L"Written only: the last Shift+F4 markdown mode. It is not read at start; the start mode comes from Markdown_Auto and the saved choice for each file" },
 	{OST_COMMON, NSecViewer, "Markdown_Auto", &Opt.ViOpt.ViewerMarkdownAuto, 1,
 		L"ViewerSettings", L"Opens .md and .markdown files in Markdown mode unless the file has a saved Shift+F4 choice" },
+	{OST_COMMON, NSecViewer, "Markdown_QuickViewWide", &Opt.ViOpt.ViewerMdQuickViewWide, 1,
+		L"ViewerSettings", L"Widens Quick view for .md and .markdown files; the other panel keeps a narrow single-column strip" },
+	{OST_COMMON, NSecViewer, "Markdown_QuickViewStripWidth", &Opt.ViOpt.ViewerMdQuickViewStripWidth, 20,
+		L"ViewerSettings", L"Width in columns of the file list strip beside a wide Quick view; the strip is at least 11 columns and at most the screen width minus 10" },
 	{OST_COMMON, NSecViewer, "PersistentBlocks", &Opt.ViOpt.PersistentBlocks, 0,
 		L"ViewerSettings", L"Keeps viewer selections visible after cursor movement and commands" },
 	{OST_COMMON, NSecViewer, "DefaultCodePage", &Opt.ViOpt.DefaultCodePage, CP_UTF8,
@@ -1199,6 +1204,16 @@ void ConfigOptSave(bool Ask)
 	if (Ask && !ConfigOptSaveAsk(SaveCommon, SavePanels, SaveMacros))
 			return;
 
+	// A wide Markdown quick view lends its strip layout to the file list. Give the layout back
+	// while the setup is saved, so that the saved split and view mode are the user's own. This
+	// comes after the Ask dialog: its redraw would apply the wide layout again.
+	QuickView *quick_view = nullptr;
+	for (Panel *panel : {CtrlObject->Cp()->LeftPanel, CtrlObject->Cp()->RightPanel}) {
+		if (panel && panel->GetType() == QVIEW_PANEL)
+			quick_view = static_cast<QuickView *>(panel);
+	}
+	const bool was_wide = quick_view && quick_view->RestoreMdWideLayout();
+
 	const unsigned SaveFlags
 			= (SaveCommon ? OST_COMMON : 0) | (SavePanels ? OST_PANELS : 0);
 
@@ -1232,4 +1247,9 @@ void ConfigOptSave(bool Ask)
 
 	if (SaveMacros)
 		CtrlObject->Macro.SaveMacros();
+
+	if (was_wide) {
+		quick_view->ApplyMdWideLayout();
+		CtrlObject->Cp()->Redraw();
+	}
 }

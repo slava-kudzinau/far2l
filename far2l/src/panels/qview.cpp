@@ -53,6 +53,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 static int LastWrapMode = -1;
 static int LastWrapType = -1;
+// Last entry of ViewSettingsRef in flmodes.cpp: one NAME column, not in the panel modes menu.
+static const int QVIEW_MD_STRIP_MODE = 10;
 
 QuickView::QuickView()
 	:
@@ -387,9 +389,98 @@ void QuickView::Update(int Mode)
 	Redraw();
 }
 
+// Widen quick view for a Markdown file. The sibling panel shrinks to a strip of
+// Markdown_QuickViewStripWidth columns with one NAME column (QVIEW_MD_STRIP_MODE), and quick
+// view takes the rest. The strip is never wider than ScrX - 10 columns. FilePanels::
+// SetPanelPositions limits the split, so the strip is never narrower than 11 columns.
+// If the panels are stacked (PanelsDisposition 1), there is no side strip and nothing changes.
+// RestoreMdWideLayout undoes it.
+void QuickView::ApplyMdWideLayout()
+{
+	if (m_md_wide_applied)
+		return;
+
+	m_md_wide_applied = 1;	// before any redraw can reach ShowFile and nest here
+	Panel *sib = CtrlObject->Cp()->GetAnotherPanel(this);
+	m_md_saved_view_mode = sib->GetViewMode();
+	m_md_saved_width_decrement = Opt.WidthDecrement;
+	const int strip = std::max(10, std::min(Opt.ViOpt.ViewerMdQuickViewStripWidth, ScrX - 10));
+	if (Opt.PanelsDisposition == 0) {
+		sib->SetViewMode(QVIEW_MD_STRIP_MODE);
+		if (sib == CtrlObject->Cp()->LeftPanel)
+			Opt.WidthDecrement = ScrX / 2 + 1 - strip;
+		else
+			Opt.WidthDecrement = strip - ScrX / 2;
+	}
+	CtrlObject->Cp()->SetScreenPosition();
+}
+
+// Give back the sibling view mode and the split saved by ApplyMdWideLayout. Safe to call twice.
+bool QuickView::RestoreMdWideLayout()
+{
+	if (!m_md_wide_applied)
+		return false;
+
+	Panel *sib = CtrlObject->Cp()->GetAnotherPanel(this);
+	sib->SetViewMode(m_md_saved_view_mode);
+	Opt.WidthDecrement = m_md_saved_width_decrement;
+	CtrlObject->Cp()->SetScreenPosition();
+	m_md_wide_applied = 0;
+	return true;
+}
+
+void QuickView::Hide()
+{
+	RestoreMdWideLayout();
+	Panel::Hide();
+}
+
+// Only a quick view that holds an open viewer applies the wide layout here. ShowFile
+// applies it for a new file, and it leaves strCurFileName stale when it shows no file.
+void QuickView::Show()
+{
+	if (QView && MdWideGate(strCurFileName))
+		ApplyMdWideLayout();
+	Panel::Show();
+}
+
+int QuickView::MdWideGate(const wchar_t *name) const
+{
+	if (!Opt.ViOpt.ViewerMdQuickViewWide || !name || !*name)
+		return 0;
+
+	const wchar_t *base = PointToName(name);
+	const size_t name_len = StrLength(base);
+	for (const wchar_t *suffix : {L".md", L".markdown"}) {
+		const size_t suffix_len = StrLength(suffix);
+		if (name_len < suffix_len)
+			continue;
+		const wchar_t *tail = base + name_len - suffix_len;
+		bool match = true;
+		for (size_t i = 0; match && i < suffix_len; ++i) {
+			wchar_t c = tail[i];
+			if (c >= L'A' && c <= L'Z')
+				c = c - L'A' + L'a';
+			match = (c == suffix[i]);
+		}
+		if (match)
+			return 1;
+	}
+	return 0;
+}
+
 void QuickView::ShowFile(const wchar_t *FileName, int TempFile, HANDLE hDirPlugin)
 {
-	DWORD FileAttr = 0;
+	// A missing file has all attribute bits set, so it counts as a directory below.
+	const DWORD FileAttr = (FileName && !hDirPlugin) ? apiGetFileAttributes(FileName) : 0;
+
+	// The layout change repaints this panel, and the repaint can re-enter ShowFile and open a
+	// viewer. So change the layout first and close the file after it.
+	if (MdWideGate(FileName) && !hDirPlugin && !(FileAttr & FILE_ATTRIBUTE_DIRECTORY))
+		ApplyMdWideLayout();
+	else
+		RestoreMdWideLayout();
+
 	CloseFile();
 	QView = nullptr;
 
@@ -403,12 +494,9 @@ void QuickView::ShowFile(const wchar_t *FileName, int TempFile, HANDLE hDirPlugi
 		return;
 	}
 
-	if (!hDirPlugin) {
-		FileAttr = apiGetFileAttributes(FileName);
-		if (FileAttr != INVALID_FILE_ATTRIBUTES
-			&& ((FileAttr & FILE_ATTRIBUTE_DEVICE) != 0 || (FileAttr & FILE_ATTRIBUTE_BROKEN) != 0) )
-			return; // avoid stuck
-	}
+	if (!hDirPlugin && FileAttr != INVALID_FILE_ATTRIBUTES
+		&& ((FileAttr & FILE_ATTRIBUTE_DEVICE) != 0 || (FileAttr & FILE_ATTRIBUTE_BROKEN) != 0) )
+		return; // avoid stuck
 
 	bool SameFile = !StrCmp(strCurFileName, FileName);
 	strCurFileName = FileName;
