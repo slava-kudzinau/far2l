@@ -40,6 +40,7 @@ Build these stories in this order. Each one changes `MarkdownRender.cpp` and the
 | [markdown-table-fit](markdown-table-fit/story.md) | planned | M | Width-aware F3 tables wrap cell content within the viewer width instead of scrolling horizontally. | markdown-horizontal-scroll | `feat/markdown-table-fit` |
 | [md-quick-view-wide](md-quick-view-wide/story.md) | in-review | M | Quick view on a `.md` file takes the screen minus a one column file list strip. The ini key `Markdown_QuickViewStripWidth` sets the strip width (20). The layout restores on close, on hide and on save. In PR #32. | - | `feat/md-quick-view-wide` |
 | [md-view-repo](md-view-repo/story.md) | in-review | M | The Alt-F3 browser view moves with its history to the public standalone repo `slava-kudzinau/md-view`, with its own install, AGENTS.md and docs. far2l does not change. | - | `feat/md-view-repo` |
+| [md-view-remove](md-view-remove/story.md) | in-review | M | far2l drops the Alt-F3 browser view: the script, nine vendored files, the install rules and the browser tests. An undrawn mermaid fence shows only its code rows, with no hint row. ADR-005 is superseded. | md-view-repo | `feat/md-view-remove` |
 
 Build md-view-repo before md-view-remove. Then users can install md-view before far2l drops the browser view.
 
