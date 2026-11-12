@@ -9,7 +9,7 @@ refs:
 # View: Markdown runtime
 
 Table layout bounds columns to the available viewer width and repeats borders and padding on continuation lines.
-Three flows matter. All F3 work runs on the UI thread.
+The flows below run on the UI thread. All F3 work runs on the UI thread.
 
 ## Open a `.md` file in F3
 

@@ -164,10 +164,10 @@ The contrast rule is all or none. Each RGB default needs 3:1 or more against the
 ### Code block tint
 
 Every row of a code block paints its background with the block tint, to the right edge, also
-past the end of the text. The rows are the code rows. The tint blends one eighth of the code role's resolved foreground into the real viewer
-background (the `BlendRgb` pattern of the file compare). It shows when the terminal reports
-true color. The pair (code foreground, tint) must reach 3:1; one verdict is cached on (viewer
-background, code color).
+past the end of the text. The tint blends one eighth of the code role's resolved foreground
+into the real viewer background (the `BlendRgb` pattern of the file compare). It shows when
+the terminal reports true color. The pair (code foreground, tint) must reach 3:1; one
+verdict is cached on (viewer background, code color).
 A theme change and a scheme change both show on the next redraw. The block background is a
 row property, not a run property: the runs ride it, the cells past the text keep it.
 A run with a token role rides the tint too (story markdown-colorer-fences): the token
@@ -325,6 +325,7 @@ Closed items: broken scrolling and the ignored `mermaid.min.js` asset (story mar
 
 | Defect | Evidence |
 |---|---|
+| A file with a UTF-8 BOM does not parse its first line as a heading. `# Title` shows with its marker. | Smoke probe. md4c gets the BOM as text. |
 | HTML entities show as source: `&amp;` stays `&amp;`. | Smoke probe. `cb_text` does not decode `MD_TEXT_ENTITY`. |
 | F8 and Shift-F8 change the code page in the status line, but the rows stay the same. `m_md_ready` stays true. | Smoke probe |
 | A file that changes on disk keeps the old render. `KEY_IDLE` does not clear `m_md_ready`. | Code |

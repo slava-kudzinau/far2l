@@ -79,7 +79,7 @@ The Markdown feature, in `docs/architecture/features/markdown/`:
 | [markdown.invariants.md](docs/architecture/features/markdown/markdown.invariants.md) | Rules that always hold for the feature |
 | [markdown-viewer.spec.md](docs/architecture/features/markdown/markdown-viewer.spec.md) | What Markdown mode in F3 must do |
 | [markdown.runtime.md](docs/architecture/features/markdown/markdown.runtime.md) | Open in F3, render and scroll, mermaid fence to ASCII art |
-| [markdown.data.md](docs/architecture/features/markdown/markdown.data.md) | Screen lines, color runs, position cache, settings keys, temp files, bundled JS |
+| [markdown.data.md](docs/architecture/features/markdown/markdown.data.md) | Screen lines, color runs, position cache, settings keys, bundled JS |
 
 Decisions, in `docs/architecture/decisions/`:
 

@@ -23,7 +23,7 @@ This fork (`origin` is `slava-kudzinau/far2l`, `upstream` is `elfmz/far2l`) adds
 | [markdown.invariants.md](markdown.invariants.md) | Rules that always hold for the feature. |
 | [markdown-viewer.spec.md](markdown-viewer.spec.md) | What Markdown mode in F3 must do. |
 | [markdown.runtime.md](markdown.runtime.md) | Open in F3, render and scroll, mermaid fence to ASCII art. |
-| [markdown.data.md](markdown.data.md) | Screen lines, color runs, position cache, settings keys, temp files, bundled JS. |
+| [markdown.data.md](markdown.data.md) | Screen lines, color runs, position cache, settings keys, bundled JS. |
 
 The decisions are in [docs/architecture/decisions/](../../decisions), because a decision can cross features.
 
