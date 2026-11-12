@@ -44,7 +44,7 @@ another file, closes or hides.
 
 ## Behavior (owner's rulings, 2026-11-11)
 
-1. The trigger is per file. The layout applies when quick view shows a `.md` or `.markdown` file. It restores in four cases. Quick view shows another file. Quick view closes. Quick view hides (Ctrl+P, Ctrl+O). The setup is saved. Tab focus switches keep it.
+1. The trigger is per file. The layout applies when quick view shows a `.md` or `.markdown` file. It restores in four cases. Quick view shows another file. Quick view closes. Quick view hides (Ctrl+P, Ctrl+O). The setup is saved. Tab focus switches keep it. Ctrl+Q moves focus into quick view, and Ctrl+Q from quick view returns focus to the sibling (owner ruling, 2026-11-12).
 2. The quick view panel takes the screen minus a strip. It is not full screen and has no `FullScreen` flag. The file list keeps a strip of `Markdown_QuickViewStripWidth` columns (default 20) on its side. At 80 columns the strip is 21 columns when the list is on the right.
 3. The strip shows one NAME column (view mode 10). Tree and info siblings get the split change only. Stacked panels (disposition 1) have no strip. Nothing changes.
 4. The restore is temporary. The saved view mode and the saved `Opt.WidthDecrement` live on the `QuickView` object. The feature never writes `far2l.ini`. `ConfigOptSave` takes the layout back before it writes the setup. Thus the saved split and the saved list mode are the user's own.

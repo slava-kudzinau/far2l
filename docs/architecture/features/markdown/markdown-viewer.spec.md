@@ -229,12 +229,12 @@ Quick view (Ctrl+Q) on a `.md` or `.markdown` file takes the screen minus a stri
 | Strip width | The strip is never wider than `ScrX - 10` columns. The existing clamp of `Opt.WidthDecrement` (`ScrX / 2 - 10`) applies too. Thus the strip is never narrower than 11 columns. |
 | Strip content | A file list in the strip shows one NAME column. It uses the internal view mode 10. The mode is not in the panel modes menu. A long name is cut at the strip width. |
 | Stacked panels | Panel disposition 1 has no side strip. The split does not change. The list keeps its view mode. |
-| Apply | `QuickView::ShowFile` applies the layout for a gate file. It applies the layout before it creates the `Viewer`. `QuickView::Show` applies it again when a hidden quick view shows a gate file. |
+| Apply | `QuickView::ShowFile` applies the layout for a gate file. It applies or restores the layout first, then it closes the old `Viewer` and creates the new one. `QuickView::Show` applies it again when a hidden quick view shows a gate file. |
 | Restore | The layout gives back the saved view mode and the saved `Opt.WidthDecrement`. This happens in four cases. Quick view shows another file. Quick view closes. Quick view hides (Ctrl+P, Ctrl+O). The setup is saved. |
 | Close | `FilePanels::ChangePanel` calls `QuickView::RestoreMdWideLayout` before it reads the quick view position. The quick view destructor does not restore the layout. |
 | Save | `ConfigOptSave` restores the layout after the Save setup dialog closes and before it writes the setup. It applies the layout again after the write and repaints the panels. The saved `WidthDecrement` and the saved view mode of the list are the values of the user. |
 | Resize keys | Ctrl+Left, Ctrl+Right and Ctrl+Clear change `Opt.WidthDecrement` for the layout that is on screen. The next restore gives back the value from before the layout, so the change is lost. To keep a strip width, set `Markdown_QuickViewStripWidth` in the ini file. |
-| Focus | A Tab to the other panel does not change the layout. |
+| Focus | Ctrl+Q moves focus into quick view, for any file. Ctrl+Q from quick view closes it and returns focus to the sibling panel, where quick view started. A Tab to the other panel does not change the layout. |
 
 ### Failure behavior
 

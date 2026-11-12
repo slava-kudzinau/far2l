@@ -50,6 +50,8 @@ These fixes came from owner tests. They replace the rulings above where they dif
 | `ShowFile(nullptr)` undid its own restore | `Show` read the old Markdown name in `strCurFileName` and applied the layout | `QuickView::Show` applies only when the quick view holds an open `Viewer`. No test drives this path: it needs a plugin panel whose file fetch fails. Proof is by code reading |
 | A directory named `docs.md` widened quick view | The gate checked the name only | `ShowFile` also needs a path that is not a directory |
 | Stacked panels changed the list view mode for no gain | `ApplyMdWideLayout` always set view mode 10 | It sets view mode 10 only with side by side panels |
+| A viewer leaked when the layout change re-entered `ShowFile` | `CloseFile` ran before the layout change, so a nested `ShowFile` opened a `Viewer` that the outer call overwrote | `ShowFile` changes the layout first and calls `CloseFile` after it |
+| Ctrl+Q left focus on the list | Owner ruling: quick view must take focus | `KEY_CTRLQ` focuses the quick view. Ctrl+Q from quick view returns focus to the sibling. Smoke tests 0008, 000a and 0011 follow the rule |
 | The strip minimum in the comment and the help text was 10 | `SetPanelPositions` limits the split to `ScrX / 2 - 10`, so the strip has at least 11 columns | The comment and the help text say 11 |
 
 Open items:
