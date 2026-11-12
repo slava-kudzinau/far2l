@@ -473,13 +473,16 @@ void QuickView::ShowFile(const wchar_t *FileName, int TempFile, HANDLE hDirPlugi
 {
 	// A missing file has all attribute bits set, so it counts as a directory below.
 	const DWORD FileAttr = (FileName && !hDirPlugin) ? apiGetFileAttributes(FileName) : 0;
-	CloseFile();
-	QView = nullptr;
 
+	// The layout change repaints this panel, and the repaint can re-enter ShowFile and open a
+	// viewer. So change the layout first and close the file after it.
 	if (MdWideGate(FileName) && !hDirPlugin && !(FileAttr & FILE_ATTRIBUTE_DIRECTORY))
 		ApplyMdWideLayout();
 	else
 		RestoreMdWideLayout();
+
+	CloseFile();
+	QView = nullptr;
 
 	if (!IsVisible())
 		return;

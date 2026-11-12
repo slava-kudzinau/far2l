@@ -14,12 +14,28 @@ TypeEscape()
 // Alphabetical list: /.., plain.txt, wide.md. Two rows down selects wide.md.
 TypeDown(2)
 
-// Ctrl+Q opens quick view on wide.md: a 20 column strip of the file list stays on the left
-// (its border meets the quick view border at row 0), and the viewer fills the other 60 columns.
-// "india" ends past column 70: on the old half screen the line wraps before it.
+// Ctrl+Q moves focus into quick view; Ctrl+Q again closes it and returns focus to the list where
+// it started. Up then moves the list cursor onto plain.txt, so the next quick view shows it.
 ToggleLCtrl(true)
 TypeText("q")
 ToggleLCtrl(false)
+ExpectString("Wide", 21, 1, 16, 1)
+ToggleLCtrl(true)
+TypeText("q")
+ToggleLCtrl(false)
+TypeUp()
+ToggleLCtrl(true)
+TypeText("q")
+ToggleLCtrl(false)
+ExpectString("Plain", 41, 1, 16, 1)
+// Tab gives focus back to the list. Down selects wide.md.
+TypeTab()
+TypeDown()
+ExpectString("Wide", 21, 1, 16, 1)
+
+// Quick view is open on wide.md and the list has focus: a 20 column strip of the file list stays
+// on the left (its border meets the quick view border at row 0), and the viewer fills the other
+// 60 columns. "india" ends past column 70: on the old half screen the line wraps before it.
 ExpectString("Wide", 21, 1, 16, 1)
 ExpectString("india", 66, 2, 12, 1)
 ExpectString("╗╔", 18, 0, 4, 1)
@@ -71,6 +87,7 @@ TypeText("q")
 ToggleLCtrl(false)
 ExpectString("╗╔", 18, 0, 4, 1)
 
+TypeTab()
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
 TypeEnter()
@@ -88,6 +105,7 @@ ToggleLCtrl(true)
 TypeText("q")
 ToggleLCtrl(false)
 ExpectString("╗╔", 18, 0, 4, 1)
+TypeTab()
 TypeFKey(10)
 ExpectString("Do you want to quit FAR?")
 TypeEnter()

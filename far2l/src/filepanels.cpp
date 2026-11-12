@@ -570,7 +570,8 @@ int FilePanels::ProcessKey(FarKey Key)
 				else
 					NewType = TREE_PANEL;
 
-				if (ActivePanel->GetType() == NewType)
+				const bool ClosingFromThis = (ActivePanel->GetType() == NewType);
+				if (ClosingFromThis)
 					AnotherPanel = ActivePanel;
 
 				if (!AnotherPanel->ProcessPluginEvent(FE_CLOSE, nullptr)) {
@@ -598,7 +599,16 @@ int FilePanels::ProcessKey(FarKey Key)
 					AnotherPanel->Show();
 				}
 
-				ActivePanel->SetFocus();
+				// Ctrl+Q moves focus into the quick view. Ctrl+Q from the quick view returns focus
+				// to the sibling panel, where quick view was started.
+				Panel *FocusPanel = ActivePanel;
+				if (Key == KEY_CTRLQ) {
+					if (AnotherPanel->GetType() == QVIEW_PANEL)
+						FocusPanel = AnotherPanel;
+					else if (ClosingFromThis)
+						FocusPanel = GetAnotherPanel(AnotherPanel);
+				}
+				FocusPanel->SetFocus();
 			}
 
 			break;
