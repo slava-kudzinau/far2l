@@ -22,7 +22,6 @@ Vendor md4c 0.5.2 (MIT) in `far2l/src/markdown/md4c/` and use its event API (`md
 - md4c 0.5.2 gives no byte offsets in block details. The `text` callback points into the input, so `Builder::offset_of` derives the source offset from that pointer. A line takes the offset of the source line that holds its first text.
 - The parse flags are fixed in `MarkdownDoc::Render`: tables, task lists, strikethrough, permissive auto links and underline.
 - A new md4c version needs a check of that pointer rule.
-- The browser view does not use md4c (see [ADR-005](adr-005-browser-view-script.md)).
 
 ## Rejected alternatives
 

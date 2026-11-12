@@ -91,7 +91,7 @@ Result on this Mac, `next/2.9.1-ovr.1`: 12 of 14 pass. `0004-vt-shell` fails (`p
 | `sh testing/markdown/ascii-golden.sh` | `mermaid-ascii.js` against `testing/markdown/golden/*.mmd` and `*.txt`, in Node and in QuickJS | `node`; the QuickJS leg needs `../far2l.build/far2l/third_party/quickjs/libqjs.a` |
 | `sh testing/markdown/ascii-driver.sh` | The `AsciiMermaid` C++ code in a stand-alone driver (timeout, speed) | `libqjs.a`, no far2l build |
 
-All three run with no network. Do not regenerate `golden/*.txt` to make a failing test pass: they come from the `beautiful-mermaid` package (`golden/make-golden.mjs`), not from the bundle. The test for `md-open.sh` (Alt-F3 browser view) exists only in a story folder, not in `testing/` (see Risks).
+All three run with no network. Do not regenerate `golden/*.txt` to make a failing test pass: they come from the `beautiful-mermaid` package (`golden/make-golden.mjs`), not from the bundle.
 
 **The check for a story** and the command for the full suite are in [AGENTS.md](../AGENTS.md). The check takes about 12 s after a build. The full suite takes about 32 s, and two tests fail today (see above).
 
@@ -116,7 +116,6 @@ All three run with no network. Do not regenerate `golden/*.txt` to make a failin
 - `far2l/bootstrap` holds scripts and resources that cmake copies to the install folder (`far2l/bootstrap/CMakeLists.txt`). Language and help files come from `farlang.templ.m4`, `FarEng.hlf.m4` and `farlng.pl` in `far2l/bootstrap/scripts`. The build runs `farlng.pl` through perl, and no CMake file adds the `farlng` tool. A normal build does this; there is no step to run by hand.
 - The mermaid bundle `far2l/bootstrap/mermaid-ascii.js` (limit 300 KB, no `elkjs`) is built by `sh far2l/bootstrap/mermaid-ascii/build.sh`. It needs `npm` and the network: `npm install` of the pinned `beautiful-mermaid` and `npx esbuild@0.25.8`. After it, run `ascii-golden.sh` and `ascii-driver.sh`.
 - `mermaid.min.js` (5.5 MB) in `far2l/bootstrap` is git-ignored and cmake no longer installs it. Nothing on this branch reads it. Only `mermaid-png.sh` on the unmerged branch `markdown-preview/image-poc` and the check of story markdown-default-on use it. It can be deleted. The copy in `Contents/Resources` of an old build folder is a leftover of that build.
-- `marked.min.js` and its license are checked in. No procedure is recorded.
 
 ## Branches and delivery
 
@@ -133,7 +132,6 @@ All three run with no network. Do not regenerate `golden/*.txt` to make a failin
 
 ## Risks and open questions
 
-- The three story `check.sh` files (stories markdown-ascii-diagrams, markdown-default-on, markdown-browser-view) run from `docs/stories/`. Set `BUILD` to use an existing build folder for the first two. The ascii and default-on checks pass. The browser check fails one row, `far2l/src unchanged since the story base`. This is expected: that row is true only on the story branch, and later stories changed `far2l/src`.
-- The `md-open.sh` checks exist only in the `check.sh` of story markdown-browser-view, with its fixtures. Nothing in `testing/` covers it.
+- The two story `check.sh` files (stories markdown-ascii-diagrams, markdown-default-on) run from `docs/stories/`. Set `BUILD` to use an existing build folder. Both checks pass.
 - `0004-vt-shell` and `000b-find-file` fail on this Mac. We do not know if they also fail on `master`.
 - Branch `markdown-preview/fixes` exists only locally (no `origin` copy). The story markdown-preview-fixes has no `check.sh`.
