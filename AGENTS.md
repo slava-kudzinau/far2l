@@ -6,40 +6,40 @@ far2l is a Linux, macOS and BSD port of the FAR Manager file manager. This fork 
 
 Details and the reasons are in [docs/how-we-build.md](docs/how-we-build.md). Run the commands below from the repo root.
 
-**Build.** Always build into the `.build` folder at the root of the checkout. The folder is git-ignored. Each worktree uses its own `.build` folder.
+**Build.** Always build into the `out` folder at the root of the checkout. The folder is git-ignored. Each worktree uses its own `out` folder. Packaged release artifacts (DMG, staging) go in `dist`, also git-ignored.
 
 ```sh
 # new build folder (one time)
-cmake -S . -B .build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTING=Yes -DUSEWX=No -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
+cmake -S . -B out -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTING=Yes -DUSEWX=No -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
 # far2l only
-cmake --build .build --target far2l -j8
+cmake --build out --target far2l -j8
 # far2l and all plugins
-cmake --build .build -j8
+cmake --build out -j8
 ```
 
-The macOS binary is `.build/install/far2l.app/Contents/MacOS/far2l`. The Linux binary is `install/far2l` in the build folder, so change `APP` in the check below on Linux. Smoke tests need `-DTESTING=Yes`.
+The macOS binary is `out/install/far2l.app/Contents/MacOS/far2l`. The Linux binary is `install/far2l` in the build folder, so change `APP` in the check below on Linux. Smoke tests need `-DTESTING=Yes`.
 
 **Runnable binary policy.** Whenever you report that a change is implemented or fixed, build far2l with all plugins using `cmake --build "$BUILD" -j8`. Report the full path to the resulting binary so the user can run and test it. On macOS, use `$BUILD/install/far2l.app/Contents/MacOS/far2l`. On Linux and BSD, use `$BUILD/install/far2l`.
 
-**macOS release packaging.** A DMG intended to open a far2l window MUST be built with `-DUSEWX=Yes`. `-DUSEWX=No` produces a terminal-only executable even when CPack wraps it in an `.app` bundle. CPack packaging MUST be followed by ad hoc or Developer ID signing because its `install_name_tool` fixup changes invalidate earlier signatures. Bundle fixup MUST search every Homebrew library directory used by the build, including `/opt/homebrew/lib` and `/opt/homebrew/opt/wxwidgets/lib`, so transitive dependencies such as `@rpath/libsharpyuv.0.dylib` are found. The packaged `.app` MUST be tested by launching the actual bundle and confirming that its window appears and its process remains running. `--help` is not a launch test. Before uploading, verify the final bundle with `codesign --verify --deep --strict`, record its SHA-256, and remove stale or duplicate release assets. Ad hoc signing is not notarization. Release notes MUST state whether the package is GUI or terminal-only and whether it is notarized.
+**macOS release packaging.** A DMG intended to open a far2l window MUST be built with `-DUSEWX=Yes`. `-DUSEWX=No` produces a terminal-only executable even when CPack wraps it in an `.app` bundle. CPack packaging MUST be followed by ad hoc or Developer ID signing because its `install_name_tool` fixup changes invalidate earlier signatures. Bundle fixup MUST search every Homebrew library directory used by the build, including `/opt/homebrew/lib` and `/opt/homebrew/opt/wxwidgets/lib`, so transitive dependencies such as `@rpath/libsharpyuv.0.dylib` are found. The packaged `.app` MUST be tested by launching the actual bundle and confirming that its window appears and its process remains running. `--help` is not a launch test. Before uploading, verify the final bundle with `codesign --verify --deep --strict`, record its SHA-256, and remove stale or duplicate release assets. Ad hoc signing is not notarization. Release notes MUST state whether the package is GUI or terminal-only and whether it is notarized. For the full tag-and-publish procedure, read the "Make a release" section of [docs/how-we-build.md](docs/how-we-build.md) before you release.
 
 **The check.** This is the one command that proves that a story is done. It builds far2l, then runs the Markdown golden test, the C++ driver test and the three Markdown smoke tests. It takes about 12 s after a build. It prints `check ok` and exits 0, or it names the failed test and exits 1. In a worktree, set `BUILD` to the build folder of that worktree.
 
 ```sh
-BUILD=${BUILD:-.build}; APP=$(cd "$BUILD" && pwd)/install/far2l.app/Contents/MacOS/far2l; TESTS=${TESTS:-0007-view-file-markdown 0008-view-md-default 0009-view-md-setting-off}
+BUILD=${BUILD:-out}; APP=$(cd "$BUILD" && pwd)/install/far2l.app/Contents/MacOS/far2l; TESTS=${TESTS:-0007-view-file-markdown 0008-view-md-default 0009-view-md-setting-off}
 cmake --build "$BUILD" --target far2l -j8 && sh testing/markdown/ascii-golden.sh && sh testing/markdown/ascii-driver.sh && (cd testing && for t in $(echo $TESTS); do o=$(./far2l-smoke-run.sh "$APP" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && ! echo "$o" | grep -q FAILED || { echo "FAILED: $t"; exit 1; }; done) && echo "check ok"
 ```
 
 **All smoke tests.** Use this when a change touches more than Markdown. It prints PASS or FAIL for each test and takes about 32 s. Read the output, because the loop has no useful exit code.
 
 ```sh
-APP=$(cd .build && pwd)/install/far2l.app/Contents/MacOS/far2l
+APP=$(cd out && pwd)/install/far2l.app/Contents/MacOS/far2l
 (cd testing && for t in $(ls tests); do o=$(./far2l-smoke-run.sh "$APP" "$t" 2>&1) && echo "$o" | grep -q '\[DONE\]' && echo "PASS $t" || echo "FAIL $t"; done)
 ```
 
 On this Mac, `0004-vt-shell` and `000b-find-file` fail today. The cause is not known. Any other failure is new, so stop and find the cause.
 
-**Worktrees.** A worktree is in `.worktrees/{story}`. Its build folder is `.build` at the worktree root. Set `BUILD` to that folder. Each worktree keeps its own build folder, so parallel stories do not rebuild each other's objects.
+**Worktrees.** A worktree is in `.worktrees/{story}`. Its build folder is `out` at the worktree root. Set `BUILD` to that folder. Each worktree keeps its own build folder, so parallel stories do not rebuild each other's objects.
 
 A smoke run passes the test folder path as the test-controller id. far2l binds that id as a unix socket (`LocalSocketServer`, `utils/src/LocalSocket.cpp:179`). macOS keeps 103 characters of the socket name, so the long path of a worktree is cut, and a stale socket lands in `testing/tests/` with the head of the test folder name, for example `0007-view-fi`. The name length depends on the path length: a shorter worktree path leaves a longer socket name. The next run of `far2l-smoke-run.sh` then stops with `mkdir: tests/0007-view-fi: Not a directory`, and the check prints `FAILED` for a test with no code fault. Each run leaves a socket, so clean before every smoke test in the loop, not once before the loop. A far2l console server that survived an earlier run rebinds the path, and the APFS directory cache can hide the unlinked entry from `find`:
 

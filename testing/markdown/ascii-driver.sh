@@ -16,13 +16,13 @@ ascii_build=${ASCII_BUILD:-$main/../far2l.ascii.build}
 build=$ascii_build/markdown-ascii-driver
 qjs=$ascii_build/far2l/third_party/quickjs/libqjs.a
 if [ ! -f "$qjs" ]; then
-    qjs=$main/../far2l.build/far2l/third_party/quickjs/libqjs.a
+    qjs=$main/out/far2l/third_party/quickjs/libqjs.a
 fi
 bundle=$root/far2l/bootstrap/mermaid-ascii.js
 golden=$here/golden
 
 if [ ! -f "$qjs" ]; then
-    echo "missing libqjs.a (build quickjs first; looked in $ascii_build and the far2l.build dir)" >&2
+    echo "missing libqjs.a (build quickjs first; looked in $ascii_build and the out build dir)" >&2
     exit 2
 fi
 if [ ! -f "$bundle" ]; then
