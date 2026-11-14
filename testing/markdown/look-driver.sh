@@ -2,7 +2,7 @@
 # Look driver for the Colorer look of the F3 Markdown view (story
 # markdown-colorer-look).  Builds the driver, then runs it.  R1: no --case
 # runs all cases.  The plugin cases need the full build: LOOK_BUILD names it,
-# default ../far2l.markdown-colorer-look.build, falling back to ../far2l.build.
+# default ../far2l.markdown-colorer-look.build, falling back to out.
 # --rgb on the command line runs the driver with a truecolor backend, so the
 # plugin's ReloadBase picks the rgb scheme (far2l.hrd).
 set -u
@@ -14,7 +14,7 @@ if [ -z "$app_dir" ]; then
   app_dir=$(cd "$project_dir/$build_dir" 2>/dev/null && pwd)
 fi
 if [ -z "$app_dir" ]; then
-  build_dir=../far2l.build
+  build_dir=out
   app_dir=$(cd "$project_dir/$build_dir" 2>/dev/null && pwd)
 fi
 if [ -z "$app_dir" ]; then

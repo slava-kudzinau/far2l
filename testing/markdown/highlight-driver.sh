@@ -2,14 +2,14 @@
 # Fence-token driver for the Colorer fence tokens (story markdown-code-highlight).
 # Builds the driver, then runs it.  R1: no --case runs all cases.  The plugin
 # cases need the full build: HIGH_BUILD names it, default
-# ../far2l.markdown-code-highlight.build, falling back to ../far2l.build.
+# ../far2l.markdown-code-highlight.build, falling back to out.
 set -u
 script_dir=$(cd "$(dirname "$0")" && pwd)
 project_dir=$(cd "$script_dir/../.." && pwd)
 build_dir=${HIGH_BUILD:-../far2l.markdown-code-highlight.build}
 app_dir=$(cd "$project_dir/$build_dir" 2>/dev/null && pwd)
 if [ -z "$app_dir" ]; then
-  build_dir=../far2l.build
+  build_dir=out
   app_dir=$(cd "$project_dir/$build_dir" 2>/dev/null && pwd)
 fi
 if [ -z "$app_dir" ]; then

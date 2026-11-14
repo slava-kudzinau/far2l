@@ -22,25 +22,25 @@ This guide shows what the repo files do not show. For the general build and the 
 | `-DTESTING=Yes` | Builds in the test hooks that `far2l-smoke` needs. Without it the tests hang and fail. |
 | `-DUSEWX=No` | TTY-only build with no wxWidgets. We use it. |
 | `-DPYTHON=yes` | Python plugin (CI uses it). We do not build it. |
-| `-DCMAKE_BUILD_TYPE=RelWithDebInfo` | What `../far2l.build` uses. CI uses `Release`. |
+| `-DCMAKE_BUILD_TYPE=RelWithDebInfo` | What the `out` build folder uses. CI uses `Release`. |
 | `-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0` | macOS only. |
 
 ## Build
 
-`../far2l.build` is next to the checkout and is out of tree. Its `CMakeCache.txt` has `CMAKE_HOME_DIRECTORY` set to this checkout, so it belongs to this tree. Its flags are `-DTESTING=Yes -DUSEWX=No -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0`. The cache also holds `FAR2L_MD_NO_QJS=1`; no file in the tree reads it (unverified that it has any effect).
+`out` is at the checkout root, in tree, and is git-ignored. Packaged artifacts (DMG, CPack staging) go in `dist`, also git-ignored. The cache holds `-DTESTING=Yes -DUSEWX=Yes -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0`; the terminal front end uses `-DUSEWX=No`.
 
-Rule: always build out of tree, in a folder next to the repo (`../far2l.<name>.build`). Never run cmake inside the checkout. Each worktree uses its own build folder.
+Rule: always build in a folder named `out` at the checkout root. Extra build folders use the `out-<name>` pattern (for example `out-nowx` for a second front end). Each worktree uses its own build folder.
 
 ```sh
 # new build folder (once)
-cmake -S . -B ../far2l.build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTING=Yes -DUSEWX=No -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
+cmake -S . -B out -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTING=Yes -DUSEWX=No -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
 # far2l only - the fast loop
-cmake --build ../far2l.build --target far2l -j8
+cmake --build out --target far2l -j8
 # full build - the plugins too
-cmake --build ../far2l.build -j8
+cmake --build out -j8
 ```
 
-The incremental full build took 42 s on an 18-core Mac. The binary is `../far2l.build/install/far2l.app/Contents/MacOS/far2l` (on Linux: `install/far2l`). Resources go to `far2l.app/Contents/Resources`.
+The incremental full build took 42 s on an 18-core Mac. The binary is `out/install/far2l.app/Contents/MacOS/far2l` (on Linux: `install/far2l`). Resources go to `far2l.app/Contents/Resources`.
 
 ## macOS release package (DMG)
 
@@ -51,15 +51,44 @@ Sign the app after the bundle fixup. CPack runs `install_name_tool` (in `packagi
 Order:
 
 ```sh
-cmake --build .build -j8                       # USEWX=Yes in the cache
-cpack --config .build/CPackConfig.cmake        # stages + fixup; runs install_name_tool
-STAGE=$(find _CPack_Packages -type d -name far2l.app)
-codesign --force --deep --sign - "$STAGE"      # sign after fixup
+cmake --build out -j8                       # USEWX=Yes in the cache
+mkdir -p dist && (cd dist && cpack --config ../out/CPackConfig.cmake)
+                                            # stages + fixup; runs install_name_tool
+STAGE=$(find dist/_CPack_Packages -type d -name far2l.app)
+codesign --force --deep --sign - "$STAGE"   # sign after fixup
 hdiutil create -volname far2l-<version> -srcfolder "${STAGE%far2l.app}" \
-    -format UDZO far2l-<version>.dmg           # DMG from the signed staging
+    -format UDZO dist/far2l-<version>.dmg   # DMG from the signed staging
 ```
 
 Check the package: `codesign --verify --deep --strict` on the app in the mounted DMG, then launch it and confirm the process stays running. `--help` is not a launch test. Record the DMG SHA-256. Ad hoc signing is not notarization; release notes state GUI/terminal and notarized/not.
+
+## Make a release
+
+A release is an annotated tag plus a GitHub release with one DMG asset. The current releases are `v_2.9.1-ovr.1` and `v_2.9.1-ovr.2`.
+
+1. Work from the newest `next/` branch, synced with `origin`.
+2. Set the version in `packaging/version`, for example `2.9.1-ovr.2`. Commit the bump on its own `chore(release)` commit before you build the artifacts.
+3. Build all targets with the chosen front end. Pick the build folder and the `-DUSEWX` value with the package section above.
+4. Build the DMG with the order in [macOS release package (DMG)](#macos-release-package-dmg): cpack, sign the staged app, then build the image. `hdiutil create` reads the signed staging. Name the asset `far2l-<front>-<version>.dmg`. The front is `nowx` for the terminal build we ship today.
+5. Verify the DMG: `codesign --verify --deep --strict` on the app in the mounted image, then launch it and confirm the process stays running. Record the SHA-256.
+6. Tag the release commit and push the tag:
+
+   ```sh
+   git tag -a v_<version> -m "far2l <version>"
+   git push origin v_<version>
+   ```
+
+7. Create the release, targeted at `master` (the convention from `v_2.9.1-ovr.1`):
+
+   ```sh
+   gh release create v_<version> --repo slava-kudzinau/far2l --target master \
+       --title "far2l <version>" --notes-file notes.md far2l-<front>-<version>.dmg
+   ```
+
+   Pass the body with `--notes-file`. A heredoc on standard input drops the body when the DMG is a positional argument.
+
+8. Write the notes in three parts: Highlights, macOS download, and Verification. Highlights lists the user-visible changes since the last tag. macOS download gives the asset name, GUI/terminal, and notarized/not. Verification gives codesign, launch, and the SHA-256. Get the change list with `git log --oneline <prev-tag>..HEAD`.
+9. After the release, create the next versioned `next/` branch for release testing (see [Branches and delivery](#branches-and-delivery)).
 
 ## Tests
 
@@ -69,7 +98,7 @@ There is no `make test`, and `ctest` at the build root finds nothing, because th
 
 ```sh
 cd testing
-./far2l-smoke-run.sh "$PWD/../../far2l.build/install/far2l.app/Contents/MacOS/far2l" 0007-view-file-markdown
+./far2l-smoke-run.sh "$PWD/../out/install/far2l.app/Contents/MacOS/far2l" 0007-view-file-markdown
 ```
 
 - Without a prefix the run goes in name order and stops at the first failure (a Go panic). On this Mac this stops at 0004, so use one run for each test.
@@ -88,7 +117,7 @@ Result on this Mac, `next/2.9.1-ovr.1`: 12 of 14 pass. `0004-vt-shell` fails (`p
 | Script | What | Needs |
 |---|---|---|
 | `0007-view-file-markdown`, `0008-view-md-default`, `0009-view-md-setting-off`, `000f-view-md-wrap` | The viewer in Markdown mode, its default and off setting, and word wrap | `-DTESTING=Yes` build |
-| `sh testing/markdown/ascii-golden.sh` | `mermaid-ascii.js` against `testing/markdown/golden/*.mmd` and `*.txt`, in Node and in QuickJS | `node`; the QuickJS leg needs `../far2l.build/far2l/third_party/quickjs/libqjs.a` |
+| `sh testing/markdown/ascii-golden.sh` | `mermaid-ascii.js` against `testing/markdown/golden/*.mmd` and `*.txt`, in Node and in QuickJS | `node`; the QuickJS leg needs `out/far2l/third_party/quickjs/libqjs.a` in the main checkout |
 | `sh testing/markdown/ascii-driver.sh` | The `AsciiMermaid` C++ code in a stand-alone driver (timeout, speed) | `libqjs.a`, no far2l build |
 
 All three run with no network. Do not regenerate `golden/*.txt` to make a failing test pass: they come from the `beautiful-mermaid` package (`golden/make-golden.mjs`), not from the bundle. The test for `md-open.sh` (Alt-F3 browser view) exists only in a story folder, not in `testing/` (see Risks).
@@ -121,7 +150,7 @@ All three run with no network. Do not regenerate `golden/*.txt` to make a failin
 ## Branches and delivery
 
 - `origin` is the fork `slava-kudzinau/far2l`. `upstream` is `elfmz/far2l`. `master` is the upstream base. `next/2.9.1-ovr.1` is our integration branch.
-- Name each new branch `{type}/{slug}`. The type is `feat`, `fix`, `refactor`, `test`, `doc` or `chore`. A story branch is `feat/{story}` or `fix/{story}`. Each worktree needs its own build folder (`../far2l.<name>.build`).
+- Name each new branch `{type}/{slug}`. The type is `feat`, `fix`, `refactor`, `test`, `doc` or `chore`. A story branch is `feat/{story}` or `fix/{story}`. Each worktree needs its own build folder (`out` at its root).
 - The first stories used `markdown-preview/<short>`, and these branches keep their names. The short name drops the prefix `markdown-` or `markdown-preview-`. Only some of these stories had a worktree in `.worktrees/`.
 - Stories are stacked: a story branch is based on the previous one (`fixes`, then `reading`, then `ascii-diagrams`, `default-on` and `browser-view` in parallel). The PR for each goes into `next/2.9.1-ovr.1` as a merge commit (PRs #1 to #4). The owner says when to push and merge.
 - Delivery uses `fde-delivery:deliver-story` (see `docs/how-it-works.md` in the `fde-delivery` plugin):
