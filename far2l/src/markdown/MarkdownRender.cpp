@@ -27,8 +27,6 @@ namespace {
 // is also shown by layout: the box-line quote prefix, the table rules, indented code, bullets.
 constexpr int      CODE_INDENT   = 4;     // cells of indent before each code line
 constexpr wchar_t  BULLET        = L'\u2022';
-// The row after a mermaid fence that AsciiMermaid cannot draw; the fence's code rows stay above it.
-const wchar_t      MERMAID_HINT[] = L"(diagram not drawn here - Alt-F3 opens it in the browser)";
 
 std::wstring concat(const std::vector<MdRun> &runs);
 std::wstring utf8_to_wide(const char *data, size_t size);
@@ -189,14 +187,13 @@ struct Builder {
     int span_em = 0;              // open emphasis spans (story markdown-colorer-look)
     int span_link = 0;            // open links
 
-    // mermaid fences: the placeholder line range (in `out`) plus the fence body and the lead of
-    // its rows, so Render() can splice the box art in place, or add the hint row under the code.
+    // mermaid fences: the placeholder line range (in `out`) plus the fence body, so Render()
+    // can splice the box art in place of the code rows.
     struct Fence {
         int64_t file_pos;
         std::wstring src;
         size_t first_line = 0;   // index in out of the first placeholder line
         size_t count = 0;        // placeholder lines emitted for this fence
-        std::wstring lead;       // row_lead() of the fence (list indent, quote bars)
     };
     std::vector<Fence> fences;
 
@@ -747,7 +744,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             if (!text.empty() && text.back() == L'\n')
                 text.pop_back();
             // The fence body is the placeholder: Render() replaces it with the box art, or keeps
-            // it and adds the hint row when the fence is not drawn.
+            // it when the fence is not drawn.
             size_t first_line = b.out.size();
             size_t count = 0, start = 0;
             // The art of a fence is placed at the fence's first source text.
@@ -775,7 +772,7 @@ int cb_leave_block(MD_BLOCKTYPE type, void *detail, void *userdata)
             // A mermaid fence is tokenized like any fence (R33).
             tokenize_fence(b, fence_lang, fence_src, first_line, count);
             if (is_mermaid)
-                b.fences.push_back(Builder::Fence{fence_pos, fence_src, first_line, count, b.row_lead()});
+                b.fences.push_back(Builder::Fence{fence_pos, fence_src, first_line, count});
             break;
         }
         case MD_BLOCK_TH:
@@ -1322,16 +1319,8 @@ void MarkdownDoc::Render(const std::wstring &file_text, int width, bool wrap)
     for (auto it = b.fences.rbegin(); it != b.fences.rend(); ++it) {
         const std::vector<MdLine> &art = m_mermaid_cache[mermaid_key(it->src, width)];
         const size_t code_end = it->first_line + it->count;
-        if (art.empty()) {
-            // The code rows stay, and the hint row follows them.  It takes the position of the last
-            // code row, so the offsets never decrease.
-            MdLine hint;
-            hint.runs.push_back(MdRun{it->lead + MERMAID_HINT, MD_ROLE_BODY});
-            hint.nFilePos = m_lines[code_end - 1].nFilePos;
-            hint.tint = 0;   // the hint sits under the fence's code rows: same block, same tint
-            m_lines.insert(m_lines.begin() + code_end, std::move(hint));
-            continue;
-        }
+        if (art.empty())
+            continue;   // the code rows stay as they are
         // Every art row carries the fence position: the viewer finds lines by nFilePos, so the
         // offsets must stay non-decreasing down the doc (a 0 in the middle would break that).
         std::vector<MdLine> lines = art;

@@ -18,7 +18,7 @@ A run holds an `MdRole` (`MD_ROLE_BODY`, `MD_ROLE_H1`, `MD_ROLE_H2`, `MD_ROLE_H3
 
 | Role | Used for |
 |---|---|
-| body | text, lists, emphasis, table body, the hint row |
+| body | text, lists, emphasis, table body |
 | h1, h2, h3 | heading text, by level. h3 covers H3 to H6. |
 | strong | bold text, table header text |
 | link | link text, autolinks |

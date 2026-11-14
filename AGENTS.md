@@ -1,6 +1,6 @@
 # far2l fork: rules for people and agents
 
-far2l is a Linux, macOS and BSD port of the FAR Manager file manager. This fork (`origin`, `slava-kudzinau/far2l`) adds Markdown support to the F3 internal viewer. It also adds a view that renders a Markdown file to HTML and opens it in an external browser. `upstream` is `elfmz/far2l`. This file is the index for all work on the project.
+far2l is a Linux, macOS and BSD port of the FAR Manager file manager. This fork (`origin`, `slava-kudzinau/far2l`) adds Markdown support to the F3 internal viewer. `upstream` is `elfmz/far2l`. This file is the index for all work on the project.
 
 ## Build and test
 
@@ -78,9 +78,8 @@ The Markdown feature, in `docs/architecture/features/markdown/`:
 | [markdown.overview.md](docs/architecture/features/markdown/markdown.overview.md) | Start here: scope, strategy, risks and open questions |
 | [markdown.invariants.md](docs/architecture/features/markdown/markdown.invariants.md) | Rules that always hold for the feature |
 | [markdown-viewer.spec.md](docs/architecture/features/markdown/markdown-viewer.spec.md) | What Markdown mode in F3 must do |
-| [markdown-browser-view.spec.md](docs/architecture/features/markdown/markdown-browser-view.spec.md) | What the browser view must do |
-| [markdown.runtime.md](docs/architecture/features/markdown/markdown.runtime.md) | Open in F3, render and scroll, mermaid fence to ASCII art, open in browser |
-| [markdown.data.md](docs/architecture/features/markdown/markdown.data.md) | Screen lines, color runs, position cache, settings keys, temp files, bundled JS |
+| [markdown.runtime.md](docs/architecture/features/markdown/markdown.runtime.md) | Open in F3, render and scroll, mermaid fence to ASCII art |
+| [markdown.data.md](docs/architecture/features/markdown/markdown.data.md) | Screen lines, color runs, position cache, settings keys, bundled JS |
 
 Decisions, in `docs/architecture/decisions/`:
 
@@ -90,7 +89,7 @@ Decisions, in `docs/architecture/decisions/`:
 | [002](docs/architecture/decisions/adr-002-md4c-parser.md) | Parse Markdown with the vendored md4c event API |
 | [003](docs/architecture/decisions/adr-003-line-index-scrolling.md) | Scroll by rendered line index, not by file offset |
 | [004](docs/architecture/decisions/adr-004-palette-roles.md) | Runs carry a palette role, not a color |
-| [005](docs/architecture/decisions/adr-005-browser-view-script.md) | The browser view is a shell script run through File associations |
+| [005](docs/architecture/decisions/adr-005-browser-view-script.md) | Superseded. The Markdown page for the browser moved out of far2l. |
 | [006](docs/architecture/decisions/adr-006-ascii-diagrams.md) | ASCII diagrams from a committed JS bundle in quickjs-ng |
 | [007](docs/architecture/decisions/adr-007-markdown-default-on.md) | Markdown mode on by default, and the cache stores only a deviation |
 

@@ -1,5 +1,5 @@
 ---
-description: Rules that always hold for the Markdown feature - viewer, diagrams and browser view - each with where it was learned.
+description: Rules that always hold for the Markdown feature - viewer and diagrams - each with where it was learned.
 refs:
   - docs/architecture/invariants.md
   - docs/architecture/features/markdown/markdown.overview.md
@@ -33,7 +33,7 @@ Rules that always hold for the Markdown feature. Format: `- **[area]**: rule (Le
 
 - **[mermaid]**: Every `AsciiMermaid::Render` call runs under a wall-clock deadline (2 s, `FAR2L_MD_DEADLINE_MS` overrides), a 1 MB JS stack and a 128 MB memory limit. The limit is set once on the one shared runtime (`build_engine`), so the bundle and all fences share it until a timeout frees the runtime. The next call builds it again. (Learned from: story markdown-preview-fixes, final review, 2026-11-05; story markdown-ascii-diagrams, task 2 review, 2026-11-06)
 - **[mermaid]**: Diagram text is untrusted. It runs in a quickjs context with no `std` or `os` module and no DOM (the vendored quickjs builds the core only). (Learned from: story markdown-preview-fixes, hostile SVG review, 2026-11-05)
-- **[mermaid]**: A fence that cannot be drawn keeps its source as code rows and gets the hint row. It never stops the viewer. (Learned from: story markdown-preview-fixes, spec, 2026-11-05; story markdown-ascii-diagrams, 2026-11-06)
+- **[mermaid]**: A fence that cannot be drawn keeps its source as code rows, with no extra row. It never stops the viewer. (Learned from: story markdown-preview-fixes, spec, 2026-11-05; story markdown-ascii-diagrams, 2026-11-06)
 - **[bundle]**: `far2l/bootstrap/mermaid-ascii.js` is built by `far2l/bootstrap/mermaid-ascii/build.sh` and committed. It is at most 300 KB and has no `elkjs`. Run `sh testing/markdown/ascii-golden.sh` after a rebuild. The far2l build never needs Node. (Learned from: story markdown-ascii-diagrams, gate, 2026-11-06)
 - **[bundle]**: Golden files come from the `beautiful-mermaid` package in Node, never from the bundle. (Learned from: story markdown-ascii-diagrams, T4 for `A-->B`, 2026-11-06)
 
@@ -46,9 +46,3 @@ Rules that always hold for the Markdown feature. Format: `- **[area]**: rule (Le
 - **[quick view]**: The panel that Ctrl+Q focuses is the quick view. Ctrl+Q from the quick view must focus the sibling. A test that quits with the quick view focused must press Tab first, because far2l restores the focused side at the next start. (Learned from: story md-quick-view-wide, 2026-11-12)
 - **[quick view]**: A hidden quick view gives the layout back (`QuickView::Hide`), because `FileList::UpdateViewPanel` does not call `ShowFile` while the quick view is hidden. (Learned from: story md-quick-view-wide, Ctrl+P, 2026-11-11)
 - **[quick view]**: The file list redraw copies its view settings from `ViewSettingsArray[ViewMode]` each time (`FileList::ShowFileList`). A change to `ViewSettings` alone does not last. A layout that needs another column set needs its own mode entry. (Learned from: story md-quick-view-wide, one name column, 2026-11-11)
-
-## Browser view
-
-- **[browser]**: `far2l/bootstrap/md-open.sh` treats the Markdown file as untrusted. The text goes into the page as escaped data (`\` first, then `</` and `<!--`) and raw HTML shows as text. Mermaid runs with `securityLevel:'strict'`. The page has a `Content-Security-Policy` that allows inline scripts, scripts from all of `https://cdn.jsdelivr.net`, and local images only. Only the page script pins the mermaid URL (`MERMAID_URL`) and its `integrity` hash (`MERMAID_SRI`). The text shows before the CDN script loads. (Learned from: story markdown-browser-view, first final review, 2026-11-06)
-- **[browser]**: The printed Alt-F3 command leaves `!.!` unquoted, because far2l escapes the file name. (Learned from: story markdown-browser-view, first final review, 2026-11-06)
-- **[browser]**: No script edits `config.ini`. far2l rewrites it on exit. The owner adds the File associations entry by hand. (Learned from: story markdown-browser-view, gate, 2026-11-06)

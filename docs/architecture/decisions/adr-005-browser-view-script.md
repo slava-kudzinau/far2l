@@ -1,10 +1,12 @@
 ---
 description: The full Markdown view with diagrams is a shell script that Alt-F3 runs through File associations, and it shows the page in the system browser.
-status: accepted
+status: superseded
 date: 2026-11-05
 ---
 
 # ADR-005: Browser view as an external script
+
+Superseded. The browser view moved out of far2l. md-view replaces it: https://github.com/slava-kudzinau/md-view.
 
 ## Context
 
@@ -35,7 +37,7 @@ The page holds the Markdown text, the vendored `marked.min.js` and `highlight.mi
 - The cache folder keeps one page for each Markdown file that the user opened. The script does not delete them.
 - The vendored files must stay in the folder of the script. A missing file gives exit 3.
 - Install rules put the script and the vendored files with their licenses in one folder: `Contents/Resources` on macOS, `share/far2l` on Linux. The Linux layout was tested only through a wrapper project.
-- The terminal hint `(diagram not drawn here - Alt-F3 opens it in the browser)` points at this key. It does nothing until the owner adds the association.
+- The terminal hint row pointed at this key. It did nothing until the owner added the association.
 - Tree mode (story markdown-browser-tree-panel) puts every Markdown file of the root in one page, because a `file://` page cannot read another local file. The page holds a tree index, and the page script routes `#/ENC` to a file and checks each link against the root. The root and the limits come from `md-view.ini`. A scan uses only the POSIX tools in the known list. A saved panel state is in the browser profile, not in the repo.
 
 ## Rejected alternatives

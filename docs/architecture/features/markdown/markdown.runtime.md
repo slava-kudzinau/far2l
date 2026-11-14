@@ -1,16 +1,15 @@
 ---
-description: Runtime view - open a Markdown file in F3, render and scroll, draw one mermaid fence as ASCII art, and open the file in the browser.
+description: Runtime view - open a Markdown file in F3, render and scroll, and draw one mermaid fence as ASCII art.
 refs:
   - docs/architecture/features/markdown/markdown.overview.md
   - docs/architecture/features/markdown/markdown-viewer.spec.md
-  - docs/architecture/features/markdown/markdown-browser-view.spec.md
   - docs/architecture/features/markdown/markdown.data.md
 ---
 
 # View: Markdown runtime
 
 Table layout bounds columns to the available viewer width and repeats borders and padding on continuation lines.
-Four flows matter. All F3 work runs on the UI thread. The browser flow is outside far2l after the command starts.
+The flows below run on the UI thread. All F3 work runs on the UI thread.
 
 ## Open a `.md` file in F3
 
@@ -116,7 +115,7 @@ sequenceDiagram
   else error or deadline
     JS-->>A: exception or interrupt
     A-->>Doc: false and err
-    Doc->>Doc: code rows stay, hint row follows
+    Doc->>Doc: code rows stay
   end
 ```
 
@@ -126,40 +125,6 @@ sequenceDiagram
 | Bounds | `AsciiMermaid::Render` | A deadline, a 1 MB stack and a 128 MB limit on the one shared runtime. The deadline also covers a load of the bundle. |
 | Timeout | `discard_engine` | Frees the runtime. The next call builds it again. |
 | Splice | `MarkdownDoc::Render` | Runs in reverse order, so earlier indexes stay valid. |
-
-## Open in the browser
-
-```mermaid
-sequenceDiagram
-  actor User
-  participant Panel as FileList
-  participant Sh as md-open.sh
-  participant OS as open or xdg-open
-  participant Page as Browser page
-  participant CDN as cdn.jsdelivr.net
-  User->>Panel: Alt-F3 on a .md file
-  Panel->>Sh: command of the association
-  Sh->>Sh: escape the text, write the page
-  Sh->>OS: page path
-  OS->>Page: load the file URL
-  Page->>Page: marked.parse, show the text
-  opt the page has a mermaid block
-    Page->>CDN: mermaid 12.3.0 with integrity hash
-    alt loaded
-      CDN-->>Page: script
-      Page->>Page: parse each diagram, then draw
-    else blocked
-      Page->>Page: each diagram shows as code
-    end
-  end
-```
-
-| Step | Who | Note |
-|---|---|---|
-| Start | `ProcessLocalFileTypes` | Needs an entry that the user added by hand. |
-| Write | `md-open.sh` | One page at `${TMPDIR:-/tmp}/far2l-md-<pid>.html`. |
-| Show | The page script | The text shows before any network use. |
-| Failure | `showCode` | A broken diagram shows its source and its error. Other diagrams still draw. |
 
 ## Quick view takes the screen minus a strip for Markdown
 

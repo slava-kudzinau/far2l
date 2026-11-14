@@ -1563,8 +1563,8 @@ uint32_t BlendEighth(uint32_t base, uint32_t mix)
 	return r | (g << 8) | (b << 16);
 }
 
-// The code block tint (story markdown-code-tint, plan T1): a fence's rows (the code
-// rows and the hint row) carry the tint field, rows outside the block are plain; the
+// The code block tint (story markdown-code-tint, plan T1): a fence's code rows carry the
+// tint field, rows outside the block are plain; the
 // row's background is the blend of one eighth of the resolved code foreground into the
 // viewer background; a low-contrast pair (code foreground, tint) draws no tint; a
 // viewer background change is a new pair and answers a new blend (the cache key of
@@ -1615,13 +1615,13 @@ int tint()
 			code_rows, plain);
 	}
 
-	// The hint row under undrawn mermaid art carries the tint too (spec, Row tint).
+	// The code rows of an undrawn mermaid fence carry the tint too (spec, Row tint).
 	MarkdownDoc mer;
 	mer.Render(L"```mermaid\ngraph XX\nA\n```\n", 80);
 	{
 		const std::vector<MdLine> &lines = mer.Lines();
-		if (lines.size() != 3) {
-			printf("FAILED tint: the mermaid fixture made %zu rows, want two code rows and the hint\n",
+		if (lines.size() != 2) {
+			printf("FAILED tint: the mermaid fixture made %zu rows, want the two code rows\n",
 				lines.size());
 			return 1;
 		}
@@ -1631,7 +1631,7 @@ int tint()
 				return 1;
 			}
 		}
-		printf("ok tint: the hint row under undrawn art carries the tint\n");
+		printf("ok tint: the undrawn fence rows carry the tint\n");
 	}
 
 	// 2. The blend: the row background equals the blend of the same inputs - the live

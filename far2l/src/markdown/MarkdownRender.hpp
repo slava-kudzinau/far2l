@@ -55,10 +55,9 @@ struct MdLine {
     int64_t nFilePos = 0;
     int tokens = -1;   // index into MarkdownDoc::m_token_groups; -1: no token group
     // The code block's background (story markdown-code-tint): 0 marks a tinted row, -1
-    // none.  The fence builder sets it on the fence's rows (the code rows and the hint row
-    // under undrawn mermaid art); art rows keep their own background.  The printer resolves
-    // the row's tint to the live theme through MdCodeTint, so a theme change shows on the
-    // next redraw.
+    // none.  The fence builder sets it on the fence's code rows; art rows keep their own
+    // background.  The printer resolves the row's tint to the live theme through MdCodeTint,
+    // so a theme change shows on the next redraw.
     int64_t tint = -1;
     // Soft-wrap (F2) fields.  `flow` marks a prose line - a paragraph, heading, blockquote or
     // list item - that the wrap pass may split; tables, code fences and diagram art keep it off.
@@ -74,7 +73,7 @@ struct MdLine {
 // Renders a whole markdown document (markdown -> styled display lines) and
 // hands out lines block-by-block to the viewer.  A markdown fence tagged
 // "mermaid" is drawn by AsciiMermaid (see AsciiMermaid.hpp) and cached; a fence
-// it cannot draw keeps its code rows and gets a hint row under them.
+// it cannot draw keeps its code rows.
 class MarkdownDoc {
 public:
     MarkdownDoc() = default;

@@ -17,7 +17,7 @@ This repository is a fork (`origin` is `slava-kudzinau/far2l`, `upstream` is `el
 
 ## Features
 
-- **Markdown:** Markdown mode in the F3 viewer and a browser view. → [overview](features/markdown/markdown.overview.md)
+- **Markdown:** Markdown mode in the F3 viewer. → [overview](features/markdown/markdown.overview.md)
 
 A feature folder is `docs/architecture/features/{slug}/`, with files named `{slug}.{type}.md`. See [ADR-001](decisions/adr-001-docs-structure.md).
 

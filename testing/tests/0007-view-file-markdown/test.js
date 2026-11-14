@@ -160,15 +160,14 @@ ExpectNoString("```mermaid")
 var flow = ExpectString("└───────┘     └────────┘")
 var flow_art = ReadCell(flow.X, flow.Y)
 ExpectNoString("graph LR")
-// The swimlane block is not drawn: its code shows, and the hint row follows the code.
+// The swimlane block is not drawn: its code shows, and nothing follows it.
 var swim_last = ExpectString("a1[Start] --> a2[Finish]")
-var hint = ExpectString("(diagram not drawn here - Alt-F3 opens it in the browser)")
-if (hint.Y != swim_last.Y + 2) {
-	Log("swimlane code on row " + swim_last.Y + ", hint on row " + hint.Y);
-	Panic("the hint does not follow the swimlane code after its end line");
-}
-// The hint row is body text: the scheme's def:Text row, like all body cells.
-CheckForeSame("diagram hint", ReadCell(hint.X, hint.Y), body_cell, "body")
+// The row below the code is its end line: the last code row.
+ExpectString("end", 0, swim_last.Y + 1, 80, 1)
+ExpectNoString("not drawn here")
+// The rows of an undrawn fence keep the code tint.
+CheckSameBack("undrawn fence code row", ReadCell(swim_last.X, swim_last.Y), code_cell, "code")
+CheckSameBack("undrawn fence code row", ReadCell(70, swim_last.Y), code_cell, "code")
 TypeEnd()
 // Quote text and the quote bar take the quote role: today the viewer text, so the check reads
 // the first quote and keeps the cell for the later pairs.

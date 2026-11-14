@@ -18,7 +18,7 @@ flowchart LR
   host <-->|"console input and output"| far2l[far2l]
   far2l -->|"files, processes, signals"| os[(Operating system)]
   far2l -->|"plugins"| remote[("Remote hosts and devices")]
-  far2l -->|"helper scripts"| ext["External programs - browser, clipboard, notify, sudo"]
+  far2l -->|"helper scripts"| ext["External programs - clipboard, notify, sudo"]
   os --- ext
 ```
 
@@ -30,7 +30,7 @@ flowchart LR
 | GUI host | Shows far2l in its own window. | wxWidgets module `far2l_gui.so` (default, `USEWX`). SDL module `far2l_sdl.so` (`USESDL`, off by default). The `Mac` folders in both backends hold macOS code. |
 | Operating system | Gives files, processes, pseudo terminals, sockets and the clipboard. | Linux first. macOS and BSD work but BSD is not tested often (`README.md`). |
 | Remote hosts and devices | Hold files that the user opens as panels. | Reached only through plugins: NetRocks (SFTP, SCP, SHELL, FTP, FTPS, SMB, NFS, WebDAV, AWS S3), ADB, MTP, and optional FarFTP. |
-| External programs | Do work that far2l does not do itself. | Shell scripts next to the binary (`open.sh`, `notify.sh`, `trash.sh`, `wslgclip.sh`), the system browser, an optional `clipboard` helper in the config folder, `sudo`. `md-open.sh` is in `Contents/Resources` or `share/far2l`, after `cmake --install` only. |
+| External programs | Do work that far2l does not do itself. | Shell scripts next to the binary (`open.sh`, `notify.sh`, `trash.sh`, `wslgclip.sh`), an optional `clipboard` helper in the config folder, `sudo`. |
 
 ## Notes
 

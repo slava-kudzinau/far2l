@@ -4,7 +4,6 @@ status: ready
 refs:
   - docs/architecture/features/markdown/markdown.overview.md
   - docs/architecture/features/markdown/markdown.invariants.md
-  - docs/architecture/features/markdown/markdown-browser-view.spec.md
   - docs/architecture/features/markdown/markdown.runtime.md
   - docs/architecture/features/markdown/markdown.data.md
   - docs/architecture/decisions/adr-002-md4c-parser.md
@@ -20,7 +19,7 @@ Tables use their natural column widths when they fit the viewer. For an oversize
 ## Intent
 
 **Problem:** a Markdown file in the plain viewer shows its markup, and a mermaid fence shows as source text.
-**Approach:** the viewer parses the whole file with md4c and draws styled rows. It draws mermaid fences as box art. Any fence that it cannot draw stays as code, and the browser view is the fallback for that fence.
+**Approach:** the viewer parses the whole file with md4c and draws styled rows. It draws mermaid fences as box art. Any fence that it cannot draw stays as code.
 
 The code is `far2l/src/markdown/`, `far2l/src/viewer.cpp` and `MarkdownPrinter` in `far2l/src/ViewerPrinter.cpp`.
 
@@ -128,7 +127,7 @@ A run holds an `MdRole`. `MarkdownRunColor` calls `MdRunColor` in `far2l/src/mar
 
 | Role | Elements |
 |---|---|
-| body | Body text, lists, table body cells, the hint row |
+| body | Body text, lists, table body cells |
 | h1, h2, h3 | Heading text by level. H3 covers H3 to H6. |
 | strong | Bold text, table header text |
 | em | Emphasis text, `_text_` and `*text*` |
@@ -165,11 +164,10 @@ The contrast rule is all or none. Each RGB default needs 3:1 or more against the
 ### Code block tint
 
 Every row of a code block paints its background with the block tint, to the right edge, also
-past the end of the text. The rows are the code rows and, under undrawn mermaid art, the hint
-row. The tint blends one eighth of the code role's resolved foreground into the real viewer
-background (the `BlendRgb` pattern of the file compare). It shows when the terminal reports
-true color. The pair (code foreground, tint) must reach 3:1; one verdict is cached on (viewer
-background, code color).
+past the end of the text. The tint blends one eighth of the code role's resolved foreground
+into the real viewer background (the `BlendRgb` pattern of the file compare). It shows when
+the terminal reports true color. The pair (code foreground, tint) must reach 3:1; one
+verdict is cached on (viewer background, code color).
 A theme change and a scheme change both show on the next redraw. The block background is a
 row property, not a run property: the runs ride it, the cells past the text keep it.
 A run with a token role rides the tint too (story markdown-colorer-fences): the token
@@ -207,15 +205,14 @@ A code block is a mermaid fence when its info word is `mermaid`, in any letter c
 1. `Render` keeps the fence body as code rows. These rows are the placeholder.
 2. `AsciiMermaid::Render` sends the source to `renderAscii` in `far2l/bootstrap/mermaid-ascii.js`. One quickjs-ng runtime serves the process.
 3. If the call succeeds, art rows replace the code rows. Each art row has the source offset of the fence.
-4. If the call fails, the code rows stay and the hint row follows them.
+4. If the call fails, the code rows stay and no row follows them.
 
 | Rule | Value |
 |---|---|
 | First word of a drawn diagram | `graph`, `flowchart`, `stateDiagram`, `stateDiagram-v2`, `sequenceDiagram`, `classDiagram`, `erDiagram`, `xychart-beta`. The match is case-sensitive. |
 | Unspaced edges | For `graph` and `flowchart`, `entry.js` puts spaces around each edge operator before the parse. |
 | Art width | The bundle takes no width. The art is not scaled. A wide row is cut at the right edge. Wrap does not split art rows. |
-| Art lead | Art rows have no list lead and no quote bar. The hint row keeps its lead. |
-| Hint row | `(diagram not drawn here - Alt-F3 opens it in the browser)` |
+| Art lead | Art rows have no list lead and no quote bar. |
 | Cache | `m_mermaid_cache` uses the source hash and the width as its key. It lives for one render pass, so fences with the same source draw once. |
 
 ### Quick view of a Markdown file
@@ -238,7 +235,7 @@ Quick view (Ctrl+Q) on a `.md` or `.markdown` file takes the screen minus a stri
 
 ### Failure behavior
 
-Each failure writes one stderr line, `AsciiMermaid: render failed: <err>`, and shows the code rows plus the hint row. The viewer stays open.
+Each failure writes one stderr line, `AsciiMermaid: render failed: <err>`, and shows the code rows. The viewer stays open.
 
 | Cause | `err` |
 |---|---|
@@ -285,7 +282,7 @@ Each failure writes one stderr line, `AsciiMermaid: render failed: <err>`, and s
 | Scrolling, percent, toggle, hex priority | `testing/tests/0007-view-file-markdown` with `long.md` |
 | Spacing | `testing/tests/0007-view-file-markdown` with `spacing.md` |
 | Palette roles, tables | `testing/tests/0007-view-file-markdown` with `sample.md` |
-| Art and hint row in the viewer | `testing/tests/0007-view-file-markdown` with `sample.md` |
+| Art and the undrawn fence in the viewer | `testing/tests/0007-view-file-markdown` with `sample.md` |
 | Bundle output, size limit (300 KB), no `elkjs` | `sh testing/markdown/ascii-golden.sh` |
 | `AsciiMermaid` failures, deadline, speed | `sh testing/markdown/ascii-driver.sh` |
 | Fence token colors, the token cache | `testing/tests/000c-view-md-highlight`, `testing/tests/000d-view-md-look`, `sh testing/markdown/highlight-driver.sh`, `sh testing/markdown/look-driver.sh` |
@@ -298,7 +295,7 @@ No test covers these parts:
 - The `KEY_ADD` save site and Quick View.
 - Search and F5.
 - A fence in a list or a quote.
-- The failure paths through the viewer, except the hint row for an unsupported type.
+- The failure paths through the viewer.
 
 See [testing/README.md](../../../../testing/README.md) for the smoke tool and [how-we-build.md](../../../how-we-build.md) for the commands.
 
@@ -316,7 +313,7 @@ States are checked against the code of branch `next/2.9.1-ovr.1`.
 | In the default palette, art (light gray) and code (white) are the closest pair. A real terminal must show if this is good enough. | markdown-preview-reading | Closed by markdown-palette: code and art have different colors on both paths. The look needs the owner's manual check. |
 | The manual check in macOS Terminal and ghostty has no record. | markdown-preview-fixes | Open. Story markdown-palette adds `manual-checks.md` with the steps; the result waits for the owner. |
 | An autolink cell shows the viewer link highlight (`#ff8833`), not the link role. `Viewer::UnderlineLinks` recolors it after the printer. | markdown-palette | Open. A fix needs `viewer.cpp` or `LinkHighlighter.cpp`, outside that story's files. |
-| A fence that starts with `%%` goes to the hint (`unsupported: %%`), although the package can draw it. | markdown-ascii-diagrams | Open |
+| A fence that starts with `%%` shows as code rows, although the package can draw it. | markdown-ascii-diagrams | Open |
 | The pre-pass can split circle, cross and edge-id endpoints. `A--B` becomes `A -- B`. | markdown-ascii-diagrams | Open |
 | Large diagrams: a 26-node `graph TD` failed at once (stack overflow), and a 26-node `graph LR` chain can use the full 2 s. The limits in the code are the same, but the run is not repeated. | markdown-ascii-diagrams | Open |
 
@@ -328,12 +325,11 @@ Closed items: broken scrolling and the ignored `mermaid.min.js` asset (story mar
 
 | Defect | Evidence |
 |---|---|
-| A file with a UTF-8 BOM does not parse its first line as a heading. `# Title` shows with its marker. The browser view strips the BOM. | Smoke probe. md4c gets the BOM as text. |
+| A file with a UTF-8 BOM does not parse its first line as a heading. `# Title` shows with its marker. | Smoke probe. md4c gets the BOM as text. |
 | HTML entities show as source: `&amp;` stays `&amp;`. | Smoke probe. `cb_text` does not decode `MD_TEXT_ENTITY`. |
 | F8 and Shift-F8 change the code page in the status line, but the rows stay the same. `m_md_ready` stays true. | Smoke probe |
 | A file that changes on disk keeps the old render. `KEY_IDLE` does not clear `m_md_ready`. | Code |
 | Source offsets are UTF-8 offsets of the decoded text. On other code pages the top row after a toggle is wrong. | Code |
-| The hint says Alt-F3 opens the browser. Only a panel handles Alt-F3, and only after the user adds the association. The viewer ignores the key. | `far2l/src/panels/filelist.cpp` |
 | The help files have no text about Markdown mode, Shift-F4 or the new check box. | `far2l/bootstrap/scripts/*.hlf.m4` |
 | `ViewerMode` grew by one `int`, but `Reserved[3]` stayed and `FARMANAGERVERSION` did not change. A plugin binary from before this change reads `ViewerInfo` at wrong offsets. | `far2l/far2sdk/farplug-wide.h` |
 | Tabs do not expand, and wide characters count as one unit. Table columns and rules go out of line. | Code |
