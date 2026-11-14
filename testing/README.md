@@ -1,6 +1,6 @@
 ## How to run tests
 To run tests execute ./far2l-smoke-run.sh with argument - path to far2l which was built by cmake configured with -DTESTING=Yes  
-Example: `./far2l-smoke-run.sh ../../far2l.build/install/far2l`  
+Example: `./far2l-smoke-run.sh ../out/install/far2l`
 Note: if provided far2l is built without testing support this will stuck for a while and fail then.
 
 ## How to write tests

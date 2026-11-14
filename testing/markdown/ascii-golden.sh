@@ -64,7 +64,7 @@ main=$root
 if common=$(cd "$root" && git rev-parse --git-common-dir 2> /dev/null); then
     main=$(cd "$root" && cd "$common/.." && pwd)
 fi
-qjs_build=$main/../far2l.build/far2l/third_party/quickjs
+qjs_build=$main/out/far2l/third_party/quickjs
 if [ -f "$qjs_build/libqjs.a" ]; then
     ${CC:-cc} -std=c11 -O1 -I"$root/far2l/third_party/quickjs" "$gold/qjs-host.c" \
         "$qjs_build/libqjs.a" -lm -lpthread -o "$tmp/qjs-host"
